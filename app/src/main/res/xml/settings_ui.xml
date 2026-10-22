@@ -15,13 +15,15 @@
             android:icon="@drawable/ic_baseline_tv_24"
             android:key="@string/app_layout_key"
             android:title="@string/app_layout" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_home_posters">
         <SwitchPreference
             android:defaultValue="true"
             android:icon="@drawable/title_24px"
             android:key="@string/bottom_title_key"
             android:summary="@string/bottom_title_settings_des"
             android:title="@string/bottom_title_settings" />
-
         <SeekBarPreference
             android:defaultValue="0"
             android:icon="@drawable/arrows_input_24px"
@@ -33,7 +35,6 @@
             app:min="0"
             app:seekBarIncrement="1"
             app:showSeekBarValue="true" />
-
         <SeekBarPreference
             android:defaultValue="0"
             android:icon="@drawable/baseline_grid_view_24"
@@ -45,13 +46,13 @@
             app:min="0"
             app:seekBarIncrement="1"
             app:showSeekBarValue="true" />
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/pref_category_ui_features">
         <Preference
             android:icon="@drawable/ic_baseline_tv_24"
             android:key="@string/poster_ui_key"
             android:title="@string/poster_ui_settings" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_search_discovery">
         <SwitchPreference
             android:icon="@drawable/search_icon"
             android:summary="@string/advanced_search_des"
@@ -64,6 +65,13 @@
             android:title="@string/search_suggestions"
             app:defaultValue="true"
             app:key="search_suggestions_enabled" />
+        <Preference
+            android:icon="@drawable/ic_baseline_filter_list_24"
+            android:key="@string/pref_filter_search_quality_key"
+            android:title="@string/pref_filter_search_quality" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_playback_details">
         <SwitchPreference
             android:defaultValue="true"
             android:icon="@drawable/baseline_theaters_24"
@@ -78,7 +86,7 @@
             android:defaultValue="true"
             android:icon="@drawable/ic_baseline_people_24"
             android:key="@string/show_cast_in_details_key"
-            android:title="@string/show_cast_in_details" />    
+            android:title="@string/show_cast_in_details" />
         <SwitchPreference
             android:defaultValue="false"
             android:icon="@drawable/ic_baseline_skip_next_24"
@@ -89,12 +97,15 @@
             android:icon="@drawable/metadata_overlay_icon"
             android:key="@string/show_player_metadata_key"
             android:title="@string/show_player_metadata_overlay" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_behavior_accessibility">
         <SwitchPreference
-                android:icon="@drawable/ic_baseline_clock_24"
-                android:summary="@string/tv_layout_clock_settings_des"
-                android:title="@string/tv_layout_clock_settings"
-                android:defaultValue="false"
-                android:key="@string/tv_layout_clock_key" />
+            android:icon="@drawable/ic_baseline_clock_24"
+            android:summary="@string/tv_layout_clock_settings_des"
+            android:title="@string/tv_layout_clock_settings"
+            android:defaultValue="false"
+            android:key="@string/tv_layout_clock_key" />
         <SwitchPreference
             android:icon="@drawable/ic_baseline_play_arrow_24"
             android:summary="@string/random_button_settings_desc"
@@ -106,9 +117,5 @@
             android:key="@string/confirm_exit_key"
             android:summary="@string/confirm_before_exiting_desc"
             android:title="@string/confirm_before_exiting_title" />
-        <Preference
-            android:icon="@drawable/ic_baseline_filter_list_24"
-            android:key="@string/pref_filter_search_quality_key"
-            android:title="@string/pref_filter_search_quality" />
     </PreferenceCategory>
 </PreferenceScreen>

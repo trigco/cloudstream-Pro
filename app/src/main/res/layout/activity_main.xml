@@ -18,6 +18,7 @@
             android:layout_height="match_parent"
             android:background="?attr/primaryGrayBackground"
             android:descendantFocusability="afterDescendants"
+            app:itemIconSize="26dp"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
             app:headerLayout="@layout/rail_header"
@@ -36,15 +37,18 @@
                   -->
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/nav_view"
-            android:layout_height="@dimen/nav_view_height"
             android:layout_width="0dp"
-            app:labelVisibilityMode="unlabeled"
-            android:background="?attr/primaryGrayBackground"
-
+            android:layout_height="64dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_floating_navigation"
+            android:elevation="8dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
-            app:itemActiveIndicatorColor="@color/navIndicatorRed"
-
+            app:labelVisibilityMode="unlabeled"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
@@ -84,8 +88,4 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <androidx.compose.ui.platform.ComposeView
-        android:id="@+id/compose_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
 </FrameLayout>
