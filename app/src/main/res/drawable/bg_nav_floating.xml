@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 4: floating bottom-nav background (Telegram-style pill bar).
+     Solid follows the theme's nav surface attr so it flips per variant. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="28dp" />
+    <solid android:color="?attr/primaryGrayBackground" />
+</shape>

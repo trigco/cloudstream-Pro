@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 4 (Task 8): popup backdrop blur for Android 12+ (API 31+).
+         These styles REDEFINE the exact dialog themes AppTheme points to
+         (alertDialogTheme -> Theme.AlertDialog, bottomSheetDialogTheme ->
+         AppBottomSheetDialogTheme), copying every base item verbatim and
+         adding the two blur-behind window items. On API 31+ devices with
+         cross-window blur enabled, the content behind alert dialogs and
+         bottom sheets is blurred instead of only dimmed.
+         Devices below API 31 (including the user's Android 8.1 / API 27
+         phone) never load the values-v31 folder at all, so their dialogs
+         keep the base themes unchanged — zero risk to older phones. -->
+
+    <!-- Copy of Theme.AlertDialog (values/styles.xml) + blur items. -->
+    <style name="Theme.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="android:windowMinWidthMajor">@dimen/abc_dialog_min_width_major</item>
+        <item name="android:windowMinWidthMinor">@dimen/abc_dialog_min_width_minor</item>
+        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <item name="textAllCaps">false</item>
+        <item name="android:textColorPrimary">?attr/grayTextColor</item>
+
+        <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
+        <item name="buttonBarNegativeButtonStyle">@style/BlackButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/BlackButton.Dialog</item>
+
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">24</item>
+    </style>
+
+    <!-- Copy of AppBottomSheetDialogTheme (values/styles.xml) + blur items. -->
+    <style name="AppBottomSheetDialogTheme">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:navigationBarColor">?attr/boxItemBackground</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Design.BottomSheetDialog</item>
+        <item name="bottomSheetStyle">@style/AppModalStyle</item>
+
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">24</item>
+    </style>
+</resources>

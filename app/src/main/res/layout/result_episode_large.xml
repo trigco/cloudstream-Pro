@@ -18,7 +18,7 @@
         android:id="@+id/episode_holder"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:foreground="@drawable/bg_ripple_rounded"
         android:orientation="vertical"
         android:padding="10dp">
 
@@ -40,7 +40,7 @@
                     android:layout_height="match_parent"
                     android:contentDescription="@string/episode_poster_img_des"
 
-                    android:foreground="?android:attr/selectableItemBackgroundBorderless"
+                    android:foreground="@drawable/bg_ripple_rounded"
                     android:nextFocusRight="@id/download_button"
                     android:scaleType="centerCrop"
                     tools:src="@drawable/example_poster"
