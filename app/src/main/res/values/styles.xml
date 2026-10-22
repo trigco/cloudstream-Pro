@@ -44,7 +44,7 @@
         <item name="android:textColorHint">?attr/grayTextColor</item>
         <item name="android:editTextColor">?attr/textColor</item>
         <item name="android:colorForeground">?attr/textColor</item>
-        <item name="android:colorControlHighlight">?attr/textColor</item> <!--iconRipple-->
+        <item name="android:colorControlHighlight">#1FFFFFFF</item> <!--iconRipple — Phase 7.5 FIX-1: was ?attr/textColor (opaque #FFFFFF); on API 27 the press/ripple flood painted whole rows solid light grey. Now a faint 12% white wash. LightMode/LavenderMode override with faint black.-->
 
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
@@ -189,6 +189,7 @@
         <item name="colorOnPrimary">@color/blackText</item>
         <item name="colorPrimary">@color/black</item> <!-- Phase 5A: monochrome accent for light -->
         <item name="android:colorPrimary">@color/black</item>
+        <item name="android:colorControlHighlight">#14000000</item> <!-- Phase 7.5 FIX-1: faint black press feedback on light surfaces (AppTheme's faint white would be invisible/wrong here) -->
         <item name="isLightTheme">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
@@ -228,6 +229,7 @@
         <item name="white">@color/LavenderTextColor</item>
         <item name="black">@color/LavenderPrimaryGrayBackground</item>
         <item name="colorOnPrimary">@color/LavenderTextColor</item>
+        <item name="android:colorControlHighlight">#14000000</item> <!-- Phase 7.5 FIX-1: light theme — faint black press feedback, same as LightMode -->
         <item name="isLightTheme">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
@@ -843,7 +845,7 @@
 
     <style name="RoundedSelectableButton">
         <item name="backgroundTint">@color/toggle_button</item>
-        <item name="rippleColor">@color/textColor</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/textColor -->
         <item name="android:textColor">@color/toggle_button_text</item>
         <item name="cornerRadius">100dp</item>
         <item name="strokeWidth">1dp</item>
@@ -868,7 +870,7 @@
         <item name="backgroundTint">?attr/iconGrayBackground</item>
         <item name="iconTint">?attr/textColor</item>
         <item name="android:textColor">?attr/textColor</item>
-        <item name="rippleColor">?attr/textColor</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was ?attr/textColor (opaque in both themes) -->
     </style>
 
     <style name="SelectableButton" parent="NiceButton">
@@ -905,7 +907,7 @@
     </style>
 
     <style name="SyncButton" parent="NiceButton">
-        <item name="rippleColor">?attr/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was ?attr/white (opaque #FFF on dark themes) -->
         <item name="iconTint">?attr/textColor</item>
         <item name="android:layout_columnWeight">1</item>
         <item name="android:layout_rowWeight">1</item>
@@ -942,7 +944,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv_attr</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
 
         <item name="iconTint">@color/player_on_button_tv_attr</item>
@@ -969,7 +971,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv_attr</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
         <item name="iconTint">@color/player_on_button_tv_attr</item>
         <item name="iconGravity">textStart</item>
@@ -998,7 +1000,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
 
         <item name="iconTint">@color/player_on_button_tv</item>
