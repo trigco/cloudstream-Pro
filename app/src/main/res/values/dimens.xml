@@ -3,19 +3,19 @@
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
     <dimen name="rounded_image_radius">20dp</dimen>
-    <dimen name="rounded_button_radius">4dp</dimen>
+    <dimen name="rounded_button_radius">10dp</dimen>
 
     <dimen name="navbar_height">0dp</dimen>
-    <dimen name="card_corner_radius">2dp</dimen>
+    <dimen name="card_corner_radius">12dp</dimen>
     <dimen name="result_padding">15dp</dimen>
 
     <dimen name="loading_line_height">15dp</dimen>
-    <dimen name="loading_radius">3dp</dimen>
+    <dimen name="loading_radius">12dp</dimen>
     <dimen name="loading_margin">15dp</dimen>
 
     <integer name="loading_time">2000</integer>
 
-    <dimen name="storage_radius">3dp</dimen>
+    <dimen name="storage_radius">8dp</dimen>
     <dimen name="navbar_width">0dp</dimen>
 
     <dimen name="nav_view_height">70dp</dimen>

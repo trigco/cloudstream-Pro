@@ -31,6 +31,7 @@
             <androidx.cardview.widget.CardView
                 android:layout_width="126dp"
                 android:layout_height="72dp"
+                app:cardCornerRadius="12dp"
                 android:foreground="@drawable/outline_drawable">
 
                 <ImageView
