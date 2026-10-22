@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7.5 FIX-3: corner mask for the details-page backdrop/trailer card.
+
+     The trailer's TextureView does not follow result_top_holder's outline
+     clipping on older GPUs (API 27 era), so a playing trailer renders with
+     square corners even though the static backdrop (a normal ImageView)
+     is clipped correctly. Instead of relying on clipping, this drawable
+     PAINTS the page background color over the four corner squares that
+     lie outside the card's 24dp rounded corner; the video/backdrop shows
+     through untouched everywhere else.
+
+     Construction: a layer-list item outset by -10dp on every side carries
+     a rounded rect (radius 34dp) whose only paint is a 20dp stroke in
+     ?attr/primaryBlackBackground, centered on the item's outline. The
+     stroke's inner edge therefore lands exactly on the card's 24dp corner
+     arc (center 24dp/24dp, radius 34 - 10 = 24), so within the mask view's
+     bounds the paint covers precisely the corner region outside the arc:
+       - full corner coverage: the square corner tip sits ~9.9dp beyond
+         the 24dp arc (24*sqrt(2) - 24); the stroke reaches 10dp inside
+         the view bounds from an outline 10dp outside, i.e. it covers the
+         arc's exterior completely;
+       - zero paint along the straight edges inside the card, so neither
+         the backdrop image nor the video gains a visible inner frame.
+     If a build ever clamped the negative insets to 0, the same values
+     degrade gracefully: the stroke then sits centered on the view bounds
+     (10dp band inside, inner radius still 24dp) and the corners stay
+     covered. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:left="-10dp"
+        android:top="-10dp"
+        android:right="-10dp"
+        android:bottom="-10dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="34dp" />
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="20dp"
+                android:color="?attr/primaryBlackBackground" />
+        </shape>
+    </item>
+</layer-list>

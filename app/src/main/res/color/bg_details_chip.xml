@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7.5: details-page genre/tag chip fill. Used only by
+     ResultFragmentPhone after populateChips, so other ChipFilled users keep
+     the shared chip_color selector. boxItemBackground (#232323 in the base
+     theme) is visibly lighter than the details card's primaryGrayBackground
+     (#121212), letting each chip read as its own pill on the card. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/boxItemBackground" android:state_checked="true" />
+    <item android:color="@color/boxItemBackground" android:state_focused="true" />
+    <item android:color="@color/boxItemBackground" />
+</selector>
