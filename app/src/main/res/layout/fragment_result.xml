@@ -714,7 +714,7 @@
                                     android:text="@string/play_movie_button"
                                     android:textColor="@color/white"
                                     android:visibility="visible"
-                                    app:backgroundTint="@color/colorPrimary"
+                                    app:backgroundTint="@color/colorPrimaryRed"
                                     app:icon="@drawable/ic_baseline_play_arrow_24"
                                     app:iconTint="@color/white"
                                     app:strokeColor="@color/transparent">
