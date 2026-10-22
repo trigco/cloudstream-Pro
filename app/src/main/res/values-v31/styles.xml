@@ -24,7 +24,7 @@
         <item name="buttonBarNeutralButtonStyle">@style/BlackButton.Dialog</item>
 
         <item name="android:windowBlurBehindEnabled">true</item>
-        <item name="android:windowBlurBehindRadius">24</item>
+        <item name="android:windowBlurBehindRadius">24dp</item>
     </style>
 
     <!-- Copy of AppBottomSheetDialogTheme (values/styles.xml) + blur items. -->
@@ -37,6 +37,6 @@
         <item name="bottomSheetStyle">@style/AppModalStyle</item>
 
         <item name="android:windowBlurBehindEnabled">true</item>
-        <item name="android:windowBlurBehindRadius">24</item>
+        <item name="android:windowBlurBehindRadius">24dp</item>
     </style>
 </resources>
