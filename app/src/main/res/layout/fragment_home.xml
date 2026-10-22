@@ -217,16 +217,24 @@
             android:textColor="?attr/textColor" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/home_master_recycler"
+    <!-- Phase 6A-2: pull-to-refresh wrapper (phone). Takes the RecyclerView's
+         place in the root; the RecyclerView itself is unchanged. -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/home_swipe_refresh"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:descendantFocusability="afterDescendants"
-        android:layoutAnimation="@anim/home_master_layout_animation"
-        android:nextFocusLeft="@id/nav_rail_view"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/homepage_parent"
-        tools:visibility="gone" />
+        android:layout_height="wrap_content">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/home_master_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:descendantFocusability="afterDescendants"
+            android:layoutAnimation="@anim/home_master_layout_animation"
+            android:nextFocusLeft="@id/nav_rail_view"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/homepage_parent"
+            tools:visibility="gone" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <TextClock
             android:id="@+id/home_clock"

@@ -41,12 +41,10 @@
             android:paddingHorizontal="0dp">
 
 
-            <!-- Phase 5A: replaced by the global floating top bar in activity_main (MainActivity) -->
             <androidx.appcompat.widget.SearchView
                 android:id="@+id/home_search"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:visibility="gone"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
                 android:editTextColor="@color/white"
@@ -64,7 +62,6 @@
                 tools:ignore="RtlSymmetry" />
 
             <LinearLayout
-                android:visibility="gone"
                 android:id="@+id/home_head_profile_padding"
                 android:layout_width="50dp"
                 android:layout_height="50dp"
@@ -75,12 +72,10 @@
                 android:nextFocusLeft="@id/home_search"
                 android:orientation="horizontal">
 
-                <!-- Phase 5A: replaced by the global floating top bar in activity_main (MainActivity) -->
                 <androidx.cardview.widget.CardView
                     android:id="@+id/home_head_profile_card"
                     android:layout_width="30dp"
                     android:layout_height="30dp"
-                    android:visibility="gone"
                     android:layout_gravity="center"
                     android:background="@color/transparent"
                     android:focusable="true"

@@ -36,6 +36,9 @@
         android:layout_marginBottom="100dp"
         android:orientation="vertical">
 
+        <!-- Phase 6A: title treatment hidden — the backdrop art already
+             carries the title. HomeScrollAdapter also keeps these gone at
+             bind time (bindLogo/tags logic would otherwise re-show them). -->
         <ImageView
             android:id="@+id/home_preview_logo"
             android:layout_width="260dp"
@@ -43,7 +46,8 @@
             android:layout_gravity="center_horizontal|bottom"
             android:scaleType="fitCenter"
             android:paddingBottom="10dp"
-            android:contentDescription="@null" />
+            android:contentDescription="@null"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/home_scroll_preview_title"
@@ -56,6 +60,7 @@
             android:textColor="?attr/white"
             android:textSize="17sp"
             android:textStyle="bold"
+            android:visibility="gone"
             tools:text="The Perfect Run" />
         <!--<TextView
             android:paddingStart="30dp"
@@ -77,6 +82,7 @@
             android:paddingEnd="30dp"
             android:textColor="?attr/white"
             android:textSize="14sp"
+            android:visibility="gone"
             tools:text="Hello • World • Tags" />
     </LinearLayout>
 
