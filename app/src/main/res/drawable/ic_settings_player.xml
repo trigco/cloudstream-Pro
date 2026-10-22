@@ -6,6 +6,6 @@
     <!-- Phase 3: filled play button (disc with punched triangle hole) -->
     <path
         android:pathData="M3,12 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M10,8.2 L16.6,12 L10,15.8 Z"
-        android:fillColor="?attr/iconColor"
+        android:fillColor="?attr/textColor"
         android:fillType="evenOdd" />
 </vector>

@@ -6,8 +6,8 @@
     <!-- Phase 3: filled puzzle substitute (block with top knob) -->
     <path
         android:pathData="M9,5.5 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z"
-        android:fillColor="?attr/iconColor" />
+        android:fillColor="?attr/textColor" />
     <path
         android:pathData="M7,7.5 H17 A2,2 0 0,1 19,9.5 V19 A2,2 0 0,1 17,21 H7 A2,2 0 0,1 5,19 V9.5 A2,2 0 0,1 7,7.5 Z"
-        android:fillColor="?attr/iconColor" />
+        android:fillColor="?attr/textColor" />
 </vector>
