@@ -660,7 +660,7 @@
         <item name="android:paddingStart">20dp</item>
         <item name="android:paddingEnd">20dp</item>
         <item name="android:selectAllOnFocus">true</item>
-        <item name="android:background">?attr/focusBackground</item>
+        <item name="android:background">@drawable/bg_ripple_rounded</item> <!-- Phase 4: rounded ripple tap surface (was ?attr/focusBackground) -->
         <item name="android:textColor">?attr/textColor</item>
         <item name="android:textAppearance">?android:attr/textAppearanceListItemSmall</item>
         <item name="drawableEndCompat">@drawable/ic_baseline_keyboard_arrow_right_24</item>
