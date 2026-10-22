@@ -182,6 +182,9 @@
     <string name="search">Search</string>
     <string name="library">Library</string>
     <string name="category_account">Accounts and Security</string>
+    <string name="settings_group_app">App</string>
+    <string name="settings_group_content">Content</string>
+    <string name="settings_group_system">System</string>
     <string name="category_updates">Updates and Backup</string>
     <string name="settings_info">Info</string>
     <string name="advanced_search">Advanced Search</string>

@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#2962FF</color>
+    <color name="colorPrimary">#FFFFFF</color> <!-- Phase 5A: monochrome accent (dark base) -->
     <color name="colorPrimarySecond">@color/colorPrimary</color>
     <color name="colorSearch">#232323</color> <!--#3444D1 @color/itemBackground-->
     <color name="colorOngoing">#F53B66</color> <!--FF8181-->
-    <color name="colorPrimaryDark">#0039CB</color>
-    <color name="colorAccent">#2962FF</color> <!-- 818fff-->
+    <color name="colorPrimaryDark">#CCCCCC</color>
+    <color name="colorAccent">#FFFFFF</color> <!-- 818fff-->
 
-    <color name="primaryGrayBackground">#1F1F1F</color> <!--0f0f10 0E0E10 303135 2B2C30-->
-    <color name="primaryBlackBackground">#141414</color> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
+    <color name="primaryGrayBackground">#121212</color> <!-- Phase 5A: near-black surface on pure black --> <!--0f0f10 0E0E10 303135 2B2C30-->
+    <color name="primaryBlackBackground">#000000</color> <!-- Phase 5A: pure black default --> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
     <color name="iconGrayBackground">#1F1F1F</color> <!--141419 202125-->
     <color name="boxItemBackground">#232323</color> <!-- 17171B 1B1B20-->
 
@@ -98,7 +98,7 @@
 
     <!--Other Colors -->
     <color name="colorPrimaryBlue">#5664B7</color>
-    <color name="colorPrimaryRed">#2962FF</color>
+    <color name="colorPrimaryRed">#E50914</color> <!-- Phase 5A: Play-button red -->
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>
     <color name="colorPrimaryGreenApple">#48E484</color>

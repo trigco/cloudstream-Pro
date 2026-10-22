@@ -85,5 +85,61 @@
                 app:customCastBackgroundColor="?attr/primaryGrayBackground"
                 tools:ignore="FragmentTagUsage" />
         </LinearLayout>
+
+        <!-- Phase 5A: global floating top bar (phone portrait only).
+             Visibility + NavHost top padding are driven from MainActivity.updateNavBar:
+             visible on the 5 top-level tab destinations, gone everywhere else. -->
+        <LinearLayout
+            android:id="@+id/top_bar"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_topbar_floating"
+            android:elevation="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/nav_rail_view"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:visibility="visible">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/app_name"
+                android:textColor="?attr/textColor"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/top_bar_search"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:clickable="true"
+                android:contentDescription="@string/title_search"
+                android:focusable="true"
+                android:foreground="@drawable/rounded_select_ripple"
+                android:padding="9dp"
+                android:src="@drawable/search_icon"
+                android:stateListAnimator="@animator/icon_press_scale" />
+
+            <ImageView
+                android:id="@+id/top_bar_profile"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:clickable="true"
+                android:contentDescription="@string/title_settings"
+                android:focusable="true"
+                android:foreground="@drawable/rounded_select_ripple"
+                android:padding="9dp"
+                android:src="@drawable/ic_outline_account_circle_24"
+                android:stateListAnimator="@animator/icon_press_scale" />
+        </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
