@@ -566,29 +566,6 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                     }
             }
 
-            // Phase 5A: global floating top bar. Same phone case as the bottom nav
-            // (PHONE layout, portrait), and only on the 5 top-level tab destinations.
-            // Non-home tabs get top padding (bar 56dp + top margin 12dp + 8dp air)
-            // so their content is not hidden under the floating bar; home stays
-            // full-bleed (hero) by design. Hidden destinations get no padding.
-            val isTopTab = listOf(
-                R.id.navigation_home,
-                R.id.navigation_search,
-                R.id.navigation_library,
-                R.id.navigation_downloads,
-                R.id.navigation_settings
-            ).contains(destination.id)
-            val showTopBar = isLayout(PHONE) && !isLandscape() && isTopTab
-            topBar.isVisible = showTopBar
-            val topBarPadding =
-                if (showTopBar && destination.id != R.id.navigation_home) 76.toPx else 0
-            navHostFragment.setPadding(
-                navHostFragment.paddingStart,
-                topBarPadding,
-                navHostFragment.paddingEnd,
-                navHostFragment.paddingBottom
-            )
-
             /**
              * We need to make sure if we return to a sub-fragment,
              * the correct navigation item is selected so that it does not
@@ -827,16 +804,6 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         } catch (e: IllegalArgumentException) {
             Log.e("NavigationError", "Failed to navigate: ${e.message}")
             false
-        }
-    }
-
-    /** Phase 5A: floating top bar navigation — no-op when already on the destination. */
-    private fun navigateTopBar(navController: NavController, @IdRes destinationId: Int) {
-        if (navController.currentDestination?.id == destinationId) return
-        try {
-            navController.navigate(destinationId)
-        } catch (e: IllegalArgumentException) {
-            Log.e("NavigationError", "Failed to navigate: ${e.message}")
         }
     }
 
@@ -1790,21 +1757,6 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 handled
             }
 
-        }
-
-        // Phase 5A: floating top bar actions. The icon tint is set in code because
-        // android:tint="?attr/..." has no precedent on ImageViews in project layouts.
-        // R.attr.white flips per variant (LightMode swaps the white/black attrs),
-        // matching the chosen icons' own vector tint behaviour.
-        binding?.topBarSearch?.apply {
-            imageTintList =
-                ColorStateList.valueOf(getResourceColor(R.attr.white, 1.0f))
-            setOnClickListener { navigateTopBar(navController, R.id.navigation_search) }
-        }
-        binding?.topBarProfile?.apply {
-            imageTintList =
-                ColorStateList.valueOf(getResourceColor(R.attr.white, 1.0f))
-            setOnClickListener { navigateTopBar(navController, R.id.navigation_settings) }
         }
 
         binding?.navRailView?.apply {
