@@ -60,6 +60,33 @@
             app:argType="boolean" />
     </action>
     <action
+        android:id="@+id/global_to_navigation_actor"
+        app:destination="@id/navigation_actor"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim">
+        <argument
+            android:name="actor_name"
+            app:argType="string" />
+        <argument
+            android:name="actor_image"
+            android:defaultValue="@null"
+            app:argType="string" />
+        <argument
+            android:name="actor_role"
+            android:defaultValue="@null"
+            app:argType="string" />
+        <argument
+            android:name="actor_role_string"
+            android:defaultValue="@null"
+            app:argType="string" />
+        <argument
+            android:name="actor_title"
+            android:defaultValue="@null"
+            app:argType="string" />
+    </action>
+    <action
         android:id="@+id/global_to_navigation_player"
         app:destination="@id/navigation_player"
         app:enterAnim="@anim/enter_anim"
@@ -558,6 +585,17 @@
             app:popEnterAnim="@anim/enter_anim"
             app:popExitAnim="@anim/exit_anim" />
     </fragment>-->
+
+    <fragment
+        android:id="@+id/navigation_actor"
+        android:name="com.lagradost.cloudstream3.ui.result.ActorFragment"
+        android:layout_height="match_parent"
+        android:label="@string/actor_overview"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_actor" />
 
     <fragment
         android:id="@+id/navigation_player"
