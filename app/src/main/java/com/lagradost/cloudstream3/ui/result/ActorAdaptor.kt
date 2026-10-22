@@ -23,7 +23,8 @@ import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 
 class ActorAdaptor(
     private var nextFocusUpId: Int? = null,
-    private val focusCallback: (View?) -> Unit = {}
+    private val focusCallback: (View?) -> Unit = {},
+    private val clickCallback: ((ActorData) -> Unit)? = null
 ) : NoStateAdapter<ActorData>(diffCallback = BaseDiffCallback(itemSame = { a, b ->
     a.actor.name == b.actor.name
 })) {
@@ -96,8 +97,15 @@ class ActorAdaptor(
                 }
 
                 itemView.setOnClickListener {
-                    inverted[item] = !isInverted
-                    this.onUpdateContent(holder, getItem(position), position)
+                    val callback = clickCallback
+                    if (callback != null) {
+                        // Phase 5B: a wired tap opens the in-app actor page
+                        // instead of toggling the name/role inversion.
+                        callback(item)
+                    } else {
+                        inverted[item] = !isInverted
+                        this.onUpdateContent(holder, getItem(position), position)
+                    }
                 }
 
                 itemView.setOnLongClickListener {

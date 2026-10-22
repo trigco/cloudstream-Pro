@@ -457,6 +457,9 @@
     <string name="actor_main">Main</string>
     <string name="actor_supporting">Supporting</string>
     <string name="actor_background">Background</string>
+    <string name="actor_overview">Overview</string>
+    <string name="actor_search_titles" formatted="true">Search titles: %s</string>
+    <string name="actor_in_format" formatted="true">in %s</string>
     <string name="home_source">Source</string>
     <string name="home_random">Random</string>
     <string name="coming_soon">Coming soon…</string>
