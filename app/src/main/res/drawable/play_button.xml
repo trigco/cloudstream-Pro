@@ -1,19 +1,17 @@
-<vector
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:name="vector"
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="842dp"
     android:height="842dp"
-    android:viewportWidth="842"
-    android:viewportHeight="842">
-    <!--70% https://stackoverflow.com/questions/11285961/how-to-make-a-background-20-transparent-on-android -->
+    android:viewportWidth="24"
+    android:viewportHeight="24">
     <path
-        android:name="path"
-        android:pathData="M 421.44 17.5 C 336.15 17.5 253.011 44.513 184.01 94.646 C 115.009 144.778 63.626 215.5 37.27 296.616 C 10.914 377.732 10.914 465.148 37.27 546.264 C 63.626 627.38 115.009 698.102 184.01 748.234 C 253.011 798.367 336.15 825.38 421.44 825.38 C 506.73 825.38 589.869 798.367 658.87 748.234 C 727.871 698.102 779.254 627.38 805.61 546.264 C 831.966 465.148 831.966 377.732 805.61 296.616 C 779.254 215.5 727.871 144.778 658.87 94.646 C 589.869 44.513 506.73 17.5 421.44 17.5 Z"
-        android:fillColor="#B3000000"
-        android:strokeWidth="1"/>
+        android:pathData="M2,12 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5" />
     <path
-        android:name="path_2"
-        android:pathData="M 598.91 419.24 L 333.91 266.24 L 333.91 572.24 L 598.91 419.24 Z"
-        android:fillColor="#ffffff"
-        android:strokeWidth="1"/>
+        android:pathData="M15.945 12.395c-.176.627-1.012 1.07-2.682 1.955c-1.615.856-2.422 1.285-3.073 1.113a1.66 1.66 0 0 1-.712-.393C9 14.62 9 13.746 9 12s0-2.62.478-3.07c.198-.186.443-.321.712-.392c.65-.173 1.458.256 3.073 1.112c1.67.886 2.506 1.329 2.682 1.955c.073.259.073.531 0 .79Z"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round" />
 </vector>

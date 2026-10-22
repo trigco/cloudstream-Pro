@@ -3,11 +3,18 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Phase 3: filled person (head + shoulders) -->
     <path
-        android:pathData="M8.4,8 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0 Z"
-        android:fillColor="#FFFFFF" />
+        android:pathData="M20 21a7.53 7.53 0 0 0-7.005-6.934L12 14q-.531.015-1 .038c-3.7.181-6.716 3.268-7 6.962"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
-        android:pathData="M4.2,20 A7.8,7.8 0 0,1 19.8,20 Z"
-        android:fillColor="#FFFFFF" />
+        android:pathData="M8,7 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>
