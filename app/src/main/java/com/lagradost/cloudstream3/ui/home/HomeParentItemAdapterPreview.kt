@@ -2,6 +2,8 @@ package com.lagradost.cloudstream3.ui.home
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
@@ -488,9 +490,33 @@ class HomeParentItemAdapterPreview(
                     val item = previewAdapter.getItemOrNull(position) ?: return
                     onSelect(item, position)
                 }
+
+                override fun onPageScrollStateChanged(state: Int) {
+                    // Pause the hero auto-slide while the user is dragging the pager.
+                    userDraggingPreview = state == ViewPager2.SCROLL_STATE_DRAGGING
+                }
             }
 
+        // Phase 2: auto-advance the hero pager every 5 seconds while this header
+        // is attached (started in onViewAttachedToWindow, stopped in
+        // onViewDetachedFromWindow, so the Handler never leaks).
+        private val autoSlideHandler = Handler(Looper.getMainLooper())
+        private var userDraggingPreview = false
+        private val autoSlideRunnable = object : Runnable {
+            override fun run() {
+                val count = previewAdapter.itemCount
+                if (count > 1 && !userDraggingPreview) {
+                    previewViewpager.setCurrentItem(
+                        (previewViewpager.currentItem + 1) % count,
+                        true
+                    )
+                }
+                autoSlideHandler.postDelayed(this, 5_000L)
+            }
+        }
+
         fun onViewDetachedFromWindow() {
+            autoSlideHandler.removeCallbacks(autoSlideRunnable)
             previewViewpager.unregisterOnPageChangeCallback(previewCallback)
         }
 
@@ -772,6 +798,10 @@ class HomeParentItemAdapterPreview(
 
         fun onViewAttachedToWindow() {
             previewViewpager.registerOnPageChangeCallback(previewCallback)
+
+            // Phase 2: start the hero auto-slide (see autoSlideRunnable above).
+            autoSlideHandler.removeCallbacks(autoSlideRunnable)
+            autoSlideHandler.postDelayed(autoSlideRunnable, 5_000L)
 
             previewViewpager.apply {
                 observe(viewModel.preview) {
