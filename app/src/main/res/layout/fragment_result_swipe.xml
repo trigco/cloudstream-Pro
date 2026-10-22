@@ -13,7 +13,9 @@
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
             android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
             android:background="@drawable/bg_result_top_bar"
+            android:elevation="6dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp">
         <LinearLayout
