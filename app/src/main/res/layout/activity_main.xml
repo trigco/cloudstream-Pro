@@ -18,6 +18,8 @@
             android:layout_height="match_parent"
             android:background="?attr/primaryGrayBackground"
             android:descendantFocusability="afterDescendants"
+            app:itemActiveIndicatorEnabled="false"
+            app:itemIconSize="26dp"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
             app:headerLayout="@layout/rail_header"
