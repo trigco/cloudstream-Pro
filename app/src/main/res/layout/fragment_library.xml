@@ -113,12 +113,16 @@
         android:background="?attr/primaryBlackBackground"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
+        <!-- Phase 7.5 FIX-5: paddingBottom 40dp (old tab-strip clearance)
+             + 88dp (floating-nav zone). The fragment now extends full height
+             under the overlay nav; 128dp keeps the pages' bottom edge exactly
+             where it was on screen, above the (also shifted) tab strip. -->
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/viewpager"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingBottom="40dp"
+            android:paddingBottom="128dp"
             tools:listitem="@layout/library_viewpager_page" />
 
         <LinearLayout
@@ -156,10 +160,12 @@
 
     </FrameLayout>
 
+    <!-- Phase 7.5 FIX-5: wrapper margin 40dp -> 128dp (+88dp nav zone) so the
+         FABs keep their pre-overlay on-screen position above the tab strip. -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="40dp">
+        android:layout_marginBottom="128dp">
 
         <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
             android:id="@+id/library_random"
@@ -188,12 +194,15 @@
             tools:ignore="ContentDescription" />
     </FrameLayout>
 
+    <!-- Phase 7.5 FIX-5: marginBottom 88dp lifts the strip above the
+         floating nav zone, restoring its pre-overlay on-screen position. -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/library_tab_layout"
         style="@style/Theme.Widget.Tabs"
         android:layout_width="match_parent"
         android:layout_height="40dp"
         android:layout_gravity="bottom"
+        android:layout_marginBottom="88dp"
         android:background="?attr/primaryGrayBackground"
         android:focusable="true"
         android:paddingHorizontal="5dp"

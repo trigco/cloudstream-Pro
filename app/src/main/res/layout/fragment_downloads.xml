@@ -299,11 +299,15 @@
             </LinearLayout>
         </com.facebook.shimmer.ShimmerFrameLayout>
 
+        <!-- Phase 7.5 FIX-5: the list viewport grew by the 88dp nav zone
+             (fragment now extends under the floating nav), so the pre-existing
+             100dp bottom padding grows by the same 88dp to keep the last
+             item's rest position (clearance above the queue bar) identical. -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/download_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingBottom="100dp"
+            android:paddingBottom="188dp"
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:nextFocusUp="@id/download_stream_button_tv"
@@ -320,6 +324,7 @@
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:layout_gravity="bottom"
+            android:layout_marginBottom="88dp"
             android:background="?attr/primaryGrayBackground"
             android:orientation="vertical">
 
@@ -352,11 +357,13 @@
             tools:visibility="visible" />
     </FrameLayout>
 
+    <!-- Phase 7.5 FIX-5: marginBottom 50dp -> 138dp (+88dp nav zone) so the
+         FAB stack keeps its pre-overlay on-screen position. -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_marginBottom="50dp"
+        android:layout_marginBottom="138dp"
         android:orientation="vertical">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
