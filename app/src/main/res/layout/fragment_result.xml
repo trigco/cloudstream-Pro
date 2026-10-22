@@ -266,10 +266,20 @@
                                 app:tint="?attr/textColor" />
                     </LinearLayout>
                 </FrameLayout>-->
+                <!-- Phase 7: backdrop as a floating rounded card (inset margins,
+                     clipped corners) instead of full-bleed edge-to-edge. The card
+                     scrolls with the page; the floating circle buttons in
+                     fragment_result_swipe.xml overlay its top corners. -->
                 <FrameLayout
                     android:id="@+id/result_top_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="200dp">
+                    android:layout_height="200dp"
+                    android:layout_marginStart="@dimen/result_padding"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginEnd="@dimen/result_padding"
+                    android:background="@drawable/bg_details_backdrop"
+                    android:clipToOutline="true"
+                    android:elevation="6dp">
 
                     <FrameLayout
                         android:id="@+id/result_smallscreen_holder"
@@ -325,12 +335,16 @@
                     android:paddingEnd="@dimen/result_padding">
 
 
+                    <!-- Phase 7: was a horizontal row (poster beside text); now a
+                         vertical stack so the title and meta line can be centered
+                         full-width directly under the backdrop card. The poster
+                         holder stays (gone on phone) to preserve its binding. -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="14dp"
                         android:layout_marginBottom="15dp"
-                        android:orientation="horizontal"
+                        android:orientation="vertical"
                         android:visibility="visible">
 
 
@@ -359,18 +373,23 @@
 
                             <TextView
                                 android:id="@+id/result_title"
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginBottom="5dp"
+                                android:gravity="center"
                                 android:maxLines="2"
                                 android:textColor="?attr/textColor"
                                 android:textSize="20sp"
                                 android:textStyle="bold"
                                 tools:text="The Perfect Run The Perfect Run" />
 
+                            <!-- Phase 7: wrap_content + center_horizontal centers the
+                                 provider/type/year meta line under the title
+                                 (FlowLayout itself packs children from the left). -->
                             <com.lagradost.cloudstream3.widget.FlowLayout
-                                android:layout_width="match_parent"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:layout_gravity="center_horizontal"
                                 app:itemSpacing="10dp">
 
                                 <com.google.android.material.button.MaterialButton
@@ -414,10 +433,15 @@
                             <!--
                             This has half margin and half padding to make TV focus on description look better.
                             The focus outline now settles between the poster and text.
+                            Phase 7 (phone layout only): the block is now a rounded
+                            card with internal padding.
                             -->
                             <FrameLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:background="@drawable/bg_details_card"
+                                android:padding="16dp">
 
                                 <TextView
                                     android:id="@+id/result_description"
@@ -538,11 +562,16 @@
                         android:textStyle="normal"
                         android:visibility="gone" />
 
+                    <!-- Phase 7: genre/tag chips sit inside a rounded card
+                         (hidden by ResultFragmentPhone when there are no tags). -->
                     <com.google.android.material.chip.ChipGroup
                         android:id="@+id/result_tag"
                         style="@style/ChipParent"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_details_card"
+                        android:padding="16dp" />
                     <!--<com.lagradost.cloudstream3.widget.FlowLayout
                             android:id="@+id/result_tag"
                             android:layout_width="match_parent"

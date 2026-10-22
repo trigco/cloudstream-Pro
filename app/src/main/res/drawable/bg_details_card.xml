@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7: rounded card surface behind the details-page description block and
+     genre/tag chip row. Same pattern as bg_settings_group: the solid follows the
+     theme's surface attr so it flips per variant. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="?attr/primaryGrayBackground" />
+</shape>

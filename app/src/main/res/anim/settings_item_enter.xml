@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7: gentle fade + rise used as the settings list entrance item animation. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator"
+    android:shareInterpolator="true">
+
+    <alpha
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0"
+        android:duration="280" />
+
+    <translate
+        android:fromYDelta="12%"
+        android:toYDelta="0%"
+        android:duration="280" />
+</set>

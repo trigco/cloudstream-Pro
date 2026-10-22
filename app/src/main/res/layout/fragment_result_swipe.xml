@@ -84,6 +84,7 @@
     <FrameLayout
             android:id="@+id/result_top_bar"
             android:layout_gravity="top"
+            android:layout_marginTop="24dp"
             android:paddingStart="@dimen/result_padding"
             android:paddingEnd="@dimen/result_padding"
             android:layout_width="match_parent"

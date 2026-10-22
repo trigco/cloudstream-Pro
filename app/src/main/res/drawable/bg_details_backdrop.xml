@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7: rounded background for the details-page backdrop holder.
+     Paired with android:clipToOutline="true" on the holder so the backdrop image
+     (and the in-card trailer) are clipped to the card's rounded corners; the solid
+     is what shows before the image loads. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="24dp" />
+    <solid android:color="?attr/primaryGrayBackground" />
+</shape>

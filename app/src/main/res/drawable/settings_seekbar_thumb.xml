@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7: larger round thumb for settings sliders (default Material thumb is ~16dp;
+     22dp reads modern and is easier to grab). Themed via colorControlActivated. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <size
+        android:width="22dp"
+        android:height="22dp" />
+    <solid android:color="?attr/colorControlActivated" />
+</shape>
