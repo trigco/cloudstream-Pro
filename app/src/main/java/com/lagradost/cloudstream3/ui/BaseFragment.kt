@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AnimationUtils
 import android.widget.Toast
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.DialogFragment
@@ -269,6 +270,11 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setSystemBarsPadding()
+        // Phase 7: gentle staggered fade+rise entrance for the settings list,
+        // shared by every settings sub-page via this base class.
+        listView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
+            requireContext(), R.anim.settings_list_layout_animation
+        )
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

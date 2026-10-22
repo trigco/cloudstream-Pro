@@ -1024,6 +1024,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }
 
                     populateChips(resultTag, d.tags)
+                    // Phase 7: result_tag now has a card background + padding, so
+                    // hide it entirely when there are no tags (no empty card bar).
+                    resultTag.isVisible = d.tags.isNotEmpty()
 
                     resultComingSoon.isVisible = d.comingSoon
                     resultDataHolder.isGone = d.comingSoon

@@ -5,6 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isGone
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.HomeScrollViewBinding
 import com.lagradost.cloudstream3.databinding.HomeScrollViewTvBinding
 import com.lagradost.cloudstream3.ui.BaseDiffCallback
@@ -58,18 +60,61 @@ class HomeScrollAdapter(
         when (binding) {
             is HomeScrollViewBinding -> {
                 binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders)
-                // Phase 6A: the hero backdrop art already carries the title,
-                // so the overlaid title/tags/logo treatment stays hidden.
+                // Phase 7: the hero is an inset rounded card and the title
+                // is back on it (bottom-left, over the scrim), with a meta
+                // line underneath. Tags/logo stay hidden (Phase 6A).
                 // bindLogo is intentionally not called here: it force-toggles
-                // title/logo visibility and would undo the hidden state.
+                // title/logo visibility and would undo this state.
                 binding.homeScrollPreviewTags.apply {
                     text = item.tags?.joinToString(" • ") ?: ""
                     isGone = true
                     maxLines = 2
                 }
                 binding.homeScrollPreviewTitle.text = item.name.html()
-                binding.homeScrollPreviewTitle.isGone = true
+                binding.homeScrollPreviewTitle.isGone = false
+
+                // Meta line: "year • ★ rating • type" — only the parts
+                // that exist for this item. Score formatting mirrors the
+                // result page (ResultViewModel2): 1 decimal, null when the
+                // score is effectively zero/unset. Type text mirrors the
+                // result page's TvType -> *_singular string mapping.
+                val metaParts = mutableListOf<String>()
+                item.year?.let { metaParts += it.toString() }
+                item.score?.toStringNull(0.1, 10, 1, false, '.')
+                    ?.let { metaParts += "★ $it" }
+                metaParts += binding.root.context.getString(
+                    when (item.type) {
+                        TvType.Movie -> R.string.movies_singular
+                        TvType.AnimeMovie -> R.string.movies_singular
+                        TvType.TvSeries -> R.string.tv_series_singular
+                        TvType.Anime -> R.string.anime_singular
+                        TvType.OVA -> R.string.ova_singular
+                        TvType.Cartoon -> R.string.cartoons_singular
+                        TvType.Documentary -> R.string.documentaries_singular
+                        TvType.AsianDrama -> R.string.asian_drama_singular
+                        TvType.Torrent -> R.string.torrent_singular
+                        TvType.Live -> R.string.live_singular
+                        TvType.NSFW -> R.string.nsfw_singular
+                        TvType.Others -> R.string.other_singular
+                        TvType.Music -> R.string.music_singular
+                        TvType.AudioBook -> R.string.audio_book_singular
+                        TvType.Audio -> R.string.audio_singular
+                        TvType.Podcast -> R.string.podcast_singular
+                        TvType.Video -> R.string.video_singular
+                        TvType.CustomMedia -> R.string.custom_media_singular
+                    }
+                )
+                binding.homeScrollPreviewMeta.apply {
+                    text = metaParts.joinToString(" • ")
+                    isGone = metaParts.isEmpty()
+                }
+
                 binding.homePreviewLogo.isGone = true
+
+                // Quality badge: LoadResponse has no quality field (quality
+                // only exists on SearchResponse), so there is no value to
+                // show and the badge stays hidden.
+                binding.homeScrollQualityBadge.isGone = true
             }
 
             is HomeScrollViewTvBinding -> {
