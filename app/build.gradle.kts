@@ -238,6 +238,7 @@ dependencies {
     implementation(libs.preference.ktx)
     implementation(libs.material)
     implementation(libs.constraintlayout)
+    implementation(libs.swiperefreshlayout) // Pull-to-refresh on Home
 
     // Coil Image Loading
     implementation(libs.bundles.coil)
