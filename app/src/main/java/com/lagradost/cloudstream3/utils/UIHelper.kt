@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.TransactionTooLargeException
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.View
@@ -124,6 +125,10 @@ object UIHelper {
                 style
             )
             chip.setChipDrawable(chipDrawable)
+            // Phase 3: full-pill genre/tag chips (radius far beyond chip height)
+            chip.chipCornerRadius = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 100f, context.resources.displayMetrics
+            )
             chip.text = tag
             chip.isChecked = false
             chip.isCheckable = false
