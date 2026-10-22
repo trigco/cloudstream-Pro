@@ -1,7 +1,11 @@
 package com.lagradost.cloudstream3.ui.result
 
-import android.app.SearchManager
-import android.content.Intent
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,8 +21,6 @@ import com.lagradost.cloudstream3.ui.BaseDiffCallback
 import com.lagradost.cloudstream3.ui.NoStateAdapter
 import com.lagradost.cloudstream3.ui.ViewHolderState
 import com.lagradost.cloudstream3.ui.newSharedPool
-import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
-import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 
 class ActorAdaptor(
@@ -67,6 +69,94 @@ class ActorAdaptor(
         super.onUpdateContent(holder, item, position)
     }
 
+    private fun showActorOverview(anchor: View, item: ActorData) {
+        val context = anchor.context
+        val dialog = BottomSheetDialog(context)
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 28, 24, 32)
+            background = GradientDrawable().apply {
+                setColor(context.getColor(R.color.primaryGrayBackground))
+                cornerRadii = floatArrayOf(28f, 28f, 28f, 28f, 0f, 0f, 0f, 0f)
+            }
+        }
+
+        val portrait = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                setColor(context.getColor(R.color.iconGrayBackground))
+                cornerRadius = 22f
+            }
+            clipToOutline = true
+            contentDescription = item.actor.name
+            loadImage(item.actor.image)
+        }
+        content.addView(portrait, LinearLayout.LayoutParams(116, 148).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = 18
+        })
+
+        content.addView(TextView(context).apply {
+            text = item.actor.name
+            textSize = 22f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(context.getColor(R.color.textColor))
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        val role = item.roleString ?: item.role?.let {
+            context.getString(
+                when (it) {
+                    ActorRole.Main -> R.string.actor_main
+                    ActorRole.Supporting -> R.string.actor_supporting
+                    ActorRole.Background -> R.string.actor_background
+                }
+            )
+        }
+        if (!role.isNullOrBlank()) {
+            content.addView(TextView(context).apply {
+                text = role
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(0, 6, 0, 0)
+                setTextColor(context.getColor(R.color.grayTextColor))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+
+        item.voiceActor?.let { voice ->
+            content.addView(TextView(context).apply {
+                text = context.getString(R.string.actor_overview_voice_actor, voice.name)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(0, 16, 0, 0)
+                setTextColor(context.getColor(R.color.textColor))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+
+        content.addView(TextView(context).apply {
+            text = context.getString(R.string.actor_overview_source_note)
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setPadding(0, 14, 0, 0)
+            setTextColor(context.getColor(R.color.grayTextColor))
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        dialog.setContentView(content)
+        dialog.show()
+    }
+
     override fun onBindContent(holder: ViewHolderState<Any>, item: ActorData, position: Int) {
         when (val binding = holder.view) {
             is CastItemBinding -> {
@@ -96,21 +186,14 @@ class ActorAdaptor(
                 }
 
                 itemView.setOnClickListener {
-                    inverted[item] = !isInverted
-                    this.onUpdateContent(holder, getItem(position), position)
+                    showActorOverview(itemView, item)
                 }
 
+                // Long-press still lets users switch between actor and voice-actor portraits.
                 itemView.setOnLongClickListener {
-                    if (isLayout(PHONE)) {
-                        Intent(Intent.ACTION_WEB_SEARCH).apply {
-                            putExtra(SearchManager.QUERY, item.actor.name)
-                        }.also { intent ->
-                            itemView.context.packageManager?.let { pm ->
-                                if (intent.resolveActivity(pm) != null) {
-                                    itemView.context.startActivity(intent)
-                                }
-                            }
-                        }
+                    if (item.voiceActor != null) {
+                        inverted[item] = !isInverted
+                        this.onUpdateContent(holder, getItem(position), position)
                     }
                     true
                 }
