@@ -189,3 +189,6 @@ actor page, results in the app's best UI, zero duplicated machinery.
    sheet does not use this adaptor). Anywhere the adaptor might be reused
    later without a callback, the inversion behaviour is preserved by the
    null default.
+
+## Post-build fix (parent): Wikipedia User-Agent
+Wikimedia's API access policy makes an identifying User-Agent mandatory (requests without one may be blocked without notice, which would make every overview silently empty). The bare app.get() relied on the HTTP library's generic default UA. fetchWikipediaOverview now passes headers = mapOf("User-Agent" to "CloudStreamPro/1.0 (myself@nitrogen.bond)") — the headers argument pattern is the one already used by KitsuApi/FcastAction/Addic7ed.

@@ -130,7 +130,13 @@ class ActorFragment : BaseFragment<FragmentActorBinding>(
             val summary = app.get(
                 "https://en.wikipedia.org/api/rest_v1/page/summary/${
                     Uri.encode(name.replace(' ', '_'))
-                }"
+                }",
+                // Wikimedia's API policy requires an identifying User-Agent;
+                // without one the request may be blocked and the overview
+                // would silently never appear.
+                headers = mapOf(
+                    "User-Agent" to "CloudStreamPro/1.0 (myself@nitrogen.bond)"
+                )
             ).parsedSafe<WikipediaSummary>()
 
             val extract = summary?.extract?.takeIf { it.isNotBlank() }
