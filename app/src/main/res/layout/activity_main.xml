@@ -43,9 +43,7 @@
 
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
-            app:itemActiveIndicatorColor="@color/navIndicatorRed"
-
-            app:layout_constraintBottom_toBottomOf="parent"
+app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:menu="@menu/bottom_nav_menu" />
@@ -84,8 +82,4 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <androidx.compose.ui.platform.ComposeView
-        android:id="@+id/compose_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
 </FrameLayout>
