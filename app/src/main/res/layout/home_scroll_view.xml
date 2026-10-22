@@ -1,19 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 7: the hero page is now an inset rounded CARD (reference-app
-     style). The page root stays match_parent so the pager's paging math is
-     unchanged; the card inside carries the margins: 16dp sides, 14dp top,
-     and 108dp bottom so the card's bottom edge clears the 100dp action-row
-     holder in fragment_home_head (that file is untouched). The root
-     background now matches the home header (?attr/primaryBlackBackground,
-     same as fragment_home_head) so the margins around the card blend in. -->
+<!-- Phase 7.5 FIX-2: the hero page is an inset rounded CARD. Phase 7 used a
+     CardView (16dp sides / 14dp top / 108dp bottom, cardElevation=0); on
+     device the margins were laid out but the card was visually invisible:
+     no shadow, a near-black margin moat identical to the page background,
+     and fragment_home_head's full-width bottom scrim faking image
+     continuation over the card's bottom edge — so it read as full-bleed.
+     The card is now a plain container using the exact recipe that DID
+     render on this device for the details-page backdrop card
+     (result_top_holder): rounded background drawable (bg_details_backdrop,
+     24dp) + clipToOutline + 6dp elevation, same margins. Title + meta are
+     CENTERED in the card (user request), like the details title. The page
+     root stays match_parent so the pager's paging math is unchanged; the
+     108dp bottom margin keeps the card's bottom edge clear of the 100dp
+     action-row holder in fragment_home_head (that file is untouched). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:background="?attr/primaryBlackBackground"
     android:layout_height="match_parent">
 
-    <androidx.cardview.widget.CardView
+    <FrameLayout
         android:id="@+id/home_scroll_card"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -21,9 +27,9 @@
         android:layout_marginTop="14dp"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="108dp"
-        app:cardBackgroundColor="@color/primaryGrayBackground"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp">
+        android:background="@drawable/bg_details_backdrop"
+        android:clipToOutline="true"
+        android:elevation="6dp">
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -53,10 +59,10 @@
                 android:layout_gravity="bottom"
                 android:background="@drawable/background_shadow" />
 
-            <!-- Phase 7: quality badge on the card's top-right corner.
-                 LoadResponse carries no quality value (quality only exists
-                 on SearchResponse), so HomeScrollAdapter keeps this gone;
-                 it appears only if a quality data source ever exists. -->
+            <!-- Quality badge on the card's top-right corner. LoadResponse
+                 carries no quality value (quality only exists on
+                 SearchResponse), so HomeScrollAdapter keeps this gone; it
+                 appears only if a quality data source ever exists. -->
             <TextView
                 android:id="@+id/home_scroll_quality_badge"
                 android:layout_width="wrap_content"
@@ -81,8 +87,8 @@
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp">
 
-                <!-- Phase 7: title is back, on the card, bottom-left over
-                     the scrim. Logo and tags stay hidden (Phase 6A). -->
+                <!-- Logo and tags stay hidden (Phase 6A). Title + meta are
+                     centered in the card (Phase 7.5 FIX-2). -->
                 <ImageView
                     android:id="@+id/home_preview_logo"
                     android:layout_width="260dp"
@@ -95,11 +101,11 @@
 
                 <TextView
                     android:id="@+id/home_scroll_preview_title"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="start"
+                    android:layout_gravity="center_horizontal"
                     android:ellipsize="end"
-                    android:gravity="start"
+                    android:gravity="center"
                     android:maxLines="2"
                     android:paddingBottom="4dp"
                     android:textColor="?attr/white"
@@ -129,15 +135,15 @@
                     android:visibility="gone"
                     tools:text="Hello • World • Tags" />
 
-                <!-- Phase 7: meta line under the title, bound by
-                     HomeScrollAdapter: "year • ★ rating • type", built
-                     only from parts that exist for the item. -->
+                <!-- Meta line under the title, bound by HomeScrollAdapter:
+                     "year • ★ rating • type", built only from parts that
+                     exist for the item. Centered with the title. -->
                 <TextView
                     android:id="@+id/home_scroll_preview_meta"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="start"
-                    android:gravity="start"
+                    android:layout_gravity="center_horizontal"
+                    android:gravity="center"
                     android:textColor="@color/grayTextColor"
                     android:textSize="13sp"
                     android:visibility="gone"
@@ -145,6 +151,6 @@
             </LinearLayout>
 
         </FrameLayout>
-    </androidx.cardview.widget.CardView>
+    </FrameLayout>
 
 </FrameLayout>

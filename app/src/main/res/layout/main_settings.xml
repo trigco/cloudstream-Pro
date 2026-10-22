@@ -6,9 +6,14 @@
     android:layout_height="match_parent"
     android:background="?attr/primaryBlackBackground">
 
+    <!-- Phase 7.5 FIX-5: bottom padding + clipToPadding=false so the last
+         settings group scrolls out from behind the floating nav but never
+         rests under it (fragment now extends full height). -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 

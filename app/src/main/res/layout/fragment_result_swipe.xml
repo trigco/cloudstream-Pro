@@ -81,10 +81,21 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- Phase 7.5 FIX-3: elevation lifts the whole bar into its own layer
+         above the trailer's TextureView hardware layer. Without it, on
+         older GPUs the video surface composites OVER the parts of the
+         circle buttons that overlap the card, making them look half
+         clipped at the card's top edge in the trailer state (the backdrop
+         state, a plain ImageView, always ordered correctly). The 24dp top
+         offset is unchanged on purpose: the card frame starts 16dp below
+         the content top in BOTH states (backdrop and trailer share
+         result_top_holder), so the circles start 8dp inside the card's
+         top edge in both states, as verified on device for the backdrop. -->
     <FrameLayout
             android:id="@+id/result_top_bar"
             android:layout_gravity="top"
             android:layout_marginTop="24dp"
+            android:elevation="12dp"
             android:paddingStart="@dimen/result_padding"
             android:paddingEnd="@dimen/result_padding"
             android:layout_width="match_parent"

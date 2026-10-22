@@ -269,14 +269,28 @@
                 <!-- Phase 7: backdrop as a floating rounded card (inset margins,
                      clipped corners) instead of full-bleed edge-to-edge. The card
                      scrolls with the page; the floating circle buttons in
-                     fragment_result_swipe.xml overlay its top corners. -->
+                     fragment_result_swipe.xml overlay its top corners.
+                     Phase 7.5 FIX-3: the card now sits in a plain wrapper that
+                     carries the margins and also holds the corner mask below.
+                     The mask must be a SIBLING of the card, not a child: the
+                     holder's own outline clip (clipToOutline) clips its
+                     children to the rounded outline, so a child mask could
+                     never paint the corner squares it exists to cover. The
+                     trailer's TextureView escapes that clip on older GPUs,
+                     which is why the trailer showed square corners while the
+                     static backdrop clipped fine. -->
+                <FrameLayout
+                    android:id="@+id/result_top_card_frame"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/result_padding"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginEnd="@dimen/result_padding">
+
                 <FrameLayout
                     android:id="@+id/result_top_holder"
                     android:layout_width="match_parent"
                     android:layout_height="200dp"
-                    android:layout_marginStart="@dimen/result_padding"
-                    android:layout_marginTop="16dp"
-                    android:layout_marginEnd="@dimen/result_padding"
                     android:background="@drawable/bg_details_backdrop"
                     android:clipToOutline="true"
                     android:elevation="6dp">
@@ -324,6 +338,24 @@
                             android:contentDescription="@null" />
 
                     </FrameLayout>
+                </FrameLayout>
+
+                <!-- Phase 7.5 FIX-3: corner mask. Paints the page background
+                     over the four corner squares outside the card's 24dp
+                     rounded corner so the trailer's un-clippable TextureView
+                     surface reads as rounded. Overlays the whole card but
+                     paints nothing inside the corner arc, so the backdrop,
+                     watermark and trailer intro overlay are untouched. It
+                     deliberately never consumes touches: the trailer's
+                     center play button and the poster stay interactive. -->
+                <View
+                    android:id="@+id/result_top_corner_mask"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_details_corner_mask"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:importantForAccessibility="no" />
                 </FrameLayout>
 
                 <LinearLayout

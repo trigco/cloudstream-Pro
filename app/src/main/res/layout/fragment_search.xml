@@ -131,14 +131,19 @@
         android:paddingStart="8dp"
         android:paddingTop="5dp"
         android:paddingEnd="8dp"
+        android:paddingBottom="100dp"
         android:visibility="gone"
         app:spanCount="3"
         tools:listitem="@layout/search_result_grid" />
 
+    <!-- Phase 7.5 FIX-5: bottom padding + clipToPadding=false so results
+         scroll out from behind the floating nav but never rest under it. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/search_master_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
 
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
@@ -152,6 +157,8 @@
         android:id="@+id/search_history_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
         android:nextFocusLeft="@id/nav_rail_view"
