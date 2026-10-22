@@ -26,7 +26,7 @@
                 android:layout_height="wrap_content">
             <ImageView
                     android:nextFocusRight="@id/result_mini_sync"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
 
                     android:id="@+id/result_back"
                     android:clickable="true"
@@ -42,7 +42,7 @@
             <ImageView
                 android:visibility="gone"
                 android:nextFocusRight="@id/result_subscribe"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_toolbar_icon_ripple"
 
                 android:id="@+id/result_mini_sync"
                 android:clickable="true"
@@ -88,7 +88,7 @@
                     android:layout_margin="5dp"
                     android:elevation="10dp"
                     android:tooltipText="@string/subscribe_tooltip"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
                     android:src="@drawable/baseline_notifications_none_24"
                     android:layout_gravity="end|center_vertical"
                     app:tint="?attr/textColor" />
@@ -105,7 +105,7 @@
                 android:layout_margin="5dp"
                 android:elevation="10dp"
                 android:tooltipText="@string/action_add_to_favorites"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_toolbar_icon_ripple"
                 android:src="@drawable/ic_baseline_favorite_border_24"
                 android:layout_gravity="end|center_vertical"
                 app:tint="?attr/textColor" />
@@ -122,7 +122,7 @@
                     android:layout_margin="5dp"
                     android:elevation="10dp"
                     android:tooltipText="@string/result_share"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
                     android:src="@drawable/ic_outline_share_24"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/result_share"
@@ -140,7 +140,7 @@
                     android:layout_margin="5dp"
                     android:elevation="10dp"
                     android:tooltipText="@string/result_open_in_browser"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
                     android:src="@drawable/ic_baseline_public_24"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/result_open_in_browser"
@@ -158,7 +158,7 @@
                     android:layout_margin="5dp"
                     android:elevation="10dp"
                     android:tooltipText="@string/result_search_tooltip"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
                     android:src="@drawable/search_icon"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/result_open_in_browser"
@@ -176,7 +176,7 @@
                     android:layout_margin="5dp"
                     android:elevation="10dp"
                     android:tooltipText="@string/recommendations_tooltip"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_toolbar_icon_ripple"
                     android:src="@drawable/baseline_list_alt_24"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/result_open_in_browser"
