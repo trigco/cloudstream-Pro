@@ -43,7 +43,6 @@
 
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
-            app:itemActiveIndicatorColor="@color/navIndicatorRed"
 
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
