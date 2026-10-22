@@ -32,6 +32,7 @@ import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.DubStatus
@@ -97,6 +98,7 @@ import com.lagradost.cloudstream3.utils.UIHelper.populateChips
 import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
 import com.lagradost.cloudstream3.utils.UIHelper.setListViewHeightBasedOnItems
 import com.lagradost.cloudstream3.utils.UIHelper.setNavigationBarColorCompat
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement.getBasePath
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
@@ -1024,6 +1026,19 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }
 
                     populateChips(resultTag, d.tags)
+                    // Phase 7.5: the shared ChipFilled fill resolves to the
+                    // same primaryGrayBackground as the new details card, and
+                    // its stroke is transparent unless focused, so the genre
+                    // chips looked like plain text on the card. Restyle only
+                    // these phone-details chips as separate pills; populateChips
+                    // already gives them a 100dp (full-pill) corner radius.
+                    for (i in 0 until resultTag.childCount) {
+                        (resultTag.getChildAt(i) as? Chip)?.apply {
+                            setChipBackgroundColorResource(R.color.bg_details_chip)
+                            setChipStrokeColorResource(R.color.bg_details_chip_stroke)
+                            chipStrokeWidth = 1.toPx.toFloat()
+                        }
+                    }
                     // Phase 7: result_tag now has a card background + padding, so
                     // hide it entirely when there are no tags (no empty card bar).
                     resultTag.isVisible = d.tags.isNotEmpty()

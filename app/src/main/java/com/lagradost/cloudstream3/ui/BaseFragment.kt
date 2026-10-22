@@ -16,7 +16,12 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.mvvm.logError
+import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
+import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
+import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.txt
 
 /**
@@ -267,6 +272,11 @@ abstract class BaseBottomSheetDialogFragment<T : ViewBinding>(
 }
 
 abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
+    /** The preference list's own bottom padding, captured before the
+     * Phase 7.5 nav clearance is applied, so it can be restored when the
+     * floating pill is not in play (TV / landscape rail). */
+    private var defaultListBottomPadding: Int? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setSystemBarsPadding()
@@ -275,10 +285,41 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
         listView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
             requireContext(), R.anim.settings_list_layout_animation
         )
+        applyNavClearancePadding()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         setSystemBarsPadding()
+        // The pill only overlays in portrait; re-evaluate on rotation, the
+        // same reason setSystemBarsPadding() is re-applied here.
+        if (view != null) runCatching { applyNavClearancePadding() }
+    }
+
+    /** Phase 7.5 (fix 5): the phone bottom nav is a true overlay (70dp bar
+     * + 18dp bottom margin = 88dp zone), so the settings sub-pages — which
+     * show the nav but are not main tabs — need the same 100dp rest
+     * clearance the main tab lists got, or their last rows rest hidden
+     * behind the pill. Only the bottom padding changes; the list's other
+     * padding is preserved. Guard mirrors MainActivity: the pill shows on
+     * phone layouts (PHONE or EMULATOR, the settings screens' own phone
+     * check) in portrait; landscape uses the nav rail and TV never shows
+     * the pill, so both keep their original padding. */
+    private fun applyNavClearancePadding() {
+        val list = listView
+        if (defaultListBottomPadding == null) {
+            defaultListBottomPadding = list.paddingBottom
+        }
+        list.clipToPadding = false
+        list.setPadding(
+            list.paddingLeft,
+            list.paddingTop,
+            list.paddingRight,
+            if (isLayout(PHONE or EMULATOR) && !isLandscape()) {
+                100.toPx
+            } else {
+                defaultListBottomPadding ?: list.paddingBottom
+            }
+        )
     }
 }
