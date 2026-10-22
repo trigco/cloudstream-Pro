@@ -222,6 +222,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:descendantFocusability="afterDescendants"
+        android:layoutAnimation="@anim/home_master_layout_animation"
         android:nextFocusLeft="@id/nav_rail_view"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         tools:listitem="@layout/homepage_parent"

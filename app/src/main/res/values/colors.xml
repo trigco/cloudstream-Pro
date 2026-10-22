@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#3d50fa</color>
+    <color name="colorPrimary">#E50914</color>
     <color name="colorPrimarySecond">@color/colorPrimary</color>
-    <color name="colorSearch">#303135</color> <!--#3444D1 @color/itemBackground-->
+    <color name="colorSearch">#232323</color> <!--#3444D1 @color/itemBackground-->
     <color name="colorOngoing">#F53B66</color> <!--FF8181-->
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#3b65f5</color> <!-- 818fff-->
+    <color name="colorPrimaryDark">#B20710</color>
+    <color name="colorAccent">#E50914</color> <!-- 818fff-->
 
-    <color name="primaryGrayBackground">#2B2C30</color> <!--0f0f10 0E0E10 303135 2B2C30-->
-    <color name="primaryBlackBackground">#111111</color> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
-    <color name="iconGrayBackground">#1C1C20</color> <!--141419 202125-->
-    <color name="boxItemBackground">#161616</color> <!-- 17171B 1B1B20-->
+    <color name="primaryGrayBackground">#1F1F1F</color> <!--0f0f10 0E0E10 303135 2B2C30-->
+    <color name="primaryBlackBackground">#141414</color> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
+    <color name="iconGrayBackground">#1F1F1F</color> <!--141419 202125-->
+    <color name="boxItemBackground">#232323</color> <!-- 17171B 1B1B20-->
 
-    <color name="textColor">#e9eaee</color> <!--FFF-->
-    <color name="grayTextColor">#9ba0a4</color> <!-- 5e5f62-->
+    <color name="textColor">#FFFFFF</color> <!--FFF-->
+    <color name="grayTextColor">#B3B3B3</color> <!-- 5e5f62-->
     <color name="grayShimmer">#DCDCDC</color> <!-- 5e5f62-->
 
     <color name="searchColorTransparent">#1AFFFFFF</color> <!--DADADA-->
@@ -30,7 +30,7 @@
     <color name="progressBackgroundColor">#1AFFFFFF</color>
 
     <color name="dubColorText">#121950</color> <!--3b65f5 f18c82 8294F1-->
-    <color name="amoledModeLight">#121213</color>
+    <color name="amoledModeLight">#1F1F1F</color>
 
     <color name="dubColorBg">#3B65F5</color>
     <color name="subColorText">#571711</color> <!--F53B66 FA3D79-->
@@ -55,7 +55,7 @@
     <color name="videoProgress">#66B5B5B5</color> <!--66B5B5B5-->
     <!--<color name="videoCache">#663D50FA</color>--> <!--66B5B5B5-->
 
-    <color name="iconColor">#9ba0a6</color>
+    <color name="iconColor">#B3B3B3</color>
 
     <!-- <color name="usedStorageColor">?attr/white</color>#fff-->
     <!-- <color name="freeStorageColor">?attr/grayTextColor</color> #676767-->
@@ -98,7 +98,7 @@
 
     <!--Other Colors -->
     <color name="colorPrimaryBlue">#5664B7</color>
-    <color name="colorPrimaryRed">#D50000</color>
+    <color name="colorPrimaryRed">#E50914</color>
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>
     <color name="colorPrimaryGreenApple">#48E484</color>
@@ -122,4 +122,7 @@
     <color name="colorTestFail">#ea596e</color>
     <color name="colorTestWarning">#FF9800</color>
     <color name="playIconBackground">#B3000000</color>
+
+    <!-- Netflix redesign: translucent red active-indicator for bottom navigation -->
+    <color name="navIndicatorRed">#4DE50914</color>
 </resources>
