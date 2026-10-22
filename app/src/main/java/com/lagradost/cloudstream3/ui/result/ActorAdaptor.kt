@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.OvershootInterpolator
 import android.view.animation.ScaleAnimation
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.ActorRole
@@ -76,15 +77,15 @@ class ActorAdaptor(
             orientation = LinearLayout.VERTICAL
             setPadding(24, 28, 24, 32)
             background = GradientDrawable().apply {
-                setColor(context.getColor(R.color.primaryGrayBackground))
-                cornerRadii = floatArrayOf(28f, 28f, 28f, 28f, 0f, 0f, 0f, 0f)
+                setColor(ContextCompat.getColor(context, R.color.primaryGrayBackground))
+                setCornerRadii(floatArrayOf(28f, 28f, 28f, 28f, 0f, 0f, 0f, 0f))
             }
         }
 
         val portrait = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
-                setColor(context.getColor(R.color.iconGrayBackground))
+                setColor(ContextCompat.getColor(context, R.color.iconGrayBackground))
                 cornerRadius = 22f
             }
             clipToOutline = true
@@ -101,7 +102,7 @@ class ActorAdaptor(
             textSize = 22f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER
-            setTextColor(context.getColor(R.color.textColor))
+            setTextColor(ContextCompat.getColor(context, R.color.textColor))
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -122,7 +123,7 @@ class ActorAdaptor(
                 textSize = 14f
                 gravity = Gravity.CENTER
                 setPadding(0, 6, 0, 0)
-                setTextColor(context.getColor(R.color.grayTextColor))
+                setTextColor(ContextCompat.getColor(context, R.color.grayTextColor))
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
