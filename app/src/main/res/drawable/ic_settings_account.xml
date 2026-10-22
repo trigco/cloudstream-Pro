@@ -6,8 +6,8 @@
     <!-- Phase 3: filled person (head + shoulders) -->
     <path
         android:pathData="M8.4,8 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0 Z"
-        android:fillColor="?attr/textColor" />
+        android:fillColor="?attr/white" />
     <path
         android:pathData="M4.2,20 A7.8,7.8 0 0,1 19.8,20 Z"
-        android:fillColor="?attr/textColor" />
+        android:fillColor="?attr/white" />
 </vector>

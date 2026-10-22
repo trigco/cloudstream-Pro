@@ -261,3 +261,6 @@ Created (2):
 ## Addendum (parent, post-review): floating bottom nav
 - NEW res/drawable/bg_nav_floating.xml: 28dp rounded rect, solid ?attr/primaryGrayBackground (flips per variant; precedent bg_color_both.xml).
 - activity_main.xml (fork version): phone BottomNavigationView only — background → @drawable/bg_nav_floating, margins 16/16/14dp, elevation 8dp. NavigationRailView untouched. The bar now floats Telegram-style instead of touching the screen edges.
+
+## Correction (post-CI): settings icon color attr
+CI runs #16/#17 failed at :app:mergePrereleaseDebugResources — VdUtil.parseColorValue rejects ?attr/iconColor AND ?attr/textColor as vector fillColor in this AGP's merger, despite upstream precedent for textColor in another file. Final: fillColor="?attr/white" — empirically proven in this project (4 upstream vectors use it; Phase 2/3 green builds carried it). Semantically it still flips: LightMode swaps the white/black attrs, SilentBlueMode binds white to its text color.

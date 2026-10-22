@@ -6,6 +6,6 @@
     <!-- Phase 3: filled globe (disc with punched meridian ellipse + equator band) -->
     <path
         android:pathData="M3,12 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M12,3 A3.4,9 0 1,0 12,21 A3.4,9 0 1,0 12,3 Z M3,10.9 H21 V13.1 H3 Z"
-        android:fillColor="?attr/textColor"
+        android:fillColor="?attr/white"
         android:fillType="evenOdd" />
 </vector>
