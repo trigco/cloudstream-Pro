@@ -246,6 +246,38 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
     }
 
+    /**
+     * Phase 3: providers often append quality/source junk to titles, e.g.
+     * "Eyes (2026) Hindi S01 Complete SONYLIV | 720p x265". Strip that from the
+     * phone details title only — stored data and other screens are untouched.
+     */
+    private fun cleanDisplayTitle(raw: String): String {
+        var title = raw.replace(
+            Regex(
+                """[\[(](480p|720p|1080p|2160p|4k|x264|x265|hevc)[)\]]""",
+                RegexOption.IGNORE_CASE
+            ), " "
+        )
+        val pipe = title.indexOf(" | ")
+        if (pipe >= 0) {
+            val tail = title.substring(pipe + 3)
+            val junk = listOf(
+                "480p", "720p", "1080p", "2160p", "4k", "x264", "x265", "hevc",
+                "web-dl", "webrip", "bluray", "hdrip", "camrip", "complete"
+            )
+            if (junk.any { tail.contains(it, ignoreCase = true) }) {
+                title = title.substring(0, pipe)
+            }
+        }
+        // Provider titles often append language/source/episode junk AFTER the
+        // year: "Eyes (2026) Hindi S01 Complete SONYLIV" -> "Eyes (2026)".
+        val year = Regex("""\((?:19|20)\d{2}\)""").find(title)
+        if (year != null && year.range.first > 0) {
+            title = title.substring(0, year.range.last + 1)
+        }
+        return title.replace(Regex("""\s+"""), " ").trim(' ', '|', '-')
+    }
+
     private fun loadTrailer(index: Int? = null) {
 
         val isSuccess =
@@ -937,7 +969,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     resultVpn.setText(d.vpnText)
                     resultInfo.setText(d.metaText)
                     resultNoEpisodes.setText(d.noEpisodesFoundText)
-                    resultTitle.setText(d.titleText)
+                    resultTitle.text = cleanDisplayTitle(d.titleText.asString(resultTitle.context))
                     resultMetaSite.setText(d.apiName)
                     resultMetaType.setText(d.typeText)
                     resultMetaYear.setText(d.yearText)
@@ -982,7 +1014,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                             isExpanded = !isExpanded
                             maxLines = if (isExpanded) {
                                 Integer.MAX_VALUE
-                            } else 10
+                            } else 5
                         }
                     }
 
