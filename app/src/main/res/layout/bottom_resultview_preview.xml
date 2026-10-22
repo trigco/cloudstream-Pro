@@ -11,6 +11,7 @@
         android:id="@+id/resultview_preview_result"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@drawable/bg_sheet_rounded_top"
         android:orientation="vertical"
         android:visibility="gone"
         tools:visibility="visible">

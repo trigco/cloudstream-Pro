@@ -711,8 +711,12 @@
                                     android:nextFocusUp="@id/result_bookmark_Button"
                                     android:nextFocusDown="@id/result_download_movie"
                                     android:text="@string/play_movie_button"
+                                    android:textColor="@color/white"
                                     android:visibility="visible"
-                                    app:icon="@drawable/ic_baseline_play_arrow_24">
+                                    app:backgroundTint="@color/colorPrimary"
+                                    app:icon="@drawable/ic_baseline_play_arrow_24"
+                                    app:iconTint="@color/white"
+                                    app:strokeColor="@color/transparent">
 
                                     <requestFocus />
 

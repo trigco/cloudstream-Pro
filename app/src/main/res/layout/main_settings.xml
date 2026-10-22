@@ -60,52 +60,66 @@
                 android:id="@+id/settings_general"
 
                 style="@style/SettingsItem"
+                android:drawablePadding="14dp"
                 android:nextFocusDown="@id/settings_player"
-                android:text="@string/category_general" />
+                android:text="@string/category_general"
+                app:drawableStartCompat="@drawable/ic_settings_general" />
 
             <TextView
                 android:id="@+id/settings_player"
                 style="@style/SettingsItem"
 
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_general"
                 android:nextFocusDown="@id/settings_providers"
-                android:text="@string/category_player" />
+                android:text="@string/category_player"
+                app:drawableStartCompat="@drawable/ic_settings_player" />
 
             <TextView
                 android:id="@+id/settings_providers"
                 style="@style/SettingsItem"
 
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_player"
                 android:nextFocusDown="@id/settings_ui"
-                android:text="@string/category_providers" />
+                android:text="@string/category_providers"
+                app:drawableStartCompat="@drawable/ic_settings_providers" />
 
             <TextView
                 android:id="@+id/settings_ui"
                 style="@style/SettingsItem"
 
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_providers"
                 android:nextFocusDown="@id/settings_updates"
-                android:text="@string/category_ui" />
+                android:text="@string/category_ui"
+                app:drawableStartCompat="@drawable/ic_settings_layout" />
 
             <TextView
                 android:id="@+id/settings_updates"
                 style="@style/SettingsItem"
 
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_ui"
                 android:nextFocusDown="@id/settings_credits"
-                android:text="@string/category_updates" />
+                android:text="@string/category_updates"
+                app:drawableStartCompat="@drawable/ic_settings_update" />
 
             <TextView
                 android:id="@+id/settings_credits"
                 style="@style/SettingsItem"
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_updates"
-                android:text="@string/category_account" />
+                android:text="@string/category_account"
+                app:drawableStartCompat="@drawable/ic_settings_account" />
 
             <TextView
                 android:id="@+id/settings_extensions"
                 style="@style/SettingsItem"
+                android:drawablePadding="14dp"
                 android:nextFocusUp="@id/settings_credits"
-                android:text="@string/extensions" />
+                android:text="@string/extensions"
+                app:drawableStartCompat="@drawable/ic_settings_extensions" />
 
             <LinearLayout
                 android:id="@+id/app_version_info"
