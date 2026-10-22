@@ -17,6 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
@@ -615,6 +616,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun onDestroyView() {
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
+        // Never leave a pull-to-refresh spinner behind on a destroyed view
+        binding?.homeSwipeRefresh?.isRefreshing = false
         super.onDestroyView()
     }
 
@@ -707,6 +710,35 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     fromUI = true
                 )
                 showToast(R.string.action_reload, Toast.LENGTH_SHORT)
+            }
+
+            // Phase 6A-2: pull-to-refresh on the home feed (phone only; the TV
+            // layout mirrors the wrapper for the shared binding but is never
+            // wired). A pull runs the exact same reload as the reload-provider
+            // button above, and the spinner is stopped by the page observer
+            // below, in the same places that hide the loading shimmer.
+            if (isLayout(PHONE)) {
+                homeSwipeRefresh.apply {
+                    setColorSchemeColors(
+                        ContextCompat.getColor(context, R.color.white),
+                        ContextCompat.getColor(context, R.color.grayTextColor)
+                    )
+                    setProgressBackgroundColorSchemeColor(
+                        ContextCompat.getColor(context, R.color.primaryGrayBackground)
+                    )
+                    // Soft, unhurried feel: the spinner starts slightly above
+                    // the top edge, settles lower, and needs a deep pull
+                    // before it lets go.
+                    setProgressViewOffset(false, (-40).toPx, 72.toPx)
+                    setDistanceToTriggerSync(120.toPx)
+                    setOnRefreshListener {
+                        homeViewModel.loadAndCancel(
+                            homeViewModel.apiName.value ?: noneApi.name,
+                            forceReload = true,
+                            fromUI = true
+                        )
+                    }
+                }
             }
 
             homePreviewSearchButton.setOnClickListener { _ ->
@@ -850,6 +882,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoadingError.isVisible = false
                         homeMasterRecycler.isVisible = true
                         homeLoadingShimmer.stopShimmer()
+                        homeSwipeRefresh.isRefreshing = false
 
                         //home_loaded?.isVisible = true
                         if (toggleRandomButton) {
@@ -887,6 +920,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoading.isVisible = false
                         homeLoadingError.isVisible = true
                         homeMasterRecycler.isInvisible = true
+                        homeSwipeRefresh.isRefreshing = false
 
                         // Based on https://github.com/recloudstream/cloudstream/pull/1438
                         val hasNoNetworkConnection = context?.isNetworkAvailable() == false

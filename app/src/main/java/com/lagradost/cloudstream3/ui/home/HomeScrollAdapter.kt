@@ -10,7 +10,6 @@ import com.lagradost.cloudstream3.databinding.HomeScrollViewTvBinding
 import com.lagradost.cloudstream3.ui.BaseDiffCallback
 import com.lagradost.cloudstream3.ui.NoStateAdapter
 import com.lagradost.cloudstream3.ui.ViewHolderState
-import com.lagradost.cloudstream3.ui.result.ResultFragment.bindLogo
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
@@ -59,19 +58,18 @@ class HomeScrollAdapter(
         when (binding) {
             is HomeScrollViewBinding -> {
                 binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders)
+                // Phase 6A: the hero backdrop art already carries the title,
+                // so the overlaid title/tags/logo treatment stays hidden.
+                // bindLogo is intentionally not called here: it force-toggles
+                // title/logo visibility and would undo the hidden state.
                 binding.homeScrollPreviewTags.apply {
                     text = item.tags?.joinToString(" • ") ?: ""
-                    isGone = item.tags.isNullOrEmpty()
+                    isGone = true
                     maxLines = 2
                 }
                 binding.homeScrollPreviewTitle.text = item.name.html()
-
-                bindLogo(
-                    url = item.logoUrl,
-                    headers = item.posterHeaders,
-                    titleView = binding.homeScrollPreviewTitle,
-                    logoView = binding.homePreviewLogo
-                )
+                binding.homeScrollPreviewTitle.isGone = true
+                binding.homePreviewLogo.isGone = true
             }
 
             is HomeScrollViewTvBinding -> {
