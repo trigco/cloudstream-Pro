@@ -73,28 +73,43 @@ class ActorAdaptor(
     private fun showActorOverview(anchor: View, item: ActorData) {
         val context = anchor.context
         val dialog = BottomSheetDialog(context)
+        val density = context.resources.displayMetrics.density
+        fun Int.dp(): Int = (this * density).toInt()
+
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 28, 24, 32)
+            setPadding(24.dp(), 12.dp(), 24.dp(), 28.dp())
             background = GradientDrawable().apply {
                 setColor(ContextCompat.getColor(context, R.color.primaryGrayBackground))
                 setCornerRadii(floatArrayOf(28f, 28f, 28f, 28f, 0f, 0f, 0f, 0f))
             }
         }
 
+        // A compact drag handle gives the sheet a clear, modern affordance.
+        content.addView(View(context).apply {
+            background = GradientDrawable().apply {
+                setColor(ContextCompat.getColor(context, R.color.grayTextColor))
+                cornerRadius = 2.dp().toFloat()
+            }
+            alpha = 0.45f
+        }, LinearLayout.LayoutParams(36.dp(), 4.dp()).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = 20.dp()
+        })
+
         val portrait = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
                 setColor(ContextCompat.getColor(context, R.color.iconGrayBackground))
-                cornerRadius = 22f
+                cornerRadius = 22.dp().toFloat()
             }
             clipToOutline = true
             contentDescription = item.actor.name
             loadImage(item.actor.image)
         }
-        content.addView(portrait, LinearLayout.LayoutParams(116, 148).apply {
+        content.addView(portrait, LinearLayout.LayoutParams(116.dp(), 148.dp()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = 18
+            bottomMargin = 18.dp()
         })
 
         content.addView(TextView(context).apply {
@@ -122,7 +137,7 @@ class ActorAdaptor(
                 text = role
                 textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, 6, 0, 0)
+                setPadding(0, 6.dp(), 0, 0)
                 setTextColor(ContextCompat.getColor(context, R.color.grayTextColor))
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -135,7 +150,7 @@ class ActorAdaptor(
                 text = context.getString(R.string.actor_overview_voice_actor, voice.name)
                 textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, 16, 0, 0)
+                setPadding(0, 16.dp(), 0, 0)
                 setTextColor(context.getColor(R.color.textColor))
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -147,7 +162,7 @@ class ActorAdaptor(
             text = context.getString(R.string.actor_overview_source_note)
             textSize = 12f
             gravity = Gravity.CENTER
-            setPadding(0, 14, 0, 0)
+            setPadding(0, 14.dp(), 0, 0)
             setTextColor(context.getColor(R.color.grayTextColor))
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
