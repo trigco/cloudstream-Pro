@@ -566,6 +566,29 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                     }
             }
 
+            // Phase 5A: global floating top bar. Same phone case as the bottom nav
+            // (PHONE layout, portrait), and only on the 5 top-level tab destinations.
+            // Non-home tabs get top padding (bar 56dp + top margin 12dp + 8dp air)
+            // so their content is not hidden under the floating bar; home stays
+            // full-bleed (hero) by design. Hidden destinations get no padding.
+            val isTopTab = listOf(
+                R.id.navigation_home,
+                R.id.navigation_search,
+                R.id.navigation_library,
+                R.id.navigation_downloads,
+                R.id.navigation_settings
+            ).contains(destination.id)
+            val showTopBar = isLayout(PHONE) && !isLandscape() && isTopTab
+            topBar.isVisible = showTopBar
+            val topBarPadding =
+                if (showTopBar && destination.id != R.id.navigation_home) 76.toPx else 0
+            navHostFragment.setPadding(
+                navHostFragment.paddingStart,
+                topBarPadding,
+                navHostFragment.paddingEnd,
+                navHostFragment.paddingBottom
+            )
+
             /**
              * We need to make sure if we return to a sub-fragment,
              * the correct navigation item is selected so that it does not
@@ -805,6 +828,61 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             Log.e("NavigationError", "Failed to navigate: ${e.message}")
             false
         }
+    }
+
+    /** Phase 5A: floating top bar navigation — no-op when already on the destination. */
+    private fun navigateTopBar(navController: NavController, @IdRes destinationId: Int) {
+        if (navController.currentDestination?.id == destinationId) return
+        try {
+            navController.navigate(destinationId)
+        } catch (e: IllegalArgumentException) {
+            Log.e("NavigationError", "Failed to navigate: ${e.message}")
+        }
+    }
+
+    /**
+     * Phase 5A: bottom-nav icon pop (1.0 -> 1.2 -> 1.0, ~250ms total).
+     * Best effort only: the BottomNavigationView internals are looked up
+     * defensively, so any structural mismatch simply skips the animation
+     * instead of crashing.
+     */
+    private fun animateNavIconPop(navView: BottomNavigationView, itemId: Int) {
+        try {
+            val menuView = navView.getChildAt(0) as? ViewGroup ?: return
+            for (i in 0 until menuView.childCount) {
+                val itemView = menuView.getChildAt(i)
+                if (itemView.id != itemId) continue
+                val icon = findFirstImageView(itemView) ?: return
+                icon.animate().cancel()
+                icon.scaleX = 1f
+                icon.scaleY = 1f
+                icon.animate()
+                    .scaleX(1.2f)
+                    .scaleY(1.2f)
+                    .setDuration(120)
+                    .withEndAction {
+                        icon.animate()
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(130)
+                            .start()
+                    }
+                    .start()
+                return
+            }
+        } catch (t: Throwable) {
+            logError(t)
+        }
+    }
+
+    private fun findFirstImageView(view: View): ImageView? {
+        if (view is ImageView) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findFirstImageView(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private val pluginsLock = Mutex()
@@ -1702,12 +1780,31 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             itemActiveIndicatorColor = rippleColor
             setupWithNavController(navController)
             setOnItemSelectedListener { item ->
-                onNavDestinationSelected(
+                val handled = onNavDestinationSelected(
                     item,
                     navController
                 )
+                // Phase 5A: pop the selected icon, but only when navigation
+                // actually happened (not on reselection / debounce rejection)
+                if (handled) animateNavIconPop(this, item.itemId)
+                handled
             }
 
+        }
+
+        // Phase 5A: floating top bar actions. The icon tint is set in code because
+        // android:tint="?attr/..." has no precedent on ImageViews in project layouts.
+        // R.attr.white flips per variant (LightMode swaps the white/black attrs),
+        // matching the chosen icons' own vector tint behaviour.
+        binding?.topBarSearch?.apply {
+            imageTintList =
+                ColorStateList.valueOf(getResourceColor(R.attr.white, 1.0f))
+            setOnClickListener { navigateTopBar(navController, R.id.navigation_search) }
+        }
+        binding?.topBarProfile?.apply {
+            imageTintList =
+                ColorStateList.valueOf(getResourceColor(R.attr.white, 1.0f))
+            setOnClickListener { navigateTopBar(navController, R.id.navigation_settings) }
         }
 
         binding?.navRailView?.apply {
