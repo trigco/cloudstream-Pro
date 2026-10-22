@@ -53,6 +53,11 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Phase 2: global rounded shapes (Netflix-style) -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearanceNetflixSmall</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearanceNetflixMedium</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearanceNetflixLarge</item>
         <item name="textColor">@color/textColor</item>
         <item name="colorOnPrimary">@color/whiteText</item>
         <item name="grayTextColor">@color/grayTextColor</item>
@@ -1063,6 +1068,23 @@
     <style name="RoundedImageView">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- Phase 2: Netflix-style shape appearances, wired into AppTheme above.
+         Built with the same cornerFamily/cornerSize items as RoundedImageView. -->
+    <style name="ShapeAppearanceNetflixSmall">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+
+    <style name="ShapeAppearanceNetflixMedium">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="ShapeAppearanceNetflixLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
     </style>
 
     <style name="PlayUnderlayProgress">
