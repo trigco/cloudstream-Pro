@@ -465,9 +465,18 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
             ).firstOrNull { it.isVisible }
 
             resultCastItems.setRecycledViewPool(ActorAdaptor.sharedPool)
-            resultCastItems.adapter = ActorAdaptor(aboveCast?.id) {
-                toggleEpisodes(false)
-            }
+            resultCastItems.adapter = ActorAdaptor(
+                nextFocusUpId = aboveCast?.id,
+                focusCallback = {
+                    toggleEpisodes(false)
+                },
+                clickCallback = { item ->
+                    // Phase 5B: cast tap opens the in-app actor overview page.
+                    val sourceTitle =
+                        (viewModel.page.value as? Resource.Success)?.value?.title
+                    ActorFragment.openActor(activity, item, sourceTitle)
+                }
+            )
 
             if (isLayout(EMULATOR)) {
                 episodesShadow.setOnClickListener {

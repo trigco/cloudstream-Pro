@@ -559,7 +559,12 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 this.orientation = RecyclerView.HORIZONTAL
             }*/
             resultCastItems.setRecycledViewPool(ActorAdaptor.sharedPool)
-            resultCastItems.adapter = ActorAdaptor()
+            resultCastItems.adapter = ActorAdaptor(clickCallback = { item ->
+                // Phase 5B: cast tap opens the in-app actor overview page.
+                val sourceTitle =
+                    (viewModel.page.value as? Resource.Success)?.value?.title
+                ActorFragment.openActor(activity, item, sourceTitle)
+            })
             resultEpisodes.setRecycledViewPool(EpisodeAdapter.sharedPool)
             resultEpisodes.adapter =
                 EpisodeAdapter(
