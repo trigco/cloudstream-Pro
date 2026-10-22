@@ -792,4 +792,8 @@
         <item quantity="other">%d downloads queued</item>
     </plurals>
     <string name="player_is_live">Live</string>
+    <string name="pref_category_home_posters">Home &amp; Posters</string>
+    <string name="pref_category_search_discovery">Search &amp; Discovery</string>
+    <string name="pref_category_playback_details">Playback &amp; Details</string>
+    <string name="pref_category_behavior_accessibility">Behavior &amp; Accessibility</string>
 </resources>
