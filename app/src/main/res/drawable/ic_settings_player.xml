@@ -3,10 +3,9 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Phase 3: filled play button (disc with punched triangle hole) -->
     <path
-        android:pathData="M3.2,12 a8.8,8.8 0 1,0 17.6,0 a8.8,8.8 0 1,0 -17.6,0 M10,8.3 L15.8,12 L10,15.7 Z"
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="?attr/white"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round" />
+        android:pathData="M3,12 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M10,8.2 L16.6,12 L10,15.8 Z"
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd" />
 </vector>

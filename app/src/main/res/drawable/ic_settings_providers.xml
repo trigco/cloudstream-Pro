@@ -3,10 +3,9 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Phase 3: filled globe (disc with punched meridian ellipse + equator band) -->
     <path
-        android:pathData="M3.2,12 a8.8,8.8 0 1,0 17.6,0 a8.8,8.8 0 1,0 -17.6,0 M12,3.2 A4.2,8.8 0 1,0 12,20.8 A4.2,8.8 0 1,0 12,3.2 M3.4,12 H20.6"
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="?attr/white"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round" />
+        android:pathData="M3,12 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 M12,3 A3.4,9 0 1,0 12,21 A3.4,9 0 1,0 12,3 Z M3,10.9 H21 V13.1 H3 Z"
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd" />
 </vector>
