@@ -1060,7 +1060,11 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     resultMetaRating.setText(d.ratingText)
                     resultMetaStatus.setText(d.onGoingText)
                     resultMetaContentRating.setText(d.contentRatingText)
-                    resultCastText.setText(d.actorsText)
+                    // Phase 8.10: the plain "Cast: ..." text line is no
+                    // longer shown on phone — the cast row below renders
+                    // every cast (photos where available, initials avatars
+                    // where not). The view stays in the layout, gone.
+                    resultCastText.isGone = true
                     resultNextAiring.setText(d.nextAiringEpisode)
                     resultNextAiringTime.setText(d.nextAiringDate)
                     resultPoster.loadImage(d.posterImage, headers = d.posterHeaders) {
