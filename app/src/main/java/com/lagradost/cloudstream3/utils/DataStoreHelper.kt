@@ -106,14 +106,117 @@ object DataStoreHelper {
         }
     }
 
+    // Phase 8.9: the search filter used to store INCLUSION lists
+    // ("search_pref_providers" / "search_pref_tags"). A frozen inclusion
+    // list silently excluded every provider installed after the list was
+    // written, so a new provider was never searched until the user
+    // re-opened the filter sheet and ticked it by hand. The source of
+    // truth is now the EXCLUSIONS below: everything installed is
+    // searched unless the user explicitly unchecks it in the filter
+    // sheet, and providers installed later are included automatically.
+    // The legacy keys are kept as a mirror (see the setters) but are no
+    // longer read, except once by the migration.
+    private var searchPrefExcludedProvidersStrings: List<String> by UserPreferenceDelegate(
+        "search_pref_excluded_providers", List(0) { "" }
+    )
+
+    private var searchPrefExcludedTagsStrings: List<String> by UserPreferenceDelegate(
+        "search_pref_excluded_tags", List(0) { "" }
+    )
+
+    private var searchPrefExclusionsMigrated: Boolean by UserPreferenceDelegate(
+        "search_pref_exclusions_migrated", false
+    )
+
+    /**
+     * The provider universe the search filter picks from — the same set
+     * the filter sheet lists (a homepage is not required to search a
+     * provider). Null while the app context is unavailable.
+     */
+    private fun searchProviderUniverse(): List<String>? =
+        context?.filterProviderByPreferredMedia(hasHomePageIsRequired = false)
+            ?.map { it.name }
+
+    /** The stored tag list, or null when the key was never written.
+     * The delegate above cannot tell its [TvType.Movie] / [TvType.TvSeries]
+     * default apart from a stored choice, so probe the raw key with the
+     * same class token the delegate uses (getKey returns null when the
+     * key is absent). */
+    @Suppress("UNCHECKED_CAST")
+    private fun storedSearchPreferenceTagsRaw(): List<String>? {
+        val default = listOf(TvType.Movie, TvType.TvSeries).map { it.name }
+        return getKeyClass(
+            "${currentAccount}/search_pref_tags", default.javaClass
+        ) as? List<String>
+    }
+
+    /**
+     * One-time flip from the legacy inclusion lists to exclusions.
+     * The complement is taken against what is installed right now, so
+     * the selection the user effectively had is preserved exactly:
+     * providers/tags they had off stay off, everything they had on stays
+     * on, and a user who never stored a choice gets no exclusions at
+     * all (everything included). If the legacy provider list cannot be
+     * evaluated yet (no context, or plugins not loaded), the migration
+     * is postponed and the accessors fall back to the legacy behaviour
+     * for that call.
+     */
+    private fun migrateSearchExclusionsIfNeeded() {
+        if (searchPrefExclusionsMigrated) return
+
+        val legacyProviders = searchPreferenceProvidersStrings
+        if (legacyProviders.isNotEmpty()) {
+            val universe = searchProviderUniverse()
+            if (universe == null || universe.isEmpty()) return
+            searchPrefExcludedProvidersStrings =
+                universe.filter { it !in legacyProviders }
+        } else {
+            // Empty legacy list already meant "no stored choice -> all"
+            // in the old getter, so there is nothing to exclude.
+            searchPrefExcludedProvidersStrings = emptyList()
+        }
+
+        val storedTags = storedSearchPreferenceTagsRaw()
+        searchPrefExcludedTagsStrings = if (storedTags == null) {
+            emptyList()
+        } else {
+            serializeTv(TvType.values().filter { it.name !in storedTags })
+        }
+
+        searchPrefExclusionsMigrated = true
+    }
+
     var searchPreferenceProviders: List<String>
         get() {
-            val ret = searchPreferenceProvidersStrings
-            return ret.ifEmpty {
-                context?.filterProviderByPreferredMedia()?.map { it.name } ?: emptyList()
+            migrateSearchExclusionsIfNeeded()
+            if (!searchPrefExclusionsMigrated) {
+                // Migration postponed (plugins not loaded yet): answer
+                // exactly like the old inclusion-list getter.
+                return searchPreferenceProvidersStrings.ifEmpty {
+                    context?.filterProviderByPreferredMedia()?.map { it.name }
+                        ?: emptyList()
+                }
+            }
+            val excluded = searchPrefExcludedProvidersStrings
+            val universe = searchProviderUniverse()
+            return if (universe != null) {
+                universe.filter { it !in excluded }
+            } else {
+                // No context yet (app still starting): best effort from
+                // the mirrored legacy list.
+                searchPreferenceProvidersStrings.filter { it !in excluded }
             }
         }
         set(value) {
+            migrateSearchExclusionsIfNeeded()
+            searchProviderUniverse()?.let { universe ->
+                searchPrefExcludedProvidersStrings =
+                    universe.filter { it !in value }
+            }
+            // Mirror the inclusion list into the legacy key, so an
+            // older build downgraded onto this data keeps reading a
+            // sensible selection. The exclusions above stay the source
+            // of truth for this build.
             searchPreferenceProvidersStrings = value
         }
 
@@ -122,8 +225,20 @@ object DataStoreHelper {
         listOf(TvType.Movie, TvType.TvSeries).map { it.name })
 
     var searchPreferenceTags: List<TvType>
-        get() = deserializeTv(searchPreferenceTagsStrings)
+        get() {
+            migrateSearchExclusionsIfNeeded()
+            if (!searchPrefExclusionsMigrated) {
+                // Migration postponed: the old stored-list behaviour.
+                return deserializeTv(searchPreferenceTagsStrings)
+            }
+            val excluded = deserializeTv(searchPrefExcludedTagsStrings)
+            return TvType.values().filter { it !in excluded }
+        }
         set(value) {
+            migrateSearchExclusionsIfNeeded()
+            searchPrefExcludedTagsStrings =
+                serializeTv(TvType.values().filter { it !in value })
+            // Legacy mirror, as in the providers setter.
             searchPreferenceTagsStrings = serializeTv(value)
         }
 

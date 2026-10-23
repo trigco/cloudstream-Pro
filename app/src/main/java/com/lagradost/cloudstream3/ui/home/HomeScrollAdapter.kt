@@ -17,6 +17,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.html
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import com.lagradost.cloudstream3.utils.getImageFromDrawable
 
 class HomeScrollAdapter(
     val callback: ((View, Int, LoadResponse) -> Unit)
@@ -59,7 +60,16 @@ class HomeScrollAdapter(
 
         when (binding) {
             is HomeScrollViewBinding -> {
-                binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders)
+                // Phase 8.9: a failed/missing hero banner shows the custom
+                // poster placeholder instead of staying blank
+                binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders) {
+                    error {
+                        getImageFromDrawable(
+                            binding.root.context,
+                            R.drawable.poster_placeholder
+                        )
+                    }
+                }
                 // Phase 8.8: the hero photo must read CLEAR — no title,
                 // meta, tags or logo overlaid on it. The views still exist
                 // in home_scroll_view.xml (inside a visibility=gone block)

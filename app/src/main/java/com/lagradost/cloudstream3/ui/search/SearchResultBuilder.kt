@@ -134,9 +134,9 @@ object SearchResultBuilder {
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {
             cardView.loadImage(card.posterUrl, card.posterHeaders) {
-                error { getImageFromDrawable(itemView.context, R.drawable.default_cover) }
+                error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
             }
-        } else cardView.loadImage(R.drawable.default_cover)
+        } else cardView.loadImage(R.drawable.poster_placeholder)
 
         fun click(view: View?) {
             clickCallback.invoke(

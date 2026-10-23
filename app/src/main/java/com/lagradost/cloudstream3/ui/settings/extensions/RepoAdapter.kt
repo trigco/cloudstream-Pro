@@ -1,7 +1,9 @@
 package com.lagradost.cloudstream3.ui.settings.extensions
 
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.RepositoryItemBinding
 import com.lagradost.cloudstream3.databinding.RepositoryItemTvBinding
@@ -67,9 +69,12 @@ class RepoAdapter(
                         clickCallback(item)
                     }
                     mainText.text = item.name
-                    subText.text = item.url
+                    // Phase 8.9: show only the source host, not the raw URL
+                    subText.text = hostLabel(item.url)
                     if (!item.iconUrl.isNullOrEmpty()) {
                         entryIcon.loadImage(item.iconUrl) {
+                            // Phase 8.9: circle-mask real repo icons/avatars
+                            transformations(CircleCropTransformation())
                             error(
                                 getImageFromDrawable(
                                     binding.root.context,
@@ -107,9 +112,12 @@ class RepoAdapter(
                     }
 
                     mainText.text = item.name
-                    subText.text = item.url
+                    // Phase 8.9: show only the source host, not the raw URL
+                    subText.text = hostLabel(item.url)
                     if (!item.iconUrl.isNullOrEmpty()) {
                         entryIcon.loadImage(item.iconUrl) {
+                            // Phase 8.9: circle-mask real repo icons/avatars
+                            transformations(CircleCropTransformation())
                             error(
                                 getImageFromDrawable(
                                     binding.root.context,
@@ -127,5 +135,15 @@ class RepoAdapter(
 
     companion object {
         const val SHAREABLE_REPO_SEPARATOR = " : "
+
+        /** Phase 8.9: the muted second line shows just the repository's host
+         * (e.g. raw.githubusercontent.com) instead of the full raw URL, which
+         * was long, noisy and user-unfriendly. The full URL is still used for
+         * clicks and the long-press copy action; this is display-only. */
+        fun hostLabel(url: String): String =
+            runCatching { Uri.parse(url).host }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: url
     }
 }
