@@ -14,7 +14,10 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+    <!-- Phase 8.8: id so SearchFragment can play a soft drop-in
+         entrance on the whole search top bar (bar + filter chips). -->
     <LinearLayout
+        android:id="@+id/search_top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -170,12 +173,16 @@
         tools:listitem="@layout/search_history_item" />
     </LinearLayout>
 
-    <!-- Suggestions overlay - appears on top of content -->
+    <!-- Suggestions overlay - appears on top of content.
+         Phase 8.8: same staggered fade+rise layout animation as the three
+         lists above; SearchFragment schedules it only on the panel's
+         hidden -> shown flip so typing updates never replay it. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/search_suggestions_recycler"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="100dp"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
         android:background="?attr/primaryGrayBackground"
         android:elevation="8dp"
         android:visibility="gone"

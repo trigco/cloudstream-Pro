@@ -14,7 +14,12 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+    <!-- Phase 8.8: same id as the phone layout's top bar — the shared
+         FragmentSearchBinding resolves every field eagerly, so the id
+         must exist here too. The entrance animation itself stays
+         phone-only in SearchFragment. -->
     <LinearLayout
+        android:id="@+id/search_top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/navbar_width"

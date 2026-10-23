@@ -2,23 +2,23 @@
 <!-- Phase 7.5 FIX-2 made the hero page an inset rounded CARD (margins
      16dp sides / 14dp top / 108dp bottom, bg_details_backdrop +
      clipToOutline + 6dp elevation), and Phase 8.5A restored exactly that
-     after the carousel experiment. Phase 8.6: the user verdict on the
-     restored build was still "the hero is FLOATING" — pixel measurement
-     of his screenshot confirmed the 7.5 geometry was rendering exactly
-     as specified (side margins 15.0/14.5dp vs 16dp design, title/meta
-     and action row at their designed offsets), so "floating" is his
-     name for the inset-card look itself: a poster hovering in a black
-     frame, detached from the screen edges. The card framing is therefore
-     REMOVED — the hero is attached again: the image fills the whole
-     500dp pager frame edge-to-edge (no margins, no rounded background,
-     no clip, no elevation), like the Phase 6 hero he praised. The
-     title/meta block keeps its exact old on-screen position (bottom
-     margin 124dp = the card's former 108dp bottom offset + its 16dp
-     gap), so the text still sits over the image just above the
-     None/Play/Info action row in fragment_home_head; that file's 220dp
-     bottom scrim plus this page's own 300dp title_shadow keep the text
-     and buttons readable over the image's bottom edge. bg_details_backdrop
-     itself is untouched — it still backs the details-page card. -->
+     after the carousel experiment. Phase 8.6 removed the card framing —
+     the hero is attached: the image fills the whole 500dp pager frame
+     edge-to-edge (no margins, no rounded background, no clip, no
+     elevation), like the Phase 6 hero he praised; the title/meta block
+     kept its old on-screen position via a 124dp bottom margin.
+     Phase 8.8: user verdict — the title and "lots of other things" over
+     the photo go away so the photo view is CLEAR. The whole title/meta
+     block below is now visibility=gone (views kept in the layout: the
+     generated binding and HomeScrollAdapter still reference them, and
+     the adapter now keeps them gone), the obsolete 124dp margin is
+     removed, and the 300dp bottom title_shadow that darkened the photo
+     is deleted. The photo's bottom edge is blended into the page by ONE
+     fade in fragment_home_head (bg_hero_bottom_fade, 90dp, ending at
+     ?attr/primaryBlackBackground) — not by any darkening in this page.
+     The 150dp top shadow stays: it is the subtle shade that keeps the
+     floating search icon + avatar legible over bright photos.
+     bg_details_backdrop is untouched — it still backs the details card. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -51,12 +51,10 @@
                 android:rotation="180"
                 android:visibility="visible" />
 
-            <View
-                android:id="@+id/title_shadow"
-                android:layout_width="match_parent"
-                android:layout_height="300dp"
-                android:layout_gravity="bottom"
-                android:background="@drawable/background_shadow" />
+            <!-- Phase 8.8: the 300dp bottom title_shadow that used to sit
+                 here is deleted — it darkened the photo's lower half.
+                 The bottom-edge blend now lives solely in
+                 fragment_home_head (bg_hero_bottom_fade over the pager). -->
 
             <!-- Quality badge on the card's top-right corner. LoadResponse
                  carries no quality value (quality only exists on
@@ -77,21 +75,26 @@
                 android:visibility="gone"
                 tools:text="1080p" />
 
+            <!-- Phase 8.8: the whole title/meta block is GONE — the hero
+                 photo must read clear, with nothing overlaid on it. The
+                 views stay in the layout (HomeScrollViewBinding and
+                 HomeScrollAdapter reference them; the adapter now keeps
+                 title and meta gone on every bind), but this container's
+                 visibility=gone means none of them are ever drawn, and
+                 the block takes no space on the photo. The Phase 8.6
+                 124dp positioning margin went with it. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
-                android:layout_marginBottom="124dp"
                 android:orientation="vertical"
                 android:paddingStart="16dp"
-                android:paddingEnd="16dp">
+                android:paddingEnd="16dp"
+                android:visibility="gone">
 
-                <!-- Logo and tags stay hidden (Phase 6A). Title + meta are
-                     centered (Phase 7.5 FIX-2). Phase 8.6: the 124dp
-                     bottom margin (= the removed card's 108dp bottom
-                     offset + the old 16dp gap) keeps this block at the
-                     exact position it held inside the card, over the
-                     now full-frame image, just above the action row. -->
+                <!-- Logo and tags stay hidden (Phase 6A). Title + meta were
+                     centered over the photo (Phase 7.5 FIX-2) until
+                     Phase 8.8 hid the whole block for a clear photo. -->
                 <ImageView
                     android:id="@+id/home_preview_logo"
                     android:layout_width="260dp"
