@@ -36,7 +36,7 @@ import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.removeKey
 import com.lagradost.cloudstream3.actions.OpenInAppAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
-import com.lagradost.cloudstream3.databinding.ToastBinding
+import com.lagradost.cloudstream3.databinding.ToastCustomBinding
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.syncproviders.AccountManager
 import com.lagradost.cloudstream3.ui.home.HomeChildItemAdapter
@@ -178,7 +178,10 @@ object CommonActivity {
         }
 
         try {
-            val binding = ToastBinding.inflate(act.layoutInflater)
+            // Phase 8.11-E2: restyled toast surface (layout/toast_custom.xml:
+            // gray fill + adaptive outline + Inter) replacing layout/toast.xml,
+            // whose pure-black CardView read as the stock system pill.
+            val binding = ToastCustomBinding.inflate(act.layoutInflater)
             binding.text.text = message.trim()
 
             // custom toasts are deprecated and won't appear when cs3 sets minSDK to api30 (A11)
@@ -203,6 +206,16 @@ object CommonActivity {
 
         } catch (e: Exception) {
             logError(e)
+            // Phase 8.11-E2: never lose the message — if building the custom
+            // toast view fails for any reason, fall back to a plain text
+            // toast instead of showing nothing at all.
+            try {
+                val fallback = Toast.makeText(act, message, duration ?: Toast.LENGTH_SHORT)
+                currentToast = fallback
+                fallback.show()
+            } catch (fallbackError: Exception) {
+                logError(fallbackError)
+            }
         }
     }
 

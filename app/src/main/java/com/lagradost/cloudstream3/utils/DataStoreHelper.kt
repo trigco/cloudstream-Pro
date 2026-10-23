@@ -91,6 +91,17 @@ object DataStoreHelper {
         R.drawable.profile_bg_purple,
         R.drawable.profile_bg_red,
         R.drawable.profile_bg_teal,
+        // Phase 8.11: bundled vector preset avatars, appended after the
+        // original seven so every stored defaultImageIndex keeps pointing
+        // at the same art. New entries may only ever be appended here.
+        R.drawable.profile_preset_aurora,
+        R.drawable.profile_preset_lagoon,
+        R.drawable.profile_preset_nebula,
+        R.drawable.profile_preset_dusk,
+        R.drawable.profile_preset_bloom,
+        R.drawable.profile_preset_forest,
+        R.drawable.profile_preset_graphite,
+        R.drawable.profile_preset_ember,
     )
 
     private var searchPreferenceProvidersStrings: List<String> by UserPreferenceDelegate(

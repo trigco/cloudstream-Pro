@@ -3,8 +3,8 @@ package com.lagradost.cloudstream3.plugins
 import android.util.Log
 import android.widget.Toast
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.lagradost.cloudstream3.CloudStreamApp.Companion.context
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
+import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
 import com.lagradost.cloudstream3.R
 import java.security.MessageDigest
@@ -64,22 +64,16 @@ object VotingApi {
         voteLock.withLock {
             if (!canVote(pluginUrl)) {
                 main {
-                    Toast.makeText(
-                        context,
-                        R.string.extension_install_first,
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    // Phase 8.11-E2: routed through the central showToast
+                    // helper so vote feedback gets the styled toast.
+                    showToast(R.string.extension_install_first, Toast.LENGTH_SHORT)
                 }
                 return getVotes(pluginUrl)
             }
 
             if (hasVoted(pluginUrl)) {
                 main {
-                    Toast.makeText(
-                        context,
-                        R.string.already_voted,
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showToast(R.string.already_voted, Toast.LENGTH_SHORT)
                 }
                 return getVotes(pluginUrl)
             }
