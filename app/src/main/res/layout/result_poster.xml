@@ -11,7 +11,7 @@
             android:layout_height="wrap_content"
             android:scaleType="fitCenter"
             android:adjustViewBounds="true"
-            android:src="@drawable/default_cover"
+            android:src="@drawable/poster_placeholder"
             android:background="?attr/primaryGrayBackground"
             android:contentDescription="@string/poster_image" />
 </LinearLayout>

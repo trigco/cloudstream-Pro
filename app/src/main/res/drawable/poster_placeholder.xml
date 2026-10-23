@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.9: custom poster/banner placeholder, replacing the stock grey
+     film-strip (default_cover) on the poster/banner error paths.
+
+     Design: a quiet diagonal gradient between the theme's two surface tones
+     (so it adapts to every theme variant and stays monochrome — no red, per
+     the Play-only-red rule) with the faint ic_poster_placeholder glyph
+     centred. Centre-safe for both portrait posters and landscape backdrops:
+     the gradient fills any bounds and the glyph keeps its own 64dp size in
+     the middle with generous margins.
+
+     The transparent 360dp anchor item only pins the layer-list's intrinsic
+     size to the same ballpark as the old default_cover vector (324x511), so
+     ImageView scaleType math (centerCrop / fitCenter) behaves exactly as it
+     did with the film-strip; it renders nothing. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="360dp"
+        android:height="360dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="315"
+                android:startColor="?attr/primaryGrayBackground"
+                android:endColor="?attr/primaryBlackBackground" />
+        </shape>
+    </item>
+    <item
+        android:drawable="@drawable/ic_poster_placeholder"
+        android:gravity="center" />
+</layer-list>
