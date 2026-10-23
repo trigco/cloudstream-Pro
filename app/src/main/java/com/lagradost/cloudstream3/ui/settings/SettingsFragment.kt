@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.ui.settings
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.res.Configuration
 import android.graphics.Outline
 import android.graphics.drawable.RotateDrawable
 import android.os.Bundle
@@ -17,10 +18,12 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.core.view.children
+import androidx.core.view.doOnLayout
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.lagradost.cloudstream3.BuildConfig
@@ -203,6 +206,20 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
         var heightAnimator: ValueAnimator? = null
         var chevronAnimator: ValueAnimator? = null
         var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
+
+        /** Phase 8.8: the section's full content height, measured with an
+         * explicit UNSPECIFIED(0) height spec (see
+         * [measureAccordionFullHeight]). While the section is expanded its
+         * container is pinned to this height, because the natural
+         * wrap_content chain under-measures it at about one screenful. */
+        var fullHeight: Int = 0
+
+        /** Phase 8.8: keeps [fullHeight] current when the embedded page's
+         * rows change while the section is open. Registered on the page's
+         * preference adapter (a recreated view brings a new adapter, so
+         * the registered instance is tracked and replaced). */
+        var contentObserver: RecyclerView.AdapterDataObserver? = null
+        var observedAdapter: RecyclerView.Adapter<*>? = null
     }
 
     private var accordionGroups: List<AccordionGroup> = emptyList()
@@ -263,6 +280,96 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
         }
     }
 
+    /**
+     * Phase 8.8 — the section's TRUE full content height, measured
+     * directly instead of trusting what the wrap_content chain reports.
+     *
+     * Why the chain under-measures: the page's ScrollView measures its
+     * content with an UNSPECIFIED height spec that still carries the
+     * viewport's size, and every ancestor between it and the embedded
+     * list forwards that size along with the mode — the main
+     * LinearLayout (which also subtracts the height of the rows above the
+     * panel from the size), the panel, the sub-page's CoordinatorLayout
+     * and the list container. The embedded list is a RecyclerView with a
+     * LinearLayoutManager, and LinearLayoutManager only treats an
+     * UNSPECIFIED spec as unbounded when its size is also 0
+     * (`resolveIsInfinite()`: mode == UNSPECIFIED && getEnd() == 0,
+     * where getEnd() is the stored spec size). With a leftover size of
+     * roughly one screenful it lays out only that much content and
+     * reports exactly that as its measured height — which is why an
+     * expanded General section stopped right after "Concurrent
+     * connections": nothing was removed by the grouping, the remaining
+     * rows (Battery optimization, the ISP and Links categories) were
+     * simply never laid out.
+     *
+     * Measuring the container ourselves with UNSPECIFIED size 0 makes
+     * the list measure every row, and the true height propagates back up
+     * through the same ancestors. (The Phase 8.7 behaviour detachment is
+     * still required for this: the app-bar scrolling behaviour clamps the
+     * list container during any measure, including this one.)
+     */
+    private fun measureAccordionFullHeight(group: AccordionGroup): Int {
+        val container = group.container
+        val width = container.width
+        if (width <= 0) return 0
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        container.measure(widthSpec, heightSpec)
+        return container.measuredHeight
+    }
+
+    /** Phase 8.8: re-measures an expanded section's full content height
+     * and re-pins its container to it. Called when the embedded page's
+     * adapter reports changes (rows appearing or disappearing, summaries
+     * changing) and after configuration changes. No-ops while the
+     * section is collapsed or mid-animation — the expand flow measures
+     * for itself. The re-measure is posted so it runs after the change
+     * that triggered it has been laid out. */
+    private fun refreshAccordionHeight(group: AccordionGroup): Unit {
+        if (!group.expanded || group.heightAnimator != null) return
+        val container = group.container
+        if (container.visibility != View.VISIBLE) return
+        container.post {
+            if (!group.expanded || group.heightAnimator != null) return@post
+            val newHeight = measureAccordionFullHeight(group)
+            if (newHeight > 0 && newHeight != group.fullHeight) {
+                group.fullHeight = newHeight
+                container.layoutParams.height = newHeight
+                container.requestLayout()
+            }
+        }
+    }
+
+    /** Phase 8.8: observes the embedded page's preference adapter so a
+     * section whose content grows or shrinks while it is open (dependent
+     * rows appearing, visibility toggles) re-pins to its new full height.
+     * Registered once per adapter instance; a recreated view brings a new
+     * adapter, which the identity check picks up on the next expand. */
+    private fun watchAccordionContent(group: AccordionGroup) {
+        val fragment = childFragmentManager.findFragmentById(group.container.id)
+            as? PreferenceFragmentCompat ?: return
+        val adapter = runCatching { fragment.listView.adapter }.getOrNull() ?: return
+        if (group.observedAdapter === adapter) return
+        group.observedAdapter = adapter
+        val observer = object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() = refreshAccordionHeight(group)
+
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) =
+                refreshAccordionHeight(group)
+
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) =
+                refreshAccordionHeight(group)
+
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) =
+                refreshAccordionHeight(group)
+
+            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) =
+                refreshAccordionHeight(group)
+        }
+        group.contentObserver = observer
+        adapter.registerAdapterDataObserver(observer)
+    }
+
     /** Stops any in-flight expand/collapse work for the group. A cancelled
      * animator still delivers its end callback, so references are cleared
      * first and callbacks verify they are still current before acting. */
@@ -280,6 +387,7 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
     private fun expandAccordionContainer(group: AccordionGroup) {
         val container = group.container
         cancelAccordionAnimation(group)
+        watchAccordionContent(group)
         // A cancelled collapse may have left a fixed mid-animation height.
         container.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
         container.visibility = View.VISIBLE
@@ -292,11 +400,19 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                 container.viewTreeObserver.removeOnPreDrawListener(this)
                 if (group.preDrawListener === this) group.preDrawListener = null
                 if (!group.expanded) return true
-                val target = container.height
+                // Phase 8.8: container.height here is whatever the
+                // wrap_content chain settled at, which under-measures
+                // the section at about one screenful (see
+                // measureAccordionFullHeight). Measure the true full
+                // height explicitly; fall back to the laid-out height
+                // only if the container has no width yet.
+                val target = measureAccordionFullHeight(group)
+                    .takeIf { it > 0 } ?: container.height
                 if (target <= 0) {
                     container.alpha = 1f
                     return true
                 }
+                group.fullHeight = target
                 startAccordionHeightAnimation(group, 0, target, expanding = true)
                 return true
             }
@@ -341,7 +457,14 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                     // A superseded (cancelled) animator must not touch the view.
                     if (group.heightAnimator !== animation) return
                     group.heightAnimator = null
-                    container.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    // Phase 8.8: an expanded section stays PINNED to its
+                    // explicitly measured full height — returning it to
+                    // WRAP_CONTENT would let the under-measuring parent
+                    // chain shrink it back to about one screenful on the
+                    // next layout pass.
+                    container.layoutParams.height =
+                        if (expanding && group.fullHeight > 0) group.fullHeight
+                        else ViewGroup.LayoutParams.WRAP_CONTENT
                     container.alpha = 1f
                     if (!expanding) container.visibility = View.GONE
                     container.requestLayout()
@@ -358,6 +481,20 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
             padBottom = isLandscape(),
             padLeft = isLayout(TV or EMULATOR)
         )
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Phase 8.8: a pinned section height was measured for the old
+        // width; re-measure any expanded sections once they have been
+        // laid out at the new one. (If the activity is recreated
+        // instead, the sections simply start collapsed again and there
+        // is no live state to repair.)
+        accordionGroups.forEach { group ->
+            if (group.expanded) {
+                group.container.doOnLayout { refreshAccordionHeight(group) }
+            }
+        }
     }
 
     override fun onBindingCreated(binding: MainSettingsBinding) {
