@@ -206,6 +206,10 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
     protected fun uiReset() {
         isShowing = false
+        // Phase 8B: player UI resets (incl. entering/leaving trailer
+        // fullscreen, which routes through here) collapse the top bar
+        // actions instantly, so the thumbnail comes back clean.
+        setTopBarActionsExpanded(false, animate = false)
         updateUIVisibility()
     }
 
@@ -278,6 +282,69 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             title = title.substring(0, year.range.last + 1)
         }
         return title.replace(Regex("""\s+"""), " ").trim(' ', '|', '-')
+    }
+
+    // Phase 8B: the details top bar collapses to just back + MORE so the
+    // thumbnail stays clean. The action circles (cast, subscribe, favorite,
+    // share, browser, search, recommendations) live in result_actions_row
+    // and are only shown on demand. Collapsing toggles ONLY that container,
+    // never the buttons themselves, so the per-button visibility logic
+    // elsewhere in this file (and the async cast callback) cannot fight it.
+    private var topBarActionsExpanded = false
+
+    private val topBarCollapseRunnable = Runnable {
+        setTopBarActionsExpanded(false)
+    }
+
+    private fun setTopBarActionsExpanded(expanded: Boolean, animate: Boolean = true) {
+        topBarActionsExpanded = expanded
+        val swipeBinding = binding ?: return
+        val row = swipeBinding.resultActionsRow
+        row.removeCallbacks(topBarCollapseRunnable)
+        swipeBinding.resultMore.setImageResource(
+            if (expanded) R.drawable.ic_baseline_clear_24
+            else R.drawable.ic_baseline_more_vert_24
+        )
+        if (expanded) {
+            row.isVisible = true
+            if (animate) {
+                row.animate().cancel()
+                row.alpha = 0f
+                row.translationX = 16.toPx.toFloat()
+                row.animate()
+                    .alpha(1f)
+                    .translationX(0f)
+                    .setDuration(180L)
+                    .start()
+            } else {
+                row.alpha = 1f
+                row.translationX = 0f
+            }
+            // Auto-collapse again after a few seconds.
+            row.postDelayed(topBarCollapseRunnable, 3_500L)
+        } else if (row.isVisible) {
+            if (animate) {
+                row.animate().cancel()
+                row.animate()
+                    .alpha(0f)
+                    .translationX(16.toPx.toFloat())
+                    .setDuration(150L)
+                    .withEndAction {
+                        // A re-expand may have cancelled this animation;
+                        // only hide if we are still meant to be collapsed.
+                        if (!topBarActionsExpanded) {
+                            row.isGone = true
+                        }
+                        row.alpha = 1f
+                        row.translationX = 0f
+                    }
+                    .start()
+            } else {
+                row.isGone = true
+                row.alpha = 1f
+                row.translationX = 0f
+            }
+        }
     }
 
     private fun loadTrailer(index: Int? = null) {
@@ -374,6 +441,8 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
 
         updateUIEvent -= ::updateUI
+        // Phase 8B: never let the auto-collapse timer outlive the view.
+        binding?.resultActionsRow?.removeCallbacks(topBarCollapseRunnable)
         playerHostView?.release()
         playerBinding = null
         resultBinding?.resultScroll?.setOnClickListener(null)
@@ -612,6 +681,8 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
             resultScroll.setOnScrollChangeListener(NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                 val dy = scrollY - oldScrollY
+                // Phase 8B: scrolling the page collapses the top bar actions.
+                if (topBarActionsExpanded) setTopBarActionsExpanded(false)
                 if (dy > 0) { //check for scroll down
                     binding.resultBookmarkFab.shrink()
                 } else if (dy < -5) {
@@ -632,6 +703,11 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             resultOverlappingPanels.setEndPanelLockState(OverlappingPanelsLayout.LockState.CLOSE)
             resultBack.setOnClickListener {
                 activity?.popCurrentPage()
+            }
+
+            // Phase 8B: MORE toggles the collapsed action row.
+            resultMore.setOnClickListener {
+                setTopBarActionsExpanded(!topBarActionsExpanded)
             }
 
             activity?.attachBackPressedCallback(this@ResultFragmentPhone.toString()) {
@@ -1149,7 +1225,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }, {
                         popupDialog = null
                         popup.callback(it)
-                    }
+                    }, icons = popup.getIcons()
                 )
             }
         }
