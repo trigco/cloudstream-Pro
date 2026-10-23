@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.widget.Toast
 import androidx.annotation.LayoutRes
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.preference.Preference
@@ -310,6 +311,29 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
             // would only duplicate it — and its back arrow would pop the
             // whole settings page instead of collapsing the section.
             view.findViewById<View>(R.id.settings_toolbar)?.visibility = View.GONE
+            // Phase 8.7 (clipping fix): the page root (settings_title_top)
+            // is a CoordinatorLayout whose list container carries the app-bar
+            // scrolling behaviour. That behaviour never lets the list measure
+            // to its content height — it clamps the container to the
+            // CoordinatorLayout's own height (in this wrap_content host:
+            // whatever height the previous layout pass left behind), which
+            // turned the embedded list into a short inner viewport whose
+            // lower rows were unreachable. Detach the behaviour and let the
+            // container wrap the list's full content height instead.
+            // Standalone pages keep the behaviour — their collapsing toolbar
+            // needs it.
+            view.findViewById<View>(android.R.id.list_container)?.let { listContainer ->
+                (listContainer.layoutParams as? CoordinatorLayout.LayoutParams)
+                    ?.let { params ->
+                        params.behavior = null
+                        params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                        listContainer.layoutParams = params
+                    }
+            }
+            // Phase 8.7: the accordion header already names the group, so
+            // the in-list category titles ("Downloads", …) are hidden in
+            // embedded mode. Standalone pages keep them.
+            preferenceScreen?.let { hideAccordionCategoryTitles(it) }
             // The outer page scrolls; this list takes its full content
             // height instead of scrolling inside the section.
             listView.isNestedScrollingEnabled = false
@@ -320,6 +344,10 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
             val ownBottomPadding = listView.paddingBottom
             view.post {
                 if (isAccordionSection) {
+                    // Re-apply the category-title hiding: this runs after the
+                    // subclass's own onViewCreated, so anything it set up
+                    // late is covered too.
+                    preferenceScreen?.let { hideAccordionCategoryTitles(it) }
                     listView.setPadding(
                         listView.paddingLeft,
                         listView.paddingTop,
@@ -341,6 +369,30 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
         // the preference tree, clicks and dependencies are untouched.
         listView.addItemDecoration(SettingsGroupCardDecoration(requireContext()))
         applyNavClearancePadding()
+    }
+
+    /**
+     * Phase 8.7 — embedded (accordion) sections hide their
+     * [PreferenceCategory] title rows: the accordion header on the main
+     * settings page already names the group, so the in-list category text
+     * would only repeat it. Each category's row layout is swapped for a
+     * zero-height one; the category and its children stay fully functional.
+     * [SettingsGroupCardDecoration] is unaffected — it anchors each card to
+     * the group's item rows, never to the header row, so a zero-height
+     * header just removes the text and the gap between cards stays the
+     * decoration's own 16dp bottom offset. Only ever called when
+     * [isAccordionSection]; standalone pages keep their category titles.
+     */
+    private fun hideAccordionCategoryTitles(group: PreferenceGroup) {
+        for (i in 0 until group.preferenceCount) {
+            val pref = group.getPreference(i)
+            if (pref is PreferenceCategory &&
+                pref.layoutResource != R.layout.preference_category_hidden
+            ) {
+                pref.layoutResource = R.layout.preference_category_hidden
+            }
+            if (pref is PreferenceGroup) hideAccordionCategoryTitles(pref)
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
