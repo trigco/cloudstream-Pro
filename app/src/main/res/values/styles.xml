@@ -519,8 +519,15 @@
         <item name="android:textColorPrimary">?attr/grayTextColor</item>
 
         <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
-        <item name="buttonBarNegativeButtonStyle">@style/BlackButton.Dialog</item>
-        <item name="buttonBarNeutralButtonStyle">@style/BlackButton.Dialog</item>
+        <!-- Phase 8.11-E2: negative/neutral were BlackButton.Dialog, whose
+             fill (?attr/iconGrayBackground, #1F1F1F) is nearly identical to
+             the dialog surface (pure black) and whose strokeColor is a
+             MaterialButton-only attr an AppCompatButton never draws (and
+             no strokeWidth was set anyway) — Cancel/Delete rendered as
+             bare text next to the filled Apply pill. OutlinedButton.Dialog
+             gives them a real outlined pill via android:background. -->
+        <item name="buttonBarNegativeButtonStyle">@style/OutlinedButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/OutlinedButton.Dialog</item>
     </style>
 
     <style name="TabNoCaps" parent="TextAppearance.Design.Tab">
@@ -763,6 +770,38 @@
         <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
     </style>
 
+    <!-- Phase 8.11-E2: outlined pill for AlertDialog negative/neutral
+         buttons (wired in Theme.AlertDialog above and its values-v31 copy;
+         AlertDialogCustom inherits it). Parented on NiceButton directly,
+         NOT on BlackButton: BlackButton's backgroundTint would tint this
+         style's background drawable into a solid blob, and its
+         strokeColor / cornerRadius are MaterialButton-only attrs that
+         the AppCompatButtons AlertController creates never read (no
+         strokeWidth is set anywhere in that chain either). The visible
+         treatment therefore comes from android:background
+         (@drawable/bg_button_outlined: 20dp corners,
+         transparent fill, 1dp @color/white_attr_20 outline — the
+         Phase 8.10-C dialog outline). Padding/min sizes make it read as
+         a button next to the filled positive pill; height (40dp), bold
+         15sp text, margins and focus foreground are inherited from
+         NiceButton so all three dialog buttons stay one family. -->
+    <style name="OutlinedButton" parent="NiceButton">
+        <item name="android:background">@drawable/bg_button_outlined</item>
+        <item name="android:textColor">?attr/textColor</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:minWidth">64dp</item>
+        <item name="android:minHeight">40dp</item>
+    </style>
+
+    <style name="OutlinedButton.Dialog" parent="OutlinedButton">
+        <item name="android:foreground">@drawable/outline_drawable_less_inset</item>
+        <item name="android:insetTop">@dimen/dialog_buttons_inset</item>
+        <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
+    </style>
+
     <style name="BlackLabel" parent="@style/Widget.MaterialComponents.Tooltip">
         <item name="backgroundTint">?attr/iconGrayBackground</item>
         <item name="android:textColor">?attr/textColor</item>
@@ -776,6 +815,19 @@
         <item name="drawableStartCompat">@drawable/ic_baseline_check_24_listview</item>
     </style>
 
+    <!-- Phase 8.11-E1: row style for sort_bottom_single_choice, whose root is
+         now a CheckedTextView. The widget itself draws the check mark (start
+         side) only while the ListView marks the row checked, so no static
+         compound drawable is set here. android:checkMarkGravity is a
+         framework CheckedTextView attr (API 24+); on API 23 it is ignored
+         and the mark falls back to the widget's default end side.
+         NoCheckLabel's android:drawablePadding supplies the gap between the
+         mark and the text, exactly as it did for the compound drawable. -->
+    <style name="CheckedLabel" parent="@style/NoCheckLabel">
+        <item name="android:checkMark">@drawable/ic_baseline_check_24_listview</item>
+        <item name="android:checkMarkGravity">start</item>
+    </style>
+
 
     <style name="NoCheckLabel" parent="@style/AppTextViewStyle">
         <item name="android:layout_width">match_parent</item>
@@ -785,8 +837,11 @@
         <item name="android:textSize">16sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:paddingStart">12dp</item>
-        <item name="android:paddingEnd">12dp</item>
+        <!-- Phase 8.11-E1: 12dp -> 16dp so selection rows align with the
+             sheet titles (?android:attr/listPreferredItemPaddingStart) and
+             the check column no longer crowds the screen edge. -->
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
         <item name="android:ellipsize">marquee</item>
         <item name="android:foreground">?attr/selectableItemBackgroundBorderless</item>
         <item name="android:drawablePadding">20dp</item>

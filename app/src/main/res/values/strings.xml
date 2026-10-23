@@ -383,6 +383,13 @@
     <string name="random_button_settings_desc">Show random button on Homepage and Library</string>
     <string name="provider_lang_settings">Extension languages</string>
     <string name="app_layout">App Layout</string>
+    <string name="app_icon_settings">App icon</string>
+    <string name="app_icon_default">Default</string>
+    <string name="app_icon_midnight">Midnight</string>
+    <string name="app_icon_inverse">Inverse</string>
+    <string name="app_icon_crimson">Crimson</string>
+    <string name="app_icon_carbon">Carbon</string>
+    <string name="app_icon_changed">App icon changed</string>
     <string name="preferred_media_settings">Preferred media</string>
     <string name="enable_nsfw_on_providers">Enable NSFW on supported Extensions</string>
     <string name="subtitles_encoding">Subtitle encoding</string>

@@ -20,8 +20,11 @@
         <item name="android:textColorPrimary">?attr/grayTextColor</item>
 
         <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
-        <item name="buttonBarNegativeButtonStyle">@style/BlackButton.Dialog</item>
-        <item name="buttonBarNeutralButtonStyle">@style/BlackButton.Dialog</item>
+        <!-- Phase 8.11-E2: see values/styles.xml — negative/neutral get the
+             outlined pill (OutlinedButton.Dialog) instead of the invisible
+             BlackButton.Dialog fill. -->
+        <item name="buttonBarNegativeButtonStyle">@style/OutlinedButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/OutlinedButton.Dialog</item>
 
         <item name="android:windowBlurBehindEnabled">true</item>
         <item name="android:windowBlurBehindRadius">24dp</item>

@@ -15,6 +15,10 @@
             android:icon="@drawable/ic_baseline_tv_24"
             android:key="@string/app_layout_key"
             android:title="@string/app_layout" />
+        <Preference
+            android:icon="@drawable/baseline_grid_view_24"
+            android:key="@string/app_icon_key"
+            android:title="@string/app_icon_settings" />
         <SwitchPreference
             android:defaultValue="true"
             android:icon="@drawable/title_24px"

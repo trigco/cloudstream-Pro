@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API 26 fallback for @mipmap/ic_launcher_carbon: same artwork
+     as a layer-list (ground + foreground stretched to icon bounds). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_bg_carbon" />
+    <item android:drawable="@drawable/ic_launcher_fg_carbon" />
+</layer-list>
