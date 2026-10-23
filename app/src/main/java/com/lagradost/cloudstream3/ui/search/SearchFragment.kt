@@ -49,6 +49,7 @@ import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.BaseAdapter
 import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
 import com.lagradost.cloudstream3.ui.home.HomeFragment
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.bindChips
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.currentSpan
@@ -669,6 +670,13 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
             searchMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             searchMasterRecycler.adapter = masterAdapter
+
+            // Phase 8.10 (phone only): provider sections glide in as they
+            // scroll into view instead of popping, matching Home. The
+            // animator resets itself when a fresh result list starts.
+            if (isLayout(PHONE)) {
+                SectionEntranceAnimator().attachTo(searchMasterRecycler)
+            }
             //searchMasterRecycler.setLinearListLayout(isHorizontal = false, nextRight = FOCUS_SELF)
 
             searchMasterRecycler.layoutManager = GridLayoutManager(context, 1)

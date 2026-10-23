@@ -941,8 +941,14 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                         )
 
                         resultCastText.setText(if (showCast) d.actorsText else null)
-                        resultCastItems.isGone = !showCast || d.actors.isNullOrEmpty()
-                        (resultCastItems.adapter as? ActorAdaptor)?.submitList(if (showCast) d.actors else emptyList())
+                        // Phase 8.10: ResultData.actors is always populated
+                        // now (the phone page renders the row in every case),
+                        // but TV keeps its previous exclusive choice — the
+                        // text line when no actor has an image (actorsText
+                        // non-null), the row otherwise.
+                        val showCastRow = showCast && d.actorsText == null
+                        resultCastItems.isGone = !showCastRow || d.actors.isNullOrEmpty()
+                        (resultCastItems.adapter as? ActorAdaptor)?.submitList(if (showCastRow) d.actors else emptyList())
 
                         if (d.contentRatingText == null) {
                             // If there is no rating to display, we don't want an empty gap
