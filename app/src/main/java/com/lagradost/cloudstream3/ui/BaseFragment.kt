@@ -31,6 +31,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.ui.settings.SettingsFragment
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.getResourceColor
 import com.lagradost.cloudstream3.utils.UIHelper.toPx
@@ -289,9 +290,47 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
      * floating pill is not in play (TV / landscape rail). */
     private var defaultListBottomPadding: Int? = null
 
+    /**
+     * Phase 8.6 — true when this page is embedded as a section of the main
+     * settings accordion (a child fragment of [SettingsFragment]) instead of
+     * being a standalone nav destination. The host page then owns the
+     * toolbar, the system-bar padding and the floating-nav clearance, and
+     * this page's list must give up its own scrolling so the whole settings
+     * page scrolls as one. Standalone destinations are hosted by the
+     * NavHostFragment, never by SettingsFragment, so this cannot misfire.
+     */
+    val isAccordionSection: Boolean
+        get() = parentFragment is SettingsFragment
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setSystemBarsPadding()
+        if (isAccordionSection) {
+            // The accordion header already shows this page's icon + title, so
+            // the page's own toolbar (from the settings_title_top layout)
+            // would only duplicate it — and its back arrow would pop the
+            // whole settings page instead of collapsing the section.
+            view.findViewById<View>(R.id.settings_toolbar)?.visibility = View.GONE
+            // The outer page scrolls; this list takes its full content
+            // height instead of scrolling inside the section.
+            listView.isNestedScrollingEnabled = false
+            // Subclass onViewCreated() calls (setPaddingBottom on TV) run
+            // after super(), so restore the list's own bottom padding once
+            // they are done — a section ends inside the page and must not
+            // keep a standalone page's bottom gap.
+            val ownBottomPadding = listView.paddingBottom
+            view.post {
+                if (isAccordionSection) {
+                    listView.setPadding(
+                        listView.paddingLeft,
+                        listView.paddingTop,
+                        listView.paddingRight,
+                        ownBottomPadding
+                    )
+                }
+            }
+        } else {
+            setSystemBarsPadding()
+        }
         // Phase 7: gentle staggered fade+rise entrance for the settings list,
         // shared by every settings sub-page via this base class.
         listView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
@@ -306,7 +345,9 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        setSystemBarsPadding()
+        // Inside the accordion the host page re-applies its own system-bar
+        // padding; a section must not pad itself a second time.
+        if (!isAccordionSection) setSystemBarsPadding()
         // The pill only overlays in portrait; re-evaluate on rotation, the
         // same reason setSystemBarsPadding() is re-applied here.
         if (view != null) runCatching { applyNavClearancePadding() }
@@ -322,6 +363,10 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
      * check) in portrait; landscape uses the nav rail and TV never shows
      * the pill, so both keep their original padding. */
     private fun applyNavClearancePadding() {
+        // Phase 8.6: an accordion section ends inside the settings page,
+        // whose own scroll area already clears the floating pill — adding
+        // the 100dp clearance here would leave a hole at the section's end.
+        if (isAccordionSection) return
         val list = listView
         if (defaultListBottomPadding == null) {
             defaultListBottomPadding = list.paddingBottom
