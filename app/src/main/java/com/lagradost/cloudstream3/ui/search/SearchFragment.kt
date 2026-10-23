@@ -53,7 +53,6 @@ import com.lagradost.cloudstream3.ui.home.HomeFragment
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.bindChips
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.currentSpan
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.loadHomepageList
-import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.updateChips
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.ui.home.ParentItemAdapter
 import com.lagradost.cloudstream3.ui.result.FOCUS_SELF
@@ -208,20 +207,15 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
     private fun reloadRepos(success: Boolean = false) = main {
         searchViewModel.reloadRepos()
-        context?.filterProviderByPreferredMedia()?.let { validAPIs ->
-            bindChips(
-                binding?.tvtypesChipsScroll?.tvtypesChips,
-                selectedSearchTypes,
-                validAPIs.flatMap { api -> api.supportedTypes }.distinct()
-            ) { list ->
-                if (selectedSearchTypes.toSet() != list.toSet()) {
-                    DataStoreHelper.searchPreferenceTags = list
-                    selectedSearchTypes.clear()
-                    selectedSearchTypes.addAll(list)
-                    search(binding?.mainSearch?.query?.toString())
-                }
-            }
-        }
+        // Phase 8.9: the tag chips no longer live on the search page —
+        // the provider/tag selection is edited only in the filter sheet
+        // and stored in DataStoreHelper with exclusion semantics
+        // (everything is included unless the user unchecks it there).
+        // Refresh the cached sets so providers installed since this
+        // fragment was created are searched too, without the user
+        // having to reopen the sheet.
+        selectedApis = DataStoreHelper.searchPreferenceProviders.toMutableSet()
+        selectedSearchTypes = DataStoreHelper.searchPreferenceTags.toMutableList()
     }
 
     override fun fixLayout(view: View) {
@@ -387,15 +381,12 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     ) { list ->
                         updateList(list)
 
-                        // refresh selected chips in main chips
+                        // Phase 8.9: no page chips to mirror into
+                        // anymore — the field (persisted by updateList)
+                        // is the selection now.
                         if (selectedSearchTypes.toSet() != list.toSet()) {
                             selectedSearchTypes.clear()
                             selectedSearchTypes.addAll(list)
-                            updateChips(
-                                binding.tvtypesChipsScroll.tvtypesChips,
-                                selectedSearchTypes
-                            )
-
                         }
                     }
 
@@ -529,10 +520,20 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 })
 
                 (binding.searchMasterRecycler.adapter as? ParentItemAdapter)?.apply {
-                    val newItems = sortedList.map { (providerName, providerData) ->
+                    val newItems = sortedList.mapNotNull { (providerName, providerData) ->
                         val dataList = providerData.list
                         val dataListFiltered =
                             context?.filterSearchResultByFilmQuality(dataList) ?: dataList
+
+                        // Phase 8.9: providers finish one by one, and a
+                        // provider whose search came back with zero
+                        // (visible) results used to stay behind as an
+                        // empty grey section bar. Only build a section
+                        // once it has results; when a later update
+                        // empties it, the submitted list drops it again.
+                        // Search only — the home screen builds its own
+                        // items in HomeFragment and is untouched.
+                        if (dataListFiltered.isEmpty()) return@mapNotNull null
 
                         val homePageList = HomePageList(
                             providerName,
@@ -584,11 +585,14 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 SEARCH_HISTORY_OPEN -> {
                     if (searchItem == null) return@SearchHistoryAdaptor
                     searchViewModel.clearSearch()
-                    if (searchItem.type.isNotEmpty())
-                        updateChips(
-                            binding.tvtypesChipsScroll.tvtypesChips,
-                            searchItem.type.toMutableList()
-                        )
+                    if (searchItem.type.isNotEmpty()) {
+                        // Phase 8.9: apply the entry's types directly —
+                        // the page chips, whose checked-change listener
+                        // used to forward them, are gone.
+                        selectedSearchTypes.clear()
+                        selectedSearchTypes.addAll(searchItem.type)
+                        DataStoreHelper.searchPreferenceTags = searchItem.type
+                    }
                     binding.mainSearch.setQuery(searchItem.searchText, true)
                 }
 
@@ -720,14 +724,17 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             // On non-phone layouts, redirect focus and handle back button
             if (!isLayout(PHONE)) {
                 if (hasSuggestions) {
-                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId = R.id.search_suggestions_recycler
+                    // Phase 8.9: the chips row this used to hang off is
+                    // gone; the filter icon is the focus anchor above
+                    // the lists now.
+                    binding.searchFilter.nextFocusDownId = R.id.search_suggestions_recycler
                     // Attach back button callback to clear suggestions
                     activity?.attachBackPressedCallback("SearchFragment") {
                         searchViewModel.clearSuggestions()
                     }
                 } else {
                     // Reset to default focus target (history)
-                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId = R.id.search_history_recycler
+                    binding.searchFilter.nextFocusDownId = R.id.search_history_recycler
                     // Detach back button callback when no suggestions
                     activity?.detachBackPressedCallback("SearchFragment")
                 }
