@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -375,8 +376,8 @@ private class SettingsGroupCardDecoration(context: Context) :
      * screen itself for root-level preferences). Null = no card — the row is
      * a category header, which sits above its card like on the main page.
      */
-    private fun cardGroupOf(pref: Preference): PreferenceGroup? {
-        if (pref is PreferenceCategory) return null
+    private fun cardGroupOf(pref: Preference?): PreferenceGroup? {
+        if (pref == null || pref is PreferenceCategory) return null
         return pref.parent
     }
 
