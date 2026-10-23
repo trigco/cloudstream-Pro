@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8E: soft-touch press feedback for poster cards. Applied via
+     android:stateListAnimator on the poster item roots (home_result_grid,
+     search_result_grid). valueTo-only on purpose (same pattern as
+     icon_press_scale): each state animates from the CURRENT scale, so the
+     default state never forces a wrong start value when the animator
+     attaches. Press shrinks to 0.96 in 100ms; release eases back in 150ms. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <set android:ordering="together">
+            <objectAnimator
+                android:duration="100"
+                android:propertyName="scaleX"
+                android:valueTo="0.96"
+                android:valueType="floatType" />
+            <objectAnimator
+                android:duration="100"
+                android:propertyName="scaleY"
+                android:valueTo="0.96"
+                android:valueType="floatType" />
+        </set>
+    </item>
+    <item>
+        <set android:ordering="together">
+            <objectAnimator
+                android:duration="150"
+                android:propertyName="scaleX"
+                android:valueTo="1.0"
+                android:valueType="floatType" />
+            <objectAnimator
+                android:duration="150"
+                android:propertyName="scaleY"
+                android:valueTo="1.0"
+                android:valueType="floatType" />
+        </set>
+    </item>
+</selector>

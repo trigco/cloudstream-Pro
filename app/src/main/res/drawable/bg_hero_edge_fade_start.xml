@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8A: left edge mask for the hero carousel. Fades from the page
+     background colour at the screen edge to transparent ~32dp in, so a
+     peeking hero card dissolves instead of hard-cutting. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="0"
+        android:startColor="?attr/primaryBlackBackground"
+        android:endColor="@android:color/transparent"
+        android:type="linear" />
+</shape>
