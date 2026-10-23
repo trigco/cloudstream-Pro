@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.viewbinding.ViewBinding
+import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getActivity
 import com.lagradost.cloudstream3.PROVIDER_STATUS_DOWN

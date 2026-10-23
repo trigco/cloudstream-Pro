@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.ui.settings.extensions
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.RepositoryItemBinding
