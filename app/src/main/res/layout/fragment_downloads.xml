@@ -302,12 +302,15 @@
         <!-- Phase 7.5 FIX-5: the list viewport grew by the 88dp nav zone
              (fragment now extends under the floating nav), so the pre-existing
              100dp bottom padding grows by the same 88dp to keep the last
-             item's rest position (clearance above the queue bar) identical. -->
+             item's rest position (clearance above the queue bar) identical.
+             Phase 8C: +12dp more (200dp) tracking the queue bar's lift from
+             88dp to 100dp bottom margin; rest clearance above the bar is
+             unchanged (50dp). -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/download_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingBottom="188dp"
+            android:paddingBottom="200dp"
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:nextFocusUp="@id/download_stream_button_tv"
@@ -324,7 +327,7 @@
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:layout_gravity="bottom"
-            android:layout_marginBottom="88dp"
+            android:layout_marginBottom="100dp"
             android:background="?attr/primaryGrayBackground"
             android:orientation="vertical">
 
@@ -358,12 +361,14 @@
     </FrameLayout>
 
     <!-- Phase 7.5 FIX-5: marginBottom 50dp -> 138dp (+88dp nav zone) so the
-         FAB stack keeps its pre-overlay on-screen position. -->
+         FAB stack keeps its pre-overlay on-screen position.
+         Phase 8C: 138dp -> 150dp, tracking the queue bar's +12dp lift; the
+         stack still rests on the queue bar's top edge as before. -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_marginBottom="138dp"
+        android:layout_marginBottom="150dp"
         android:orientation="vertical">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton

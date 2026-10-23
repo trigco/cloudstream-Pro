@@ -122,6 +122,7 @@
         android:id="@+id/search_autofit_results"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
 
         android:background="?attr/primaryBlackBackground"
         android:clipToPadding="false"
@@ -142,6 +143,7 @@
         android:id="@+id/search_master_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
         android:clipToPadding="false"
         android:paddingBottom="100dp"
 
@@ -157,6 +159,7 @@
         android:id="@+id/search_history_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
         android:clipToPadding="false"
         android:paddingBottom="100dp"
         android:background="?attr/primaryBlackBackground"
