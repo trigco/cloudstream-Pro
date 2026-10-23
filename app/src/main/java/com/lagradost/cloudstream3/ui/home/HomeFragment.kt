@@ -54,6 +54,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
 import com.lagradost.cloudstream3.ui.search.SEARCH_ACTION_LOAD
@@ -711,6 +712,66 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         if (nav.height > 0) apply() else nav.post { apply() }
     }
 
+    /**
+     * Phase 8.10: hero scroll-collapse (phone only; wired in
+     * [onBindingCreated]). As the home list scrolls, the hero frame
+     * (`home_preview_viewpager_text` — photo, bottom fade, search row and
+     * the None/Play/Info row as one visual unit) continuously shrinks,
+     * fades and lags slightly behind the scroll, dissolving into the
+     * page; scrolling back to the top restores it exactly, because every
+     * value is a pure function of the current scroll offset. Visual
+     * transforms only — no layout heights change, so there is no
+     * re-layout jank, and the 8.8 bottom fade / clear photo / auto-slide
+     * are untouched.
+     *
+     * This never fights [HomeScrollTransformer]: the transformer runs on
+     * the pager's *horizontal* page changes and only writes page padding,
+     * while this writes scale/alpha/translationY on the outer frame from
+     * the *vertical* list scroll — disjoint properties on disjoint views.
+     */
+    private fun setupHeroScrollCollapse(recyclerView: RecyclerView) {
+        fun applyHeroCollapse() {
+            val header = recyclerView.findViewHolderForAdapterPosition(0)?.itemView ?: return
+            val frame = header.findViewById<View>(R.id.home_preview_viewpager_text) ?: return
+            // No preview loaded: the frame is hidden and the alternate
+            // account row shows instead — nothing to collapse.
+            if (!frame.isVisible) return
+            val height = frame.height
+            if (height <= 0) return
+            // Layout positions only (itemView top within the list plus the
+            // frame's top within the header); transforms never feed back
+            // into them, so the mapping stays exact in both directions.
+            val scrolled = -(header.top + frame.top)
+            val ratio = (scrolled.toFloat() / height).coerceIn(0f, 1f)
+            val scale = 1f - 0.08f * ratio
+            frame.scaleX = scale
+            frame.scaleY = scale
+            frame.alpha = 1f - 0.75f * ratio
+            // Slight parallax lag: the frame drifts down against the
+            // scroll by 20% of the scrolled distance while it dissolves.
+            frame.translationY = scrolled * 0.2f
+        }
+
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                applyHeroCollapse()
+            }
+        })
+        // Re-apply when the header scrolls back into view: while it is
+        // detached there is no holder to transform, and the frame may
+        // still carry the values from when it left the screen.
+        recyclerView.addOnChildAttachStateChangeListener(
+            object : RecyclerView.OnChildAttachStateChangeListener {
+                override fun onChildViewAttachedToWindow(view: View) {
+                    if (recyclerView.getChildAdapterPosition(view) == 0) {
+                        view.post { applyHeroCollapse() }
+                    }
+                }
+
+                override fun onChildViewDetachedFromWindow(view: View) = Unit
+            })
+    }
+
     @SuppressLint("SetTextI18n")
     override fun onBindingCreated(binding: FragmentHomeBinding) {
         context?.let { HomeChildItemAdapter.updatePosterSize(it) }
@@ -737,6 +798,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             )
             homeMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             homeMasterRecycler.adapter = homeMasterAdapter
+
+            // Phase 8.10 (phone only): provider sections glide in as they
+            // scroll into view instead of popping, and the hero shrinks /
+            // dissolves as it scrolls off. TV and emulator layouts keep
+            // the stock behaviour.
+            if (isLayout(PHONE)) {
+                SectionEntranceAnimator(firstAnimatedPosition = 1)
+                    .attachTo(homeMasterRecycler)
+                setupHeroScrollCollapse(homeMasterRecycler)
+            }
 
             homeApiFab.isVisible = isLayout(PHONE)
             anchorHomeApiFab()
