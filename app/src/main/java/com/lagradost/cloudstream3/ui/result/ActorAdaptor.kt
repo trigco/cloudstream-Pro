@@ -21,6 +21,21 @@ import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 
+/**
+ * Phase 8.10: up-to-two-letter initials for an actor's avatar, shown when
+ * the actor has no photo. First letter of the first and last name part
+ * ("Vikrant Massey" -> "VM", "Madonna" -> "M"). Shared by the cast row
+ * (ActorAdaptor) and the actor page header (ActorFragment).
+ */
+internal fun initialsForActor(name: String): String {
+    val parts = name.trim().split(Regex("[\\s,]+")).filter { it.isNotBlank() }
+    return when {
+        parts.isEmpty() -> "?"
+        parts.size == 1 -> parts.first().take(1).uppercase()
+        else -> (parts.first().take(1) + parts.last().take(1)).uppercase()
+    }
+}
+
 class ActorAdaptor(
     private var nextFocusUpId: Int? = null,
     private val focusCallback: (View?) -> Unit = {},
@@ -46,6 +61,7 @@ class ActorAdaptor(
         when (val binding = holder.view) {
             is CastItemBinding -> {
                 clearImage(binding.actorImage)
+                binding.actorInitials.text = null
             }
         }
     }
@@ -79,6 +95,17 @@ class ActorAdaptor(
                 } else {
                     Pair(item.voiceActor?.image, item.actor.image)
                 }
+
+                // Phase 8.10: the initials belong to whoever's photo sits in
+                // the main slot (mirrors the mainImg choice above). They sit
+                // beneath the photo — a loaded photo covers them, a missing
+                // or failed one leaves them visible instead of a blank disc.
+                val mainName = if (!isInverted || item.voiceActor?.image.isNullOrBlank()) {
+                    item.actor.name
+                } else {
+                    item.voiceActor?.name ?: item.actor.name
+                }
+                binding.actorInitials.text = initialsForActor(mainName)
 
                 // Fix tv focus escaping the recyclerview
                 if (position == 0) {

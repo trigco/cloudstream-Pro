@@ -88,6 +88,14 @@ class SettingsUI : BasePreferenceFragmentCompat() {
                     }
                 }
                 SearchResultBuilder.updateCache(it.context)
+                // Phase 8.10-A: same refresh the poster-size and
+                // bottom-title settings above already perform — drop the
+                // pooled poster holders so the next bind re-runs with the
+                // new flags instead of the already-bound posters keeping
+                // the old visibility until they happen to recycle.
+                HomeChildItemAdapter.sharedPool.clear()
+                ParentItemAdapter.sharedPool.clear()
+                SearchAdapter.sharedPool.clear()
             }
 
             return@setOnPreferenceClickListener true

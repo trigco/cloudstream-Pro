@@ -78,6 +78,11 @@ class ActorFragment : BaseFragment<FragmentActorBinding>(
 
             // Same image-loading helper the cast list itself uses.
             actorPhoto.loadImage(image)
+            // Phase 8.10: initials avatar under the photo — shown when the
+            // actor has no photo at all (the Wikipedia upgrade in
+            // fetchWikipediaOverview still fills the photo when it can;
+            // this is the last resort, never an empty card).
+            actorInitials.text = initialsForActor(name)
             actorName.text = name
 
             // Role line: character name, role category and source title,

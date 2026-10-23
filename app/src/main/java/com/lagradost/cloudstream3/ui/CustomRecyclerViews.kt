@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.ui
 import android.content.Context
 import android.util.AttributeSet
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import androidx.core.content.withStyledAttributes
 import androidx.core.view.children
 import androidx.recyclerview.widget.GridLayoutManager
@@ -189,5 +190,115 @@ class MaxRecyclerView(ctx: Context, attrs: AttributeSet) : RecyclerView(ctx, att
             child.updateMaxSize()
         }
         super.onChildAttachedToWindow(child)
+    }
+}
+
+/**
+ * Phase 8.10: scroll-in entrance for provider section items (used by the
+ * Home and Search master lists, phone only — the fragments gate the call).
+ *
+ * A [RecyclerView.LayoutAnimationController] only runs on a list's first
+ * layout pass, so sections that arrive or scroll in later would just pop.
+ * This listener animates an item the first time it attaches at a position
+ * beyond everything seen so far: a 220ms fade + slight rise (decelerate —
+ * the timings of `@anim/settings_item_enter` / the `feel_*` resources),
+ * transform/alpha only, so it stays smooth on API 27 and never triggers
+ * a layout pass.
+ *
+ * Recycling safety:
+ * - Scrolling back up never re-animates: re-attached items sit at or below
+ *   [lastAnimatedPosition].
+ * - A data observer resets the tracker when a fresh list starts (insert
+ *   or removal at the first animated position, or a wholesale change),
+ *   so a new search / provider reload animates its sections again, while
+ *   plain appends further down keep the tracker. (The comparison uses
+ *   [firstAnimatedPosition] because BaseAdapter offsets its differ
+ *   events by its header count.)
+ * - Views are normalised on detach (and before the animate decision on
+ *   attach), so a recycled view can never be reused mid-animation with a
+ *   stale alpha/translation.
+ * - The list's own XML layoutAnimation covers the very first layout pass;
+ *   items attached before that pass completes are marked seen instead of
+ *   being animated twice.
+ *
+ * [firstAnimatedPosition] lets Home skip its header (position 0), whose
+ * hero has its own scroll-driven treatment; views below it are never
+ * touched, on attach or detach.
+ */
+class SectionEntranceAnimator(
+    private val firstAnimatedPosition: Int = 0,
+) : RecyclerView.OnChildAttachStateChangeListener {
+
+    private var lastAnimatedPosition = firstAnimatedPosition - 1
+    private var firstLayoutPassed = false
+
+    private val dataObserver = object : RecyclerView.AdapterDataObserver() {
+        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+            if (positionStart <= firstAnimatedPosition) reset()
+        }
+
+        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+            if (positionStart <= firstAnimatedPosition) reset()
+        }
+
+        override fun onChanged() {
+            reset()
+        }
+    }
+
+    private fun reset() {
+        lastAnimatedPosition = firstAnimatedPosition - 1
+    }
+
+    /** Registers this listener (and the data observer) on [recyclerView]. */
+    fun attachTo(recyclerView: RecyclerView) {
+        recyclerView.addOnChildAttachStateChangeListener(this)
+        recyclerView.adapter?.registerAdapterDataObserver(dataObserver)
+        // Posted runnables run after the current layout pass, so anything
+        // attached by the first pass is covered by the list's own
+        // layoutAnimation and only marked as seen.
+        recyclerView.post { firstLayoutPassed = true }
+    }
+
+    override fun onChildViewAttachedToWindow(view: View) {
+        val recyclerView = view.parent as? RecyclerView ?: return
+        val position = recyclerView.getChildAdapterPosition(view)
+        if (position == RecyclerView.NO_POSITION || position < firstAnimatedPosition) return
+
+        if (position > lastAnimatedPosition) lastAnimatedPosition = position
+        else return // already seen: scrolling back up, or a rebind
+
+        view.animate().cancel()
+        if (!firstLayoutPassed) {
+            // First layout pass: the XML layoutAnimation owns the entrance.
+            view.alpha = 1f
+            view.translationY = 0f
+            return
+        }
+
+        val rise = if (view.height > 0) view.height * 0.06f
+        else 16f * view.resources.displayMetrics.density
+        view.alpha = 0f
+        view.translationY = rise
+        view.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(ENTRANCE_DURATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    override fun onChildViewDetachedFromWindow(view: View) {
+        val recyclerView = view.parent as? RecyclerView ?: return
+        val position = recyclerView.getChildAdapterPosition(view)
+        if (position != RecyclerView.NO_POSITION && position < firstAnimatedPosition) return
+        // Cancel + normalise so the view is never recycled mid-animation.
+        view.animate().cancel()
+        view.alpha = 1f
+        view.translationY = 0f
+    }
+
+    private companion object {
+        const val ENTRANCE_DURATION_MS = 220L
     }
 }

@@ -7,6 +7,7 @@ import android.os.Build
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -29,6 +30,7 @@ import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.result.FOCUS_SELF
 import com.lagradost.cloudstream3.ui.result.setLinearListLayout
 import com.lagradost.cloudstream3.ui.setRecycledViewPool
+import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setSystemBarsPadding
@@ -39,6 +41,7 @@ import com.lagradost.cloudstream3.utils.AppContextUtils.setDefaultFocus
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.UIHelper.hideProgress
 import com.lagradost.cloudstream3.utils.UIHelper.showProgress
 import com.lagradost.cloudstream3.utils.setText
@@ -81,6 +84,32 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
     override fun onBindingCreated(binding: FragmentExtensionsBinding) {
         setUpToolbar(R.string.extensions)
         setToolBarScrollFlags()
+
+        // Phase 8.10: on phone the floating nav pill overlays the bottom
+        // 88dp (70dp pill + 18dp margin — Phase 7.5 let content run
+        // full-height under it), and this screen's bottom-anchored storage
+        // bar, with its "Downloaded / Disabled / Not downloaded" legend,
+        // rested half behind the pill. Lift the bar and everything stacked
+        // on it by the pill zone, restoring the pre-overlay geometry
+        // pixel-for-pixel: bar at 88–168dp from the bottom, both lists
+        // ending on its top edge, the Add-repository FAB floating just
+        // above it. Gated to PHONE in code because this layout is shared —
+        // TV/emulator use the rail and keep the XML geometry untouched
+        // (the same pattern as BasePreferenceFragmentCompat's clearance).
+        if (isLayout(PHONE)) {
+            val pillZone = 88.toPx
+            (binding.pluginStorageAppbar.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                lp.bottomMargin = pillZone
+                binding.pluginStorageAppbar.layoutParams = lp
+            }
+            for (list in listOf(binding.repoRecyclerView, binding.pluginRecyclerView)) {
+                (list.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    lp.bottomMargin += pillZone
+                    list.layoutParams = lp
+                }
+            }
+            binding.addRepoButton.translationY = (-168).toPx.toFloat()
+        }
 
         binding.repoRecyclerView.apply {
             setLinearListLayout(

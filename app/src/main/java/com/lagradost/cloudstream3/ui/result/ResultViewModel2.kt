@@ -297,7 +297,13 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         url = url,
         tags = tags ?: emptyList(),
         comingSoon = comingSoon,
-        actors = if (hasActorImages) actors else null,
+        // Phase 8.10: the actor list is always passed through now. The phone
+        // details page renders it as a cast row in every case (photo when an
+        // actor has one, an initials avatar when not) instead of falling back
+        // to the plain "Cast: ..." text line. actorsText is still produced
+        // exactly as before (non-null only when no actor has an image) — the
+        // TV page keeps its old text-vs-row choice and uses it as the guard.
+        actors = actors,
         actorsText = if (hasActorImages || actors.isNullOrEmpty()) null else txt(
             R.string.cast_format,
             actors?.joinToString { it.actor.name }),
