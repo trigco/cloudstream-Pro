@@ -1,18 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 7.5 FIX-2: the hero page is an inset rounded CARD. Phase 7 used a
-     CardView (16dp sides / 14dp top / 108dp bottom, cardElevation=0); on
-     device the margins were laid out but the card was visually invisible:
-     no shadow, a near-black margin moat identical to the page background,
-     and fragment_home_head's full-width bottom scrim faking image
-     continuation over the card's bottom edge — so it read as full-bleed.
-     The card is now a plain container using the exact recipe that DID
-     render on this device for the details-page backdrop card
-     (result_top_holder): rounded background drawable (bg_details_backdrop,
-     24dp) + clipToOutline + 6dp elevation, same margins. Title + meta are
-     CENTERED in the card (user request), like the details title. The page
-     root stays match_parent so the pager's paging math is unchanged; the
-     108dp bottom margin keeps the card's bottom edge clear of the 100dp
-     action-row holder in fragment_home_head (that file is untouched). -->
+<!-- Phase 7.5 FIX-2 made the hero page an inset rounded CARD (margins
+     16dp sides / 14dp top / 108dp bottom, bg_details_backdrop +
+     clipToOutline + 6dp elevation), and Phase 8.5A restored exactly that
+     after the carousel experiment. Phase 8.6: the user verdict on the
+     restored build was still "the hero is FLOATING" — pixel measurement
+     of his screenshot confirmed the 7.5 geometry was rendering exactly
+     as specified (side margins 15.0/14.5dp vs 16dp design, title/meta
+     and action row at their designed offsets), so "floating" is his
+     name for the inset-card look itself: a poster hovering in a black
+     frame, detached from the screen edges. The card framing is therefore
+     REMOVED — the hero is attached again: the image fills the whole
+     500dp pager frame edge-to-edge (no margins, no rounded background,
+     no clip, no elevation), like the Phase 6 hero he praised. The
+     title/meta block keeps its exact old on-screen position (bottom
+     margin 124dp = the card's former 108dp bottom offset + its 16dp
+     gap), so the text still sits over the image just above the
+     None/Play/Info action row in fragment_home_head; that file's 220dp
+     bottom scrim plus this page's own 300dp title_shadow keep the text
+     and buttons readable over the image's bottom edge. bg_details_backdrop
+     itself is untouched — it still backs the details-page card. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -22,14 +28,7 @@
     <FrameLayout
         android:id="@+id/home_scroll_card"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="14dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="108dp"
-        android:background="@drawable/bg_details_backdrop"
-        android:clipToOutline="true"
-        android:elevation="6dp">
+        android:layout_height="match_parent">
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -82,13 +81,17 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="124dp"
                 android:orientation="vertical"
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp">
 
                 <!-- Logo and tags stay hidden (Phase 6A). Title + meta are
-                     centered in the card (Phase 7.5 FIX-2). -->
+                     centered (Phase 7.5 FIX-2). Phase 8.6: the 124dp
+                     bottom margin (= the removed card's 108dp bottom
+                     offset + the old 16dp gap) keeps this block at the
+                     exact position it held inside the card, over the
+                     now full-frame image, just above the action row. -->
                 <ImageView
                     android:id="@+id/home_preview_logo"
                     android:layout_width="260dp"

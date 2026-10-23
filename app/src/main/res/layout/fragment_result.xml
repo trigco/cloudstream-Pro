@@ -288,21 +288,49 @@
                      (small "ears" floating above the card) — outside the
                      old frame-bounds mask's reach. The enlarged mask paints
                      page colour over the whole exterior corner zone; see
-                     bg_details_corner_mask.xml for the new geometry. -->
+                     bg_details_corner_mask.xml for the new geometry.
+                     Phase 8.6: that geometry REGRESSED the inside edge —
+                     on device the mask painted a ~21.5dp black frame
+                     INSIDE the card's straight edges (AMOLED Jailer 2
+                     screenshot, pixel-measured: image inset 43px per
+                     side vs the Phase 8 build's 18px). Cause, measured:
+                     the -12dp margins on the match_parent mask view
+                     delivered only ~3dp of real outset on device, so
+                     the 24dp stroke reached ~21dp inside the card.
+                     Fix: the outset is no longer entrusted to negative
+                     margins on the mask. The FRAME now carries a plain
+                     POSITIVE layout_margin of 20dp inside the wrap, so
+                     the wrap (and the mask, a match_parent child of the
+                     wrap with no margins of its own) is the card rect
+                     outset by a guaranteed 20dp on every side. The
+                     wrap's own margins are the arithmetic compensation
+                     (15dp page inset − 20dp = −5dp sides, 16dp top −
+                     20dp = −4dp top, −20dp bottom), so the card lands
+                     at exactly its old position (15dp sides / 16dp top)
+                     and the wrap's flow footprint is unchanged; even if
+                     a compensation margin under-delivers, only the
+                     whole header shifts a few dp — the card/mask
+                     relationship cannot break. See
+                     bg_details_corner_mask.xml for the re-derived
+                     stroke geometry (radius 44dp / stroke 20dp: inner
+                     edge exactly on the card's 24dp arc, ZERO paint
+                     inside the card's straight edges). -->
                 <FrameLayout
                     android:id="@+id/result_top_card_wrap"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/result_padding"
-                    android:layout_marginTop="16dp"
-                    android:layout_marginEnd="@dimen/result_padding"
+                    android:layout_marginStart="-5dp"
+                    android:layout_marginTop="-4dp"
+                    android:layout_marginEnd="-5dp"
+                    android:layout_marginBottom="-20dp"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
                 <FrameLayout
                     android:id="@+id/result_top_card_frame"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:layout_margin="20dp">
 
                 <FrameLayout
                     android:id="@+id/result_top_holder"
@@ -383,12 +411,22 @@
                      beyond the old frame-bounds mask). It still paints
                      nothing inside the card's 24dp arc, so the backdrop,
                      watermark and trailer overlay stay untouched, and it
-                     still never consumes touches. -->
+                     still never consumes touches.
+                     Phase 8.6: the -12dp margins are GONE — measured on
+                     device they delivered only ~3dp of outset, letting
+                     the old 24dp stroke paint ~21.5dp inside the card's
+                     straight edges (the black frame the user reported).
+                     The mask is now a plain match_parent child of the
+                     wrap; its 20dp outset from the card comes from the
+                     frame's +20dp positive margin inside the wrap, and
+                     the drawable was re-derived for that outset (radius
+                     44dp, stroke 20dp — inner edge exactly on the card's
+                     24dp arc, paint strictly outside the card's straight
+                     edges, exterior ear zone still covered). -->
                 <View
                     android:id="@+id/result_top_corner_mask"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_margin="-12dp"
                     android:background="@drawable/bg_details_corner_mask"
                     android:elevation="8dp"
                     android:outlineProvider="none"

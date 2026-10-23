@@ -62,9 +62,13 @@
             </LinearLayout>
 
             <!-- Phase 5A: main menu grouped into cards (App / Content / System).
-                 All item IDs, texts, icons and the SettingsItem style are unchanged;
-                 only the containers, group headers and the focus chain (new visual
-                 order) are new. -->
+                 Phase 8.6: each entry is now an accordion header in its own
+                 card; the FrameLayout directly below it hosts the group's
+                 settings sub-page as an embedded child fragment (created
+                 lazily by SettingsFragment on first expand, then kept).
+                 All item IDs, texts, icons and the SettingsItem style are
+                 unchanged. Extensions has no PreferenceFragment sub-page,
+                 so it stays a plain navigation row (no container). -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -83,6 +87,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
                 android:background="@drawable/bg_settings_group"
                 android:orientation="vertical">
 
@@ -94,6 +99,26 @@
                     android:nextFocusDown="@id/settings_player"
                     android:text="@string/category_general"
                     app:drawableStartCompat="@drawable/ic_settings_general" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_general_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/settings_player"
@@ -104,6 +129,26 @@
                     android:nextFocusDown="@id/settings_ui"
                     android:text="@string/category_player"
                     app:drawableStartCompat="@drawable/ic_settings_player" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_player_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/settings_ui"
@@ -115,6 +160,16 @@
                     android:text="@string/category_ui"
                     app:drawableStartCompat="@drawable/ic_settings_layout" />
             </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_ui_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -134,6 +189,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
                 android:background="@drawable/bg_settings_group"
                 android:orientation="vertical">
 
@@ -146,6 +202,26 @@
                     android:nextFocusDown="@id/settings_extensions"
                     android:text="@string/category_providers"
                     app:drawableStartCompat="@drawable/ic_settings_providers" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_providers_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/settings_extensions"
@@ -175,6 +251,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
                 android:background="@drawable/bg_settings_group"
                 android:orientation="vertical">
 
@@ -187,6 +264,26 @@
                     android:nextFocusDown="@id/settings_credits"
                     android:text="@string/category_updates"
                     app:drawableStartCompat="@drawable/ic_settings_update" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_updates_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/settings_credits"
@@ -196,6 +293,16 @@
                     android:text="@string/category_account"
                     app:drawableStartCompat="@drawable/ic_settings_account" />
             </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_account_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:id="@+id/app_version_info"
