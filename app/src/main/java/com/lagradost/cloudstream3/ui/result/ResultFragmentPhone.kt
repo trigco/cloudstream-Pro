@@ -1067,7 +1067,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                         error {
                             getImageFromDrawable(
                                 context ?: return@error null,
-                                R.drawable.default_cover
+                                R.drawable.poster_placeholder
                             )
                         }
                     }
@@ -1078,7 +1078,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                         error {
                             getImageFromDrawable(
                                 context ?: return@error null,
-                                R.drawable.default_cover
+                                R.drawable.poster_placeholder
                             )
                         }
                     }
