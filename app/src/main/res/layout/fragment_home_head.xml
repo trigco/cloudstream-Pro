@@ -22,7 +22,11 @@
             android:id="@+id/home_preview_viewpager"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal">
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            android:paddingStart="36dp"
+            android:paddingEnd="36dp">
 
         </androidx.viewpager2.widget.ViewPager2>
 
@@ -31,6 +35,29 @@
             android:layout_height="220dp"
             android:layout_gravity="bottom"
             android:background="@drawable/gradient_home_hero_scrim" />
+
+        <!-- Phase 8A: soft edge masks so the peeking neighbour hero cards
+             melt into the page background instead of hard-cutting at the
+             screen edge. Non-interactive: touches fall through. -->
+        <View
+            android:id="@+id/home_preview_edge_fade_start"
+            android:layout_width="32dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="start"
+            android:background="@drawable/bg_hero_edge_fade_start"
+            android:clickable="false"
+            android:focusable="false"
+            android:importantForAccessibility="no" />
+
+        <View
+            android:id="@+id/home_preview_edge_fade_end"
+            android:layout_width="32dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:background="@drawable/bg_hero_edge_fade_end"
+            android:clickable="false"
+            android:focusable="false"
+            android:importantForAccessibility="no" />
 
         <LinearLayout
             android:id="@+id/home_padding"

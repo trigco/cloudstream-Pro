@@ -33,10 +33,10 @@
     <action
         android:id="@+id/global_to_navigation_results_phone"
         app:destination="@id/navigation_results_phone"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim">
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_fade_in"
+        app:popExitAnim="@anim/feel_fade_out">
         <argument
             android:name="url"
             app:argType="string" />
@@ -515,10 +515,10 @@
         android:id="@+id/navigation_results_phone"
         android:name="com.lagradost.cloudstream3.ui.result.ResultTrailerPlayer"
         android:layout_height="match_parent"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_fade_in"
+        app:popExitAnim="@anim/feel_fade_out"
         tools:layout="@layout/fragment_result_swipe">
         <action
             android:id="@+id/action_navigation_results_phone_to_navigation_quick_search"

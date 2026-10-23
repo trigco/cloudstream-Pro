@@ -150,6 +150,23 @@
                 android:animateLayoutChanges="true"
                 android:layout_gravity="center_vertical|end">
 
+            <!-- Phase 8B: all action circles live in this row, collapsed
+                 (gone) by default so the thumbnail stays clean. Tapping
+                 result_more shows the row; it auto-collapses after a few
+                 seconds, on scroll, or on a second tap. Collapsing toggles
+                 ONLY this container — the per-button visibility logic in
+                 ResultFragmentPhone (subscribe/favorite/search/cast...)
+                 keeps working untouched underneath. -->
+            <LinearLayout
+                    android:id="@+id/result_actions_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
             <androidx.mediarouter.app.MediaRouteButton
                     android:layout_gravity="end|center_vertical"
                     android:background="@drawable/bg_circle_overlay"
@@ -273,6 +290,27 @@
                     android:src="@drawable/baseline_list_alt_24"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/result_open_in_browser"
+                    app:tint="@color/white" />
+            </LinearLayout>
+
+            <!-- Phase 8B: the always-visible toggle for the actions row.
+                 Stays OUTSIDE result_actions_row so it never hides itself;
+                 its icon swaps to a close (clear) icon while expanded. -->
+            <ImageView
+                    android:id="@+id/result_more"
+                    android:nextFocusDown="@id/result_description"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="9dp"
+                    android:layout_margin="5dp"
+                    android:elevation="10dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:tooltipText="@string/episode_more_options_des"
+                    android:background="@drawable/bg_circle_overlay"
+                    android:src="@drawable/ic_baseline_more_vert_24"
+                    android:layout_gravity="end|center_vertical"
+                    android:contentDescription="@string/episode_more_options_des"
                     app:tint="@color/white" />
         </LinearLayout>
     </FrameLayout>

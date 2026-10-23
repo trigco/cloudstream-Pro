@@ -347,12 +347,22 @@
                      paints nothing inside the corner arc, so the backdrop,
                      watermark and trailer intro overlay are untouched. It
                      deliberately never consumes touches: the trailer's
-                     center play button and the poster stay interactive. -->
+                     center play button and the poster stay interactive.
+                     Phase 8B: the mask needs elevation ABOVE the holder's
+                     6dp. ViewGroup draws siblings in Z order, so at 0dp the
+                     mask composited UNDER the holder subtree — the trailer
+                     surface painted straight over it and the corners stayed
+                     square in the trailer states (the backdrop state never
+                     noticed: the holder's own clip handled it). 8dp puts
+                     the mask back on top; outlineProvider="none" keeps it
+                     from casting a rectangular shadow of its own. -->
                 <View
                     android:id="@+id/result_top_corner_mask"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:background="@drawable/bg_details_corner_mask"
+                    android:elevation="8dp"
+                    android:outlineProvider="none"
                     android:clickable="false"
                     android:focusable="false"
                     android:importantForAccessibility="no" />
