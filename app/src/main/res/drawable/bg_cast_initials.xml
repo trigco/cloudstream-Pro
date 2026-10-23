@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.10: circular surface behind a cast member's initials, shown
+     when the actor has no photo. Solid follows the theme's surface attr
+     (same pattern as bg_settings_group) so it flips per variant. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="?attr/primaryGrayBackground" />
+</shape>

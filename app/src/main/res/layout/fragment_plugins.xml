@@ -39,12 +39,18 @@
         </FrameLayout>
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- Phase 8.10: paddingBottom gives the last plugin rows the same
+         100dp rest clearance over the floating nav pill (88dp zone) that
+         the main tabs got in Phase 7.5. PluginsFragment only overrides
+         this padding on TV/emulator (200dp, for its own scroll quirk),
+         where the pill never shows. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/plugin_recycler_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="?attr/primaryBlackBackground"
         android:clipToPadding="false"
+        android:paddingBottom="100dp"
 
         android:nextFocusLeft="@id/nav_rail_view"
         android:nextFocusUp="@id/tvtypes_chips"

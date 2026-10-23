@@ -24,6 +24,22 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal">
 
+            <!-- Phase 8.10: initials avatar, drawn beneath the photo card.
+                 A loaded photo fully covers it; when the actor has no
+                 image (or it fails to load) this is what shows — never a
+                 blank circle. Same slot/size as voice_actor_image_holder2. -->
+            <TextView
+                android:id="@+id/actor_initials"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:layout_gravity="start|top"
+                android:background="@drawable/bg_cast_initials"
+                android:fontFamily="@font/inter_semibold"
+                android:gravity="center"
+                android:textColor="?attr/textColor"
+                android:textSize="22sp"
+                tools:text="VM" />
+
             <androidx.cardview.widget.CardView
                 android:id="@+id/voice_actor_image_holder"
                 android:layout_width="70dp"
@@ -51,6 +67,7 @@
                 android:layout_width="70dp"
                 android:layout_height="70dp"
                 android:foreground="@drawable/outline_drawable"
+                app:cardBackgroundColor="@color/transparent"
                 app:cardCornerRadius="35dp">
 
                 <ImageView
@@ -76,26 +93,32 @@
 
             <TextView
                 android:id="@+id/actor_name"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:gravity="center_horizontal"
+                android:maxLines="1"
                 android:textColor="?attr/textColor"
                 android:textStyle="bold"
                 tools:text="Ackerman, Mikasa" />
 
             <TextView
                 android:id="@+id/voice_actor_name"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:gravity="center_horizontal"
+                android:maxLines="1"
                 android:textColor="?attr/grayTextColor"
                 tools:text="voiceactor" />
 
             <TextView
                 android:id="@+id/actor_extra"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:gravity="center_horizontal"
+                android:maxLines="1"
                 android:textColor="?attr/grayTextColor"
                 tools:text="Main" />
 

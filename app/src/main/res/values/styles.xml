@@ -19,6 +19,7 @@
         <item name="android:textViewStyle">@style/AppTextViewStyle</item>
         <item name="android:buttonStyle">@style/AppButtonStyle</item>
         <item name="android:editTextStyle">@style/AppEditStyle</item>
+        <item name="editTextStyle">@style/AppEditStyle</item> <!-- Phase 8.10-C: AppCompatEditText resolves the unprefixed attr; pointing it at AppEditStyle makes the rounded text box reach every dialog field, not just framework EditTexts -->
         <item name="alertDialogTheme">@style/Theme.AlertDialog</item>
         <item name="materialButtonStyle">@style/AppMaterialButtonStyle</item>
         <item name="preferenceFragmentCompatStyle">@style/PreferenceTheme</item>
@@ -537,6 +538,16 @@
 
     <style name="AppEditStyle" parent="android:Widget.EditText">
         <item name="android:fontFamily">@font/inter</item>
+        <!-- Phase 8.10-C: rounded filled text box (surface fill + subtle
+             outline, stronger outline on focus) instead of the underline.
+             A layout's own android:padding, when present, still wins over
+             these; the values below just keep text off the box's edges for
+             the dialog fields that set no padding of their own. -->
+        <item name="android:background">@drawable/bg_dialog_input</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">10dp</item>
+        <item name="android:paddingBottom">10dp</item>
     </style>
 
     <style name="ResultInfoText">
@@ -635,6 +646,11 @@
 
     <style name="PopupMenu" parent="@android:style/Widget.PopupMenu">
         <item name="android:backgroundTint">?attr/primaryBlackBackground</item>
+        <!-- Phase 8.10-C: outlined, rounded popup surface, same recipe as the
+             dialog surface (bg_popup_surface). This style is applied as a
+             ContextThemeWrapper around the app's popup menus in UIHelper, so
+             theme-resolved popup windows pick the background up from here. -->
+        <item name="android:popupBackground">@drawable/bg_popup_surface</item>
     </style>
 
     <style name="CustomPreferenceThemeOverlay" parent="@style/PreferenceThemeOverlay">

@@ -6,9 +6,13 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- Phase 8.10: same nav-pill clearance as subtitle_settings.xml —
+         the form's last row must rest above the floating pill (88dp zone). -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp">
 
         <LinearLayout
             android:layout_width="match_parent"

@@ -7,9 +7,15 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- Phase 8.10: bottom padding + clipToPadding=false so the form's
+         last row (Apply / Cancel) can rest above the floating nav pill
+         (88dp zone) instead of behind it — same treatment the settings
+         main page's ScrollView got in Phase 7.5. -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp">
 
         <LinearLayout
             android:layout_width="match_parent"

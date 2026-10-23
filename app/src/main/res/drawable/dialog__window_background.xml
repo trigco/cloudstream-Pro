@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.10-C: dialog surface. 20dp rounded corners + a 1dp theme-adaptive
+     outline. The stroke colour is @color/white_attr_20, i.e. ?attr/white at
+     20% alpha: the "white" attr flips per theme variant (white on the dark
+     variants, black in LightMode, the variant text colour in Dracula /
+     SilentBlue / Lavender / Monet), so the outline reads as a light line on
+     dark dialogs and a dark line on light ones. Without it, dialogs whose
+     fill is ?attr/primaryBlackBackground (pure black in the default and
+     AMOLED variants) had no visible edge against the dimmed backdrop.
+     This drawable is the android:windowBackground of Theme.AlertDialog and
+     AlertDialogCustom in both values/ and values-v31/styles.xml, so every
+     AlertDialog in the app inherits the outline. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android">
     <shape android:shape="rectangle">
-        <corners android:radius="16dp" />
+        <corners android:radius="20dp" />
         <solid android:color="?attr/primaryBlackBackground" />
+        <stroke
+            android:width="1dp"
+            android:color="@color/white_attr_20" />
     </shape>
 </inset>

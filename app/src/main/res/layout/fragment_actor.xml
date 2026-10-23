@@ -50,6 +50,21 @@
                     app:cardCornerRadius="@dimen/rounded_image_radius"
                     app:cardElevation="0dp">
 
+                    <!-- Phase 8.10: initials on the theme surface, beneath
+                         the photo. A loaded photo (provider, else the
+                         Wikipedia upgrade) covers it; when no photo exists
+                         at all this is the header's last-resort face. -->
+                    <TextView
+                        android:id="@+id/actor_initials"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="?attr/primaryGrayBackground"
+                        android:fontFamily="@font/inter_semibold"
+                        android:gravity="center"
+                        android:textColor="?attr/textColor"
+                        android:textSize="56sp"
+                        tools:text="VM" />
+
                     <ImageView
                         android:id="@+id/actor_photo"
                         android:layout_width="match_parent"

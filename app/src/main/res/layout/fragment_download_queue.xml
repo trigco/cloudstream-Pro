@@ -42,9 +42,13 @@
                 android:id="@+id/download_queue_list"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:clipToPadding="false"
                 android:nextFocusLeft="@id/navigation_downloads"
                 android:nextFocusUp="@id/download_queue_toolbar"
-                android:padding="10dp"
+                android:paddingStart="10dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="100dp"
                 app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
                 tools:listitem="@layout/download_queue_item" />
 

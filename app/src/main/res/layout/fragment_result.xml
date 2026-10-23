@@ -603,6 +603,11 @@
                                                 tools:visibility="visible" />
                     -->
 
+                    <!-- Phase 8.10: hidden on phone — the cast is presented
+                         by result_cast_items below in every case (photo or
+                         initials avatar). Kept in the layout only so the
+                         generated binding and ResultFragmentPhone's explicit
+                         isGone assignment stay valid; it is never shown. -->
                     <TextView
                         android:id="@+id/result_cast_text"
                         android:layout_width="wrap_content"
@@ -612,6 +617,7 @@
                         android:maxLines="2"
                         android:textColor="?attr/grayTextColor"
                         android:textSize="15sp"
+                        android:visibility="gone"
                         tools:text="Cast: Joe Ligma" />
 
                     <androidx.recyclerview.widget.RecyclerView
