@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.net.toUri
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
@@ -86,6 +87,7 @@ import com.lagradost.cloudstream3.utils.SubtitleHelper.getFlagFromIso
 import com.lagradost.cloudstream3.utils.TvChannelUtils
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.getResourceColor
 import com.lagradost.cloudstream3.utils.UIHelper.getSpanCount
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
@@ -446,6 +448,43 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
                         val name = getItem(position)
                         titleText?.text = name
+
+                        // Phase 8.11-E1: the row's CheckLabel check is a static
+                        // compound drawable whose stateful tint never
+                        // discriminated on device (every row rendered
+                        // checked). Drive it from the ListView's checked
+                        // state explicitly instead — updateList() seeds it
+                        // via setItemChecked before filling the adapter, and
+                        // both branches run on every bind so recycled rows
+                        // never keep a stale check. Same explicit-tint
+                        // pattern as SingleSelectionHelper's IconArrayAdapter.
+                        val isChecked =
+                            (parent as? ListView)?.isItemChecked(position) == true
+                        if (isChecked) {
+                            val checkDrawable = ContextCompat.getDrawable(
+                                view.context, R.drawable.ic_baseline_check_24_listview
+                            )?.mutate()
+                            if (checkDrawable != null) {
+                                DrawableCompat.setTint(
+                                    checkDrawable,
+                                    view.context.getResourceColor(R.attr.textColor)
+                                )
+                                titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                                    checkDrawable, null, null, null
+                                )
+                            }
+                            titleText?.setTextColor(
+                                view.context.getResourceColor(R.attr.textColor)
+                            )
+                        } else {
+                            titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                                0, 0, 0, 0
+                            )
+                            titleText?.setTextColor(
+                                view.context.getResourceColor(R.attr.grayTextColor)
+                            )
+                        }
+
                         val providerApi = currentValidApis[position]
                         val isPinned =
                             pinnedphashset.contains(providerApi.name)
