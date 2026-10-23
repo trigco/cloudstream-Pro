@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 preset avatar: crimson ember. Abstract gradient + glow orb + wave, no text. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M0,0h100v100h-100z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="100"
+                android:endX="100"
+                android:endY="0">
+                <item android:offset="0" android:color="#2A0503" />
+                <item android:offset="1" android:color="#DC2626" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M50,38 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0"
+        android:fillColor="#30FFFFFF" />
+
+    <path
+        android:pathData="M84,84 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"
+        android:fillColor="#1FFFFFFF" />
+
+    <path
+        android:pathData="M0,78 C22,68 38,88 58,80 C76,72 90,78 100,72 L100,100 L0,100 Z"
+        android:fillColor="#12FFFFFF" />
+</vector>

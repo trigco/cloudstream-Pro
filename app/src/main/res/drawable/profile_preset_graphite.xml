@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 preset avatar: slate graphite. Abstract gradient + diagonal sheen, no text. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M0,0h100v100h-100z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="100"
+                android:endY="100">
+                <item android:offset="0" android:color="#0C1220" />
+                <item android:offset="1" android:color="#64748B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M-10,78 L110,18 L110,42 L-10,102 Z"
+        android:fillColor="#14FFFFFF" />
+
+    <path
+        android:pathData="M24,24 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0"
+        android:fillColor="#1FFFFFFF" />
+</vector>

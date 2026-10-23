@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 preset avatar: emerald forest. Abstract gradient + layered waves, no text. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M0,0h100v100h-100z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="100"
+                android:endY="100">
+                <item android:offset="0" android:color="#02231A" />
+                <item android:offset="1" android:color="#10B981" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M84,18 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0"
+        android:fillColor="#26FFFFFF" />
+
+    <path
+        android:pathData="M0,62 C20,50 36,72 56,62 C74,53 88,60 100,54 L100,100 L0,100 Z"
+        android:fillColor="#1AFFFFFF" />
+
+    <path
+        android:pathData="M0,78 C22,68 40,90 60,80 C78,71 90,78 100,72 L100,100 L0,100 Z"
+        android:fillColor="#26FFFFFF" />
+</vector>

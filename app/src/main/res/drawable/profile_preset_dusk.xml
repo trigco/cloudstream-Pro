@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 preset avatar: amber dusk. Abstract gradient + rising sun orb + wave, no text. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M0,0h100v100h-100z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="100"
+                android:endX="100"
+                android:endY="0">
+                <item android:offset="0" android:color="#451A03" />
+                <item android:offset="1" android:color="#F59E0B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M50,108 m-34,0 a34,34 0 1,0 68,0 a34,34 0 1,0 -68,0"
+        android:fillColor="#33FFFFFF" />
+
+    <path
+        android:pathData="M82,20 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"
+        android:fillColor="#26FFFFFF" />
+
+    <path
+        android:pathData="M0,80 C24,70 40,90 62,82 C78,76 92,80 100,76 L100,100 L0,100 Z"
+        android:fillColor="#14FFFFFF" />
+</vector>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11: selection ring for the preset avatar picker.
+     ?attr/textColor keeps it visible on both dark and light themes
+     (shape stroke with an attr colour, same pattern as bg_dialog_input). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+
+    <stroke
+        android:width="2dp"
+        android:color="?attr/textColor" />
+
+    <solid android:color="@android:color/transparent" />
+</shape>

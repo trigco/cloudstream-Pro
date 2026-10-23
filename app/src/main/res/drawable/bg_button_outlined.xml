@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E2: outlined pill background for AlertDialog NEGATIVE and
+     NEUTRAL buttons, wired in via OutlinedButton.Dialog (see
+     values/styles.xml, Theme.AlertDialog buttonBarNegativeButtonStyle /
+     buttonBarNeutralButtonStyle).
+
+     Why this exists: the dialog buttons are AppCompatButtons whose old
+     style (BlackButton) only set MaterialButton attrs (strokeColor with
+     no strokeWidth anywhere, backgroundTint) — the fill it produced,
+     ?attr/iconGrayBackground (#1F1F1F), is nearly identical to the dialog
+     surface (?attr/primaryBlackBackground, pure black), and no outline
+     was ever drawn, so Cancel / Delete rendered as bare floating text
+     next to the filled white Apply pill. A plain android:background
+     shape is the one lever an AppCompatButton always honours.
+
+     Look: 20dp corners (matching the dialog surface from Phase 8.10-C),
+     transparent fill, and the same variant-adaptive 1dp outline used by
+     the dialog surface and text boxes: @color/white_attr_20, i.e.
+     ?attr/white at 20% alpha — light line on dark variants, dark line on
+     light ones. Pressed state fills with ?attr/primaryGrayBackground
+     (the dialog input fill) as touch feedback. Shape <solid>/<stroke>
+     with ?attr colours is established project precedent (bg_dialog_input,
+     dialog__window_background); no ?attr is used as a vector fillColor. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="?attr/primaryGrayBackground" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/white_attr_20" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/white_attr_20" />
+        </shape>
+    </item>
+</selector>
