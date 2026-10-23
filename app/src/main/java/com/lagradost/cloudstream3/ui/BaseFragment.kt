@@ -1,6 +1,10 @@
 package com.lagradost.cloudstream3.ui
 
 import android.content.res.Configuration
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -10,7 +14,12 @@ import android.widget.Toast
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.PreferenceGroup
+import androidx.preference.PreferenceGroupAdapter
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.lagradost.cloudstream3.CommonActivity.showToast
@@ -21,6 +30,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.getResourceColor
 import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.txt
 
@@ -285,6 +295,10 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
         listView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
             requireContext(), R.anim.settings_list_layout_animation
         )
+        // Phase 8.5D: group each category's rows into a rounded card,
+        // mirroring the main settings page (Phase 5A). Pure decoration —
+        // the preference tree, clicks and dependencies are untouched.
+        listView.addItemDecoration(SettingsGroupCardDecoration(requireContext()))
         applyNavClearancePadding()
     }
 
@@ -321,5 +335,131 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
                 defaultListBottomPadding ?: list.paddingBottom
             }
         )
+    }
+}
+
+/**
+ * Phase 8.5D — settings sub-page group cards.
+ *
+ * Draws each preference group on a settings sub-page as one rounded card,
+ * mirroring the main settings page (Phase 5A): 16dp side margins, 20dp
+ * corners, `?attr/primaryGrayBackground` fill (the same values as
+ * `@drawable/bg_settings_group`, resolved from the theme so every variant
+ * flips the same way the drawable does).
+ *
+ * A "group" is the rows of one [PreferenceCategory]; preferences declared
+ * directly under the PreferenceScreen (General's first rows, the whole
+ * Providers page) form a card of their own. Category headers stay OUTSIDE
+ * their card, above it, exactly like the main page's group headers.
+ *
+ * This is purely an [RecyclerView.ItemDecoration]: group membership is read
+ * live from the [PreferenceGroupAdapter] on every layout/draw pass, so
+ * visibility changes (hidden prefs, dynamically toggled rows) re-group
+ * automatically, and preference clicks/dependencies are never touched.
+ */
+private class SettingsGroupCardDecoration(context: Context) :
+    RecyclerView.ItemDecoration() {
+
+    private val sideInset = 16.toPx
+    private val cardGap = 16.toPx
+    private val topGap = 16.toPx
+    private val cornerRadius = 20.toPx.toFloat()
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = context.getResourceColor(R.attr.primaryGrayBackground)
+        style = Paint.Style.FILL
+    }
+    private val rect = RectF()
+
+    /**
+     * The card a preference belongs to: its parent group (a category, or the
+     * screen itself for root-level preferences). Null = no card — the row is
+     * a category header, which sits above its card like on the main page.
+     */
+    private fun cardGroupOf(pref: Preference): PreferenceGroup? {
+        if (pref is PreferenceCategory) return null
+        return pref.parent
+    }
+
+    private fun isFirstInGroup(adapter: PreferenceGroupAdapter, position: Int): Boolean {
+        val group = cardGroupOf(adapter.getItem(position)) ?: return false
+        return position == 0 || cardGroupOf(adapter.getItem(position - 1)) != group
+    }
+
+    private fun isLastInGroup(adapter: PreferenceGroupAdapter, position: Int): Boolean {
+        val group = cardGroupOf(adapter.getItem(position)) ?: return false
+        return position == adapter.itemCount - 1 ||
+            cardGroupOf(adapter.getItem(position + 1)) != group
+    }
+
+    override fun getItemOffsets(
+        outRect: Rect,
+        view: View,
+        parent: RecyclerView,
+        state: RecyclerView.State
+    ) {
+        val adapter = parent.adapter as? PreferenceGroupAdapter ?: return
+        val position = parent.getChildAdapterPosition(view)
+        if (position == RecyclerView.NO_POSITION) return
+        // Headers keep stock spacing; card rows are inset to the card's edges.
+        if (cardGroupOf(adapter.getItem(position)) == null) return
+        outRect.left = sideInset
+        outRect.right = sideInset
+        // Breathing room above a card that starts the list (root-level group
+        // with no header above it); cards under a header hug it directly.
+        outRect.top = if (isFirstInGroup(adapter, position) && position == 0) topGap else 0
+        outRect.bottom = if (isLastInGroup(adapter, position)) cardGap else 0
+    }
+
+    override fun onDraw(c: Canvas, parent: RecyclerView, state: RecyclerView.State) {
+        val adapter = parent.adapter as? PreferenceGroupAdapter ?: return
+        val left = (parent.paddingLeft + sideInset).toFloat()
+        val right = (parent.width - parent.paddingRight - sideInset).toFloat()
+
+        var runStart: View? = null
+        var runEnd: View? = null
+        var runGroup: PreferenceGroup? = null
+        var runFirstPos = -1
+        var runLastPos = -1
+
+        fun flush() {
+            val start = runStart
+            val end = runEnd
+            if (start != null && end != null && runGroup != null) {
+                var top = start.top.toFloat()
+                var bottom = end.bottom.toFloat()
+                // If the group continues off-screen, push that edge past the
+                // visible area so no rounded corner shows mid-group.
+                if (!isFirstInGroup(adapter, runFirstPos)) top -= cornerRadius
+                if (!isLastInGroup(adapter, runLastPos)) bottom += cornerRadius
+                rect.set(left, top, right, bottom)
+                c.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+            }
+            runStart = null
+            runEnd = null
+            runGroup = null
+        }
+
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            val position = parent.getChildAdapterPosition(child)
+            if (position == RecyclerView.NO_POSITION) {
+                flush()
+                continue
+            }
+            val group = cardGroupOf(adapter.getItem(position))
+            if (group == null) {
+                flush()
+                continue
+            }
+            if (group != runGroup || position != runLastPos + 1) {
+                flush()
+                runStart = child
+                runFirstPos = position
+            }
+            runGroup = group
+            runEnd = child
+            runLastPos = position
+        }
+        flush()
     }
 }

@@ -6,9 +6,11 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -672,6 +674,41 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
         // Fix grid
         configEvent.invoke()
+
+        // Phase 8.5C: re-anchor the provider switcher (rotation lands here)
+        anchorHomeApiFab()
+    }
+
+    /** Phase 8.5C: anchor the provider switcher (home_api_fab) from the
+     * activity's REAL bottom-nav view instead of a hand-computed dp constant.
+     * The switcher's XML margins were already right on paper twice (7.5, 8C)
+     * and the on-device failure turned out not to be the margin at all: in
+     * the top-of-home state the FAB was not drawn at all (pixel-verified in
+     * PHASE85C_CHANGES.md). This makes the placement self-correcting:
+     * bottom margin = the nav view's measured height + the nav's own bottom
+     * margin + the original 16dp gap, recomputed on binding creation, on
+     * every successful page load, and on every fixLayout (rotation) — so it
+     * also tracks the API 30+ inset growth MainActivity applies to the pill.
+     * The XML 104dp margin remains as the pre-layout fallback. */
+    private fun anchorHomeApiFab() {
+        if (!isLayout(PHONE)) return
+        val fab = binding?.homeApiFab ?: return
+        val nav = activity?.findViewById<View>(R.id.nav_view) ?: return
+        val apply = {
+            if (nav.isVisible && nav.height > 0) {
+                val navBottomMargin =
+                    (nav.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                val desired = nav.height + navBottomMargin + 16.toPx
+                val lp = fab.layoutParams as? FrameLayout.LayoutParams
+                if (lp != null && lp.bottomMargin != desired) {
+                    lp.gravity = Gravity.BOTTOM or Gravity.END
+                    lp.bottomMargin = desired
+                    lp.marginEnd = 16.toPx
+                    fab.layoutParams = lp
+                }
+            }
+        }
+        if (nav.height > 0) apply() else nav.post { apply() }
     }
 
     @SuppressLint("SetTextI18n")
@@ -702,6 +739,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             homeMasterRecycler.adapter = homeMasterAdapter
 
             homeApiFab.isVisible = isLayout(PHONE)
+            anchorHomeApiFab()
 
             homePreviewReloadProvider.setOnClickListener {
                 homeViewModel.loadAndCancel(
@@ -782,12 +820,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (isLayout(PHONE)) {
                         // Fab is only relevant to Phone
+                        // Phase 8.5C: the provider switcher (homeApiFab) no
+                        // longer shrink()es. The RecyclerView also reports
+                        // dy > 0 while it first populates, so a shrink could
+                        // land before the FAB's extended size was ever
+                        // measured — leaving the switcher undrawn at the top
+                        // of the feed until a scroll-up happened to extend()
+                        // it (see PHASE85C_CHANGES.md). As the primary
+                        // provider control it now stays extended; the Random
+                        // FAB keeps the original shrink/extend behaviour.
                         if (dy > 0) { //check for scroll down
-                            homeApiFab.shrink() // hide
                             homeRandom.shrink()
                         } else if (dy < -5) {
                             if (isLayout(PHONE)) {
-                                homeApiFab.extend() // show
                                 homeRandom.extend()
                             }
                         }
@@ -883,6 +928,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeMasterRecycler.isVisible = true
                         homeLoadingShimmer.stopShimmer()
                         homeSwipeRefresh.isRefreshing = false
+
+                        // Phase 8.5C: whenever content is on screen the
+                        // provider switcher must be too — re-assert its
+                        // visibility and re-anchor it above the real nav
+                        // view on every successful load, so no earlier
+                        // state can leave it missing (see PHASE85C_CHANGES.md).
+                        homeApiFab.isVisible = isLayout(PHONE)
+                        anchorHomeApiFab()
 
                         //home_loaded?.isVisible = true
                         if (toggleRandomButton) {
