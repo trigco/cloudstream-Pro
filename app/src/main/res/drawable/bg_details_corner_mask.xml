@@ -1,41 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 7.5 FIX-3: corner mask for the details-page backdrop/trailer card.
+<!-- Corner mask for the details-page backdrop/trailer card.
 
      The trailer's TextureView does not follow result_top_holder's outline
      clipping on older GPUs (API 27 era), so a playing trailer renders with
      square corners even though the static backdrop (a normal ImageView)
      is clipped correctly. Instead of relying on clipping, this drawable
-     PAINTS the page background color over the four corner squares that
-     lie outside the card's 24dp rounded corner; the video/backdrop shows
-     through untouched everywhere else.
+     PAINTS the page background colour over everything outside the card's
+     24dp rounded corner arc.
 
-     Construction: a layer-list item outset by -10dp on every side carries
-     a rounded rect (radius 34dp) whose only paint is a 20dp stroke in
-     ?attr/primaryBlackBackground, centered on the item's outline. The
-     stroke's inner edge therefore lands exactly on the card's 24dp corner
-     arc (center 24dp/24dp, radius 34 - 10 = 24), so within the mask view's
-     bounds the paint covers precisely the corner region outside the arc:
-       - full corner coverage: the square corner tip sits ~9.9dp beyond
-         the 24dp arc (24*sqrt(2) - 24); the stroke reaches 10dp inside
-         the view bounds from an outline 10dp outside, i.e. it covers the
-         arc's exterior completely;
-       - zero paint along the straight edges inside the card, so neither
-         the backdrop image nor the video gains a visible inner frame.
-     If a build ever clamped the negative insets to 0, the same values
-     degrade gracefully: the stroke then sits centered on the view bounds
-     (10dp band inside, inner radius still 24dp) and the corners stay
-     covered. -->
+     Phase 8.5B geometry (changed from the Phase 7.5 FIX-3 version): the
+     mask VIEW (result_top_corner_mask) is now larger than the card — it
+     sits in result_top_card_wrap with -12dp margins, so the view's bounds
+     are the card rect outset by 12dp on every side. Reason: on device,
+     backdrop pixels were escaping the holder's outline clip in a ~6dp
+     zone just OUTSIDE the card's top corners (small triangular "ears"
+     floating above the card, tinted with the backdrop's own corner
+     colours). The old frame-bounds mask could never paint there — its
+     bounds ended exactly at the frame edge.
+
+     Construction: a single shape fills the (enlarged) view. Its corner
+     radius is 36dp = 24 (card arc) + 12 (view outset), so the shape's
+     arc centre coincides with the card's arc centre. The only paint is a
+     24dp stroke in ?attr/primaryBlackBackground centred on that outline:
+       - inner edge radius = 36 - 24/2 = 24dp: lands exactly on the card's
+         corner arc, so within the card the paint covers precisely the
+         four corner squares outside the arc (unchanged from FIX-3);
+       - outer edge radius = 36 + 24/2 = 48dp: along the straight edges
+         the band reaches exactly the view's edge, i.e. 12dp outside the
+         card, and diagonally it covers the corner zone out to 48dp from
+         the arc centre — the measured ear zone (at most ~11dp above the
+         card, hugging its sides) is fully inside the band;
+       - the stroke colour is the same attr that result_root and the
+         scroll content paint behind the card, in every theme variant,
+         so the painted zone is indistinguishable from the page.
+
+     Unlike FIX-3 there are no negative layer insets (the outset now
+     comes from the view's own margins), so there is no clamping
+     degradation mode. If the view margins were ever lost, the shape
+     would be drawn for a card-sized view instead: inner radius still
+     24dp but centred 12dp inside the card — corners stay covered, with
+     some paint spilling inside the card's straight edges. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:left="-10dp"
-        android:top="-10dp"
-        android:right="-10dp"
-        android:bottom="-10dp">
+    <item>
         <shape android:shape="rectangle">
-            <corners android:radius="34dp" />
+            <corners android:radius="36dp" />
             <solid android:color="@android:color/transparent" />
             <stroke
-                android:width="20dp"
+                android:width="24dp"
                 android:color="?attr/primaryBlackBackground" />
         </shape>
     </item>

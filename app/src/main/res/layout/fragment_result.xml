@@ -278,14 +278,31 @@
                      never paint the corner squares it exists to cover. The
                      trailer's TextureView escapes that clip on older GPUs,
                      which is why the trailer showed square corners while the
-                     static backdrop clipped fine. -->
+                     static backdrop clipped fine.
+                     Phase 8.5B: the margins moved one level up into
+                     result_top_card_wrap (clipChildren=false), and the mask
+                     moved out of the frame into the wrap with -12dp margins,
+                     so its bounds extend 12dp past the card on every side.
+                     On device, backdrop pixels were escaping the holder's
+                     clip in the ~6dp zone just outside the top corners
+                     (small "ears" floating above the card) — outside the
+                     old frame-bounds mask's reach. The enlarged mask paints
+                     page colour over the whole exterior corner zone; see
+                     bg_details_corner_mask.xml for the new geometry. -->
                 <FrameLayout
-                    android:id="@+id/result_top_card_frame"
+                    android:id="@+id/result_top_card_wrap"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/result_padding"
                     android:layout_marginTop="16dp"
-                    android:layout_marginEnd="@dimen/result_padding">
+                    android:layout_marginEnd="@dimen/result_padding"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                <FrameLayout
+                    android:id="@+id/result_top_card_frame"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
 
                 <FrameLayout
                     android:id="@+id/result_top_holder"
@@ -339,6 +356,7 @@
 
                     </FrameLayout>
                 </FrameLayout>
+                </FrameLayout>
 
                 <!-- Phase 7.5 FIX-3: corner mask. Paints the page background
                      over the four corner squares outside the card's 24dp
@@ -355,11 +373,22 @@
                      square in the trailer states (the backdrop state never
                      noticed: the holder's own clip handled it). 8dp puts
                      the mask back on top; outlineProvider="none" keeps it
-                     from casting a rectangular shadow of its own. -->
+                     from casting a rectangular shadow of its own.
+                     Phase 8.5B: the mask now lives in result_top_card_wrap
+                     (not the frame) with -12dp margins on all sides, so its
+                     bounds extend 12dp past the card and its paint covers
+                     the exterior corner zone too — that is where the
+                     on-device "ears" sat (poster pixels escaping the
+                     holder's outline clip just outside the top corners,
+                     beyond the old frame-bounds mask). It still paints
+                     nothing inside the card's 24dp arc, so the backdrop,
+                     watermark and trailer overlay stay untouched, and it
+                     still never consumes touches. -->
                 <View
                     android:id="@+id/result_top_corner_mask"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:layout_margin="-12dp"
                     android:background="@drawable/bg_details_corner_mask"
                     android:elevation="8dp"
                     android:outlineProvider="none"
@@ -604,16 +633,19 @@
                         android:textStyle="normal"
                         android:visibility="gone" />
 
-                    <!-- Phase 7: genre/tag chips sit inside a rounded card
-                         (hidden by ResultFragmentPhone when there are no tags). -->
+                    <!-- Phase 7: genre/tag chips sat inside a rounded card
+                         (hidden by ResultFragmentPhone when there are no tags).
+                         Phase 8.5B: the card surface is gone at the user's
+                         request — only the rounded chip pills themselves
+                         remain, directly on the page background. The
+                         description block above keeps its own bg_details_card
+                         FrameLayout; it is a separate view and is untouched. -->
                     <com.google.android.material.chip.ChipGroup
                         android:id="@+id/result_tag"
                         style="@style/ChipParent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:background="@drawable/bg_details_card"
-                        android:padding="16dp" />
+                        android:layout_marginTop="10dp" />
                     <!--<com.lagradost.cloudstream3.widget.FlowLayout
                             android:id="@+id/result_tag"
                             android:layout_width="match_parent"

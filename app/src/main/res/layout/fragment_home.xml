@@ -247,14 +247,14 @@
     <!-- Phase 7.5 FIX-5: bottom margin = style margin 16dp + 88dp nav zone,
          so the FAB keeps its pre-overlay on-screen position above the
          floating nav (the fragment now extends full height).
-         Phase 8C: layout_gravity is now EXPLICIT in the layout. This FAB is
-         the provider switcher (code sets its text to the provider name), and
-         on device it still ended up covered by the nav pill: it was the only
-         bottom-anchored element whose gravity came solely from the style
-         (end|bottom) while its sibling home_random declares gravity in the
-         layout. Positioning is now fully layout-declared — gravity
-         bottom|end, marginBottom 104dp (88dp nav zone + 16dp gap),
-         marginEnd 16dp (the style's old all-sides margin). -->
+         Phase 8C: layout_gravity is now EXPLICIT in the layout (bottom|end,
+         marginBottom 104dp = 88dp nav zone + 16dp gap, marginEnd 16dp).
+         Phase 8.5C: these XML values are now only the pre-layout FALLBACK.
+         On device the FAB's position measured exactly right whenever it
+         was drawn — the real failure was it not being drawn at all in the
+         top-of-home state. HomeFragment.anchorHomeApiFab() now recomputes
+         the bottom margin from the activity's measured nav view at runtime
+         and the FAB no longer shrink()es on scroll (see PHASE85C_CHANGES.md). -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/home_api_fab"
         style="@style/ExtendedFloatingActionButton"

@@ -166,10 +166,10 @@
         android:id="@+id/navigation_settings_player"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsPlayer"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim">
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right">
         <action
             android:id="@+id/action_navigation_settings_player_to_navigation_subtitles"
             app:destination="@id/navigation_subtitles"
@@ -190,10 +190,10 @@
         android:id="@+id/navigation_settings_ui"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsUI"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
 
     <fragment
         android:id="@+id/navigation_library"
@@ -208,10 +208,10 @@
         android:id="@+id/navigation_settings_general"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsGeneral"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim">
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right">
         <action
             android:id="@+id/action_navigation_settings_general_to_easterEggMonkeFragment"
             app:destination="@id/easterEggMonkeFragment"
@@ -225,10 +225,10 @@
         android:id="@+id/navigation_settings_extensions"
         android:name="com.lagradost.cloudstream3.ui.settings.extensions.ExtensionsFragment"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right"
         tools:layout="@layout/fragment_extensions">
         <action
             android:id="@+id/navigation_settings_extensions_to_navigation_settings_plugins"
@@ -276,28 +276,28 @@
         android:id="@+id/navigation_settings_providers"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsProviders"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
 
     <fragment
         android:id="@+id/navigation_settings_updates"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsUpdates"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
 
     <fragment
         android:id="@+id/navigation_settings_account"
         android:name="com.lagradost.cloudstream3.ui.settings.SettingsAccount"
         android:label="@string/title_settings"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
 
     <action
         android:id="@+id/global_to_navigation_quick_search"
@@ -394,52 +394,52 @@
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_ui"
         app:destination="@id/navigation_settings_ui"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_providers"
         app:destination="@id/navigation_settings_providers"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_player"
         app:destination="@id/navigation_settings_player"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_updates"
         app:destination="@id/navigation_settings_updates"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_account"
         app:destination="@id/navigation_settings_account"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_general"
         app:destination="@id/navigation_settings_general"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_extensions"
         app:destination="@id/navigation_settings_extensions"
-        app:enterAnim="@anim/enter_anim"
-        app:exitAnim="@anim/exit_anim"
-        app:popEnterAnim="@anim/enter_anim"
-        app:popExitAnim="@anim/exit_anim" />
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
 
     <fragment
         android:id="@+id/navigation_subtitles"
