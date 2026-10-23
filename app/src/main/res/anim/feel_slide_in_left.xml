@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.5D: mirror of feel_slide_out_left — the screen underneath a
+     settings sub-page drifts back in from its -30%p offset when the
+     sub-page is popped. 250ms, decelerate. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator"
+    android:shareInterpolator="true">
+
+    <translate
+        android:duration="250"
+        android:fromXDelta="-30%p"
+        android:toXDelta="0" />
+</set>

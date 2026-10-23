@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Corner mask for the details-page backdrop/trailer card.
+
+     The trailer's TextureView does not follow result_top_holder's outline
+     clipping on older GPUs (API 27 era), so a playing trailer renders with
+     square corners even though the static backdrop (a normal ImageView)
+     is clipped correctly. Instead of relying on clipping, this drawable
+     PAINTS the page background colour over everything outside the card's
+     24dp rounded corner arc.
+
+     How a shape stroke actually paints (calibrated against two on-device
+     builds, pixel-measured): the stroke is laid INSIDE the shape's
+     outline, extending inward by its full width; the corner radius is
+     the OUTER edge's radius. So for a mask view that is the card rect
+     outset by O, with shape radius R and stroke width W:
+       - arc centre of the shape = card corner + (R - O) — must equal the
+         card's arc centre, i.e. R = 24 + O;
+       - inner edge radius = R - W — must equal the card's 24dp arc;
+       - paint inside the card along the straight edges = W - O — must
+         be 0, i.e. W = O.
+     Phase 7.5 FIX-3 (item outset 10dp via layer insets, R 34, W 20)
+     satisfied the first two and left W - O = 10dp of paint inside the
+     straight edges — measured on device as a 9-9.5dp page-coloured
+     inset, which the user accepted (Dracula theme, subtle).
+
+     Phase 8.5B geometry (R 36 / W 24, mask view outset by -12dp margins)
+     REGRESSED this: measured on the user's AMOLED screenshot, the
+     -12dp margins on the match_parent mask view delivered only ~3dp of
+     real outset, so the stroke painted W - O = ~21.5dp INSIDE the card's
+     straight edges (photo inset 43px per side, vs 18px in Phase 8) — a
+     thick black frame around the thumbnail. Its document also wrongly
+     assumed the stroke is centred on the outline.
+
+     Phase 8.6 geometry: the outset is structural, not margin-based.
+     result_top_card_frame carries a +20dp positive margin inside
+     result_top_card_wrap, and this mask is a plain match_parent child of
+     the wrap, so the view's bounds are the card rect outset by a
+     guaranteed O = 20dp on every side. With R = 44dp (= 24 + 20, arc
+     centre coincides with the card's) and W = 20dp (= O):
+       - inner edge radius = 44 - 20 = 24dp: lands exactly on the card's
+         corner arc — within the card, the paint covers precisely the
+         four corner squares outside the arc, nothing else;
+       - straight edges: the band runs from the card's edge OUTWARD
+         (20dp of page colour outside the card), so the image again
+         fills the card edge-to-edge with NO border, in the backdrop
+         and trailer states alike;
+       - exterior corner coverage: the band reaches radius 44dp from
+         the arc centre, which covers the measured "ear" zone (backdrop
+         pixels escaping the holder's clip up to ~10dp above the card's
+         top corners, farthest point ~41.6dp from the arc centre) with
+         ~2.4dp to spare — the 8.5B ear fix is preserved.
+     The stroke colour is the same attr that result_root and the scroll
+     content paint behind the card (?attr/primaryBlackBackground) in
+     every theme variant, so all exterior paint is invisible by
+     construction. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="44dp" />
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="20dp"
+                android:color="?attr/primaryBlackBackground" />
+        </shape>
+    </item>
+</layer-list>

@@ -26,11 +26,21 @@
 
         </androidx.viewpager2.widget.ViewPager2>
 
+        <!-- Phase 8.8: bottom-edge blend for the hero photo. Was a 220dp
+             scrim (gradient_home_hero_scrim) fading to a hardcoded
+             #141414, which darkened the photo's lower half and — on any
+             theme whose page background differs (Dracula #282A36,
+             AMOLED black) — ended in a hard straight seam against the
+             page. Now a 90dp fade (18% of the 500dp frame) into
+             ?attr/primaryBlackBackground: the photo's own bottom edge
+             dissolves into exactly the background the sections below
+             sit on. It is drawn over the pager (the photo) and under
+             the search row and the None/Play/Info holder. -->
         <View
             android:layout_width="match_parent"
-            android:layout_height="220dp"
+            android:layout_height="90dp"
             android:layout_gravity="bottom"
-            android:background="@drawable/gradient_home_hero_scrim" />
+            android:background="@drawable/bg_hero_bottom_fade" />
 
         <LinearLayout
             android:id="@+id/home_padding"
@@ -111,13 +121,21 @@
                             app:tint="@color/white" />
         -->
 
+        <!-- Phase 8.8: was a fixed 100dp holder, which left ~25dp of
+             empty holder below the buttons before the frame's bottom
+             edge — half of the dead dark band the user circled between
+             the Play row and Continue Watching. Now wrap_content with
+             6dp/8dp vertical padding, so the row hugs the frame's
+             bottom edge (over the fade) with a natural gap. -->
         <LinearLayout
             android:id="@+id/home_preview_title_holder"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:gravity="center"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="6dp"
+            android:paddingBottom="8dp">
 
             <TextView
                 android:id="@+id/home_preview_bookmark"
@@ -141,7 +159,7 @@
                 android:layout_gravity="center"
                 android:text="@string/home_play"
                 android:textColor="@color/white"
-                app:backgroundTint="@color/colorPrimary"
+                app:backgroundTint="@color/colorPrimaryRed"
                 app:icon="@drawable/ic_baseline_play_arrow_24"
                 app:iconTint="@color/white"
                 app:strokeColor="@color/transparent" />
@@ -206,11 +224,21 @@
     </LinearLayout>
 
 
+    <!-- Phase 8.8: Continue Watching is now a rounded section card
+         (bg_settings_group = ?attr/primaryGrayBackground, 20dp radius —
+         the same surface as the settings cards) with 16dp side margins
+         on the unified page background, instead of a flat full-width
+         band. 12dp top margin is the gap under the hero frame. -->
     <LinearLayout
         android:id="@+id/home_watch_holder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_settings_group"
         android:orientation="vertical"
+        android:paddingBottom="12dp"
         android:visibility="gone"
         tools:visibility="visible">
 
@@ -234,17 +262,24 @@
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="10dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/home_result_grid" />
 
     </LinearLayout>
 
+    <!-- Phase 8.8: same rounded section card treatment as Continue
+         Watching above (see home_watch_holder). -->
     <LinearLayout
         android:id="@+id/home_bookmarked_holder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_settings_group"
         android:orientation="vertical"
+        android:paddingBottom="12dp"
         android:visibility="gone"
         tools:visibility="visible">
 
@@ -345,7 +380,7 @@
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="10dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/home_result_grid" />
     </LinearLayout>

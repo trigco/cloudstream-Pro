@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 4: rounded tap/ripple surface for rows (settings items, episode rows).
+     Ripple colour follows the project's own rounded_select_ripple.xml pattern
+     (?attr/colorControlHighlight). Phase 7.5 FIX-1: AppTheme now binds that
+     attr to a faint 12% white (dark themes) / 8% black (LightMode,
+     LavenderMode) instead of opaque textColor, so the press wash stays
+     subtle and flips correctly between dark and light variants.
+     The 16dp rounded-rect mask is what makes the pressed area round instead
+     of a full rectangle. Base stays transparent so the row's own surface
+     colour (theme background / card) shows through untouched. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="16dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners android:radius="16dp" />
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+</ripple>

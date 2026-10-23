@@ -13,9 +13,13 @@
         <item name="android:scrollbarThumbVertical">@null</item>
         <item name="android:scrollbarThumbHorizontal">@null</item>
 
+        <item name="fontFamily">@font/inter</item> <!-- Phase 8D: Inter as the global app font (was Product Sans via @font/google_sans) -->
+        <item name="android:fontFamily">@font/inter</item>
+
         <item name="android:textViewStyle">@style/AppTextViewStyle</item>
         <item name="android:buttonStyle">@style/AppButtonStyle</item>
         <item name="android:editTextStyle">@style/AppEditStyle</item>
+        <item name="editTextStyle">@style/AppEditStyle</item> <!-- Phase 8.10-C: AppCompatEditText resolves the unprefixed attr; pointing it at AppEditStyle makes the rounded text box reach every dialog field, not just framework EditTexts -->
         <item name="alertDialogTheme">@style/Theme.AlertDialog</item>
         <item name="materialButtonStyle">@style/AppMaterialButtonStyle</item>
         <item name="preferenceFragmentCompatStyle">@style/PreferenceTheme</item>
@@ -38,12 +42,13 @@
 
         <!-- Preference -->
         <item name="android:textColor">?attr/textColor</item>
+        <item name="android:drawableTint">?attr/iconColor</item> <!-- Phase 4 fix: theme-flip settings icons via compound-drawable tint (vector fillColor ?attr is rejected by the resource merger) -->
         <item name="android:textColorSecondary">?attr/grayTextColor</item>
 
         <item name="android:textColorHint">?attr/grayTextColor</item>
         <item name="android:editTextColor">?attr/textColor</item>
         <item name="android:colorForeground">?attr/textColor</item>
-        <item name="android:colorControlHighlight">?attr/textColor</item> <!--iconRipple-->
+        <item name="android:colorControlHighlight">#1FFFFFFF</item> <!--iconRipple — Phase 7.5 FIX-1: was ?attr/textColor (opaque #FFFFFF); on API 27 the press/ripple flood painted whole rows solid light grey. Now a faint 12% white wash. LightMode/LavenderMode override with faint black.-->
 
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
@@ -53,8 +58,13 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Phase 2: global rounded shapes (Netflix-style) -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearanceNetflixSmall</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearanceNetflixMedium</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearanceNetflixLarge</item>
         <item name="textColor">@color/textColor</item>
-        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="colorOnPrimary">@color/blackText</item> <!-- Phase 5A: white primary needs dark on-primary -->
         <item name="grayTextColor">@color/grayTextColor</item>
         <item name="primaryGrayBackground">@color/primaryGrayBackground</item>
         <item name="primaryBlackBackground">@color/primaryBlackBackground</item>
@@ -98,9 +108,9 @@
         <item name="textColor">@color/chip_color_text</item>
         <item name="android:textColor">@color/chip_color_text</item>
         <item name="checkedIconTint">@color/chip_color_text</item>
-        <item name="fontFamily">@font/google_sans</item>
+        <item name="fontFamily">@font/inter</item>
         <item name="chipIconTint">@color/chip_color_text</item>
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:tag">@string/tv_no_focus_tag</item>
         <item name="chipMinTouchTargetSize">0dp</item>
         <item name="checkedIconVisible">false</item>
@@ -135,7 +145,7 @@
         <item name="grayTextColor">@color/grayTextColor</item>
         <item name="white">@color/white</item>
         <item name="black">@color/black</item>
-        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="colorOnPrimary">@color/blackText</item> <!-- Phase 5A: white primary needs dark on-primary -->
     </style>
 
     <style name="DubButton" parent="@style/SearchBox">
@@ -181,6 +191,9 @@
         <item name="black">@color/white</item>
         <item name="account_unselected_stroke">@color/transparent</item>
         <item name="colorOnPrimary">@color/blackText</item>
+        <item name="colorPrimary">@color/black</item> <!-- Phase 5A: monochrome accent for light -->
+        <item name="android:colorPrimary">@color/black</item>
+        <item name="android:colorControlHighlight">#14000000</item> <!-- Phase 7.5 FIX-1: faint black press feedback on light surfaces (AppTheme's faint white would be invisible/wrong here) -->
         <item name="isLightTheme">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
@@ -220,6 +233,7 @@
         <item name="white">@color/LavenderTextColor</item>
         <item name="black">@color/LavenderPrimaryGrayBackground</item>
         <item name="colorOnPrimary">@color/LavenderTextColor</item>
+        <item name="android:colorControlHighlight">#14000000</item> <!-- Phase 7.5 FIX-1: light theme — faint black press feedback, same as LightMode -->
         <item name="isLightTheme">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
@@ -241,7 +255,7 @@
         <item name="android:colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
-        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="colorOnPrimary">@color/blackText</item> <!-- Phase 5A: white primary needs dark on-primary -->
         <!-- Needed for leanback fuckery -->
         <item name="android:colorAccent">@color/colorAccent</item>
     </style>
@@ -469,7 +483,7 @@
         <item name="android:searchIcon">@drawable/search_icon</item>
         <item name="android:queryHint">@string/search_hint</item>
         <item name="android:background">@color/transparent</item>
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="closeIcon">@drawable/ic_baseline_close_24</item>
     </style>
 
@@ -505,25 +519,42 @@
         <item name="android:textColorPrimary">?attr/grayTextColor</item>
 
         <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
-        <item name="buttonBarNegativeButtonStyle">@style/BlackButton.Dialog</item>
-        <item name="buttonBarNeutralButtonStyle">@style/BlackButton.Dialog</item>
+        <!-- Phase 8.11-E2: negative/neutral were BlackButton.Dialog, whose
+             fill (?attr/iconGrayBackground, #1F1F1F) is nearly identical to
+             the dialog surface (pure black) and whose strokeColor is a
+             MaterialButton-only attr an AppCompatButton never draws (and
+             no strokeWidth was set anyway) — Cancel/Delete rendered as
+             bare text next to the filled Apply pill. OutlinedButton.Dialog
+             gives them a real outlined pill via android:background. -->
+        <item name="buttonBarNegativeButtonStyle">@style/OutlinedButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/OutlinedButton.Dialog</item>
     </style>
 
     <style name="TabNoCaps" parent="TextAppearance.Design.Tab">
         <item name="textAllCaps">false</item>
-        <item name="fontFamily">@font/google_sans</item>
+        <item name="fontFamily">@font/inter</item>
     </style>
 
     <style name="AppTextViewStyle" parent="android:Widget.TextView">
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="AppButtonStyle" parent="android:Widget.Holo.Button">
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="AppEditStyle" parent="android:Widget.EditText">
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
+        <!-- Phase 8.10-C: rounded filled text box (surface fill + subtle
+             outline, stronger outline on focus) instead of the underline.
+             A layout's own android:padding, when present, still wins over
+             these; the values below just keep text off the box's edges for
+             the dialog fields that set no padding of their own. -->
+        <item name="android:background">@drawable/bg_dialog_input</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">10dp</item>
+        <item name="android:paddingBottom">10dp</item>
     </style>
 
     <style name="ResultInfoText">
@@ -540,7 +571,7 @@
     </style>
 
     <style name="AppMaterialButtonStyle" parent="Widget.MaterialComponents.Button">
-        <item name="android:fontFamily">@font/google_sans</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="Theme.Widget.Tabs" parent="Widget.MaterialComponents.TabLayout.Colored">
@@ -622,6 +653,11 @@
 
     <style name="PopupMenu" parent="@android:style/Widget.PopupMenu">
         <item name="android:backgroundTint">?attr/primaryBlackBackground</item>
+        <!-- Phase 8.10-C: outlined, rounded popup surface, same recipe as the
+             dialog surface (bg_popup_surface). This style is applied as a
+             ContextThemeWrapper around the app's popup menus in UIHelper, so
+             theme-resolved popup windows pick the background up from here. -->
+        <item name="android:popupBackground">@drawable/bg_popup_surface</item>
     </style>
 
     <style name="CustomPreferenceThemeOverlay" parent="@style/PreferenceThemeOverlay">
@@ -655,7 +691,7 @@
         <item name="android:paddingStart">20dp</item>
         <item name="android:paddingEnd">20dp</item>
         <item name="android:selectAllOnFocus">true</item>
-        <item name="android:background">?attr/focusBackground</item>
+        <item name="android:background">@drawable/bg_ripple_rounded</item> <!-- Phase 4: rounded ripple tap surface (was ?attr/focusBackground) -->
         <item name="android:textColor">?attr/textColor</item>
         <item name="android:textAppearance">?android:attr/textAppearanceListItemSmall</item>
         <item name="drawableEndCompat">@drawable/ic_baseline_keyboard_arrow_right_24</item>
@@ -734,6 +770,38 @@
         <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
     </style>
 
+    <!-- Phase 8.11-E2: outlined pill for AlertDialog negative/neutral
+         buttons (wired in Theme.AlertDialog above and its values-v31 copy;
+         AlertDialogCustom inherits it). Parented on NiceButton directly,
+         NOT on BlackButton: BlackButton's backgroundTint would tint this
+         style's background drawable into a solid blob, and its
+         strokeColor / cornerRadius are MaterialButton-only attrs that
+         the AppCompatButtons AlertController creates never read (no
+         strokeWidth is set anywhere in that chain either). The visible
+         treatment therefore comes from android:background
+         (@drawable/bg_button_outlined: 20dp corners,
+         transparent fill, 1dp @color/white_attr_20 outline — the
+         Phase 8.10-C dialog outline). Padding/min sizes make it read as
+         a button next to the filled positive pill; height (40dp), bold
+         15sp text, margins and focus foreground are inherited from
+         NiceButton so all three dialog buttons stay one family. -->
+    <style name="OutlinedButton" parent="NiceButton">
+        <item name="android:background">@drawable/bg_button_outlined</item>
+        <item name="android:textColor">?attr/textColor</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:minWidth">64dp</item>
+        <item name="android:minHeight">40dp</item>
+    </style>
+
+    <style name="OutlinedButton.Dialog" parent="OutlinedButton">
+        <item name="android:foreground">@drawable/outline_drawable_less_inset</item>
+        <item name="android:insetTop">@dimen/dialog_buttons_inset</item>
+        <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
+    </style>
+
     <style name="BlackLabel" parent="@style/Widget.MaterialComponents.Tooltip">
         <item name="backgroundTint">?attr/iconGrayBackground</item>
         <item name="android:textColor">?attr/textColor</item>
@@ -747,6 +815,20 @@
         <item name="drawableStartCompat">@drawable/ic_baseline_check_24_listview</item>
     </style>
 
+    <!-- Phase 8.11-E1: row style for sort_bottom_single_choice, whose root is
+         now a CheckedTextView. The widget itself draws the check mark only
+         while the ListView marks the row checked, so no static compound
+         drawable is set here. NOTE: android:checkMarkGravity turned out to
+         be a PRIVATE framework attr — AAPT refused to link it (run #102) —
+         so it is not set and the mark renders at the widget's default
+         end side. -->
+    <style name="CheckedLabel" parent="@style/NoCheckLabel">
+        <item name="android:checkMark">@drawable/ic_baseline_check_24_listview</item>
+        <!-- No android:checkMarkGravity here: that framework attr is
+             PRIVATE (AAPT link error, Phase 8.11 run #102), so the check
+             renders at CheckedTextView's default end side. -->
+    </style>
+
 
     <style name="NoCheckLabel" parent="@style/AppTextViewStyle">
         <item name="android:layout_width">match_parent</item>
@@ -756,8 +838,11 @@
         <item name="android:textSize">16sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:paddingStart">12dp</item>
-        <item name="android:paddingEnd">12dp</item>
+        <!-- Phase 8.11-E1: 12dp -> 16dp so selection rows align with the
+             sheet titles (?android:attr/listPreferredItemPaddingStart) and
+             the check column no longer crowds the screen edge. -->
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
         <item name="android:ellipsize">marquee</item>
         <item name="android:foreground">?attr/selectableItemBackgroundBorderless</item>
         <item name="android:drawablePadding">20dp</item>
@@ -835,7 +920,7 @@
 
     <style name="RoundedSelectableButton">
         <item name="backgroundTint">@color/toggle_button</item>
-        <item name="rippleColor">@color/textColor</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/textColor -->
         <item name="android:textColor">@color/toggle_button_text</item>
         <item name="cornerRadius">100dp</item>
         <item name="strokeWidth">1dp</item>
@@ -860,7 +945,7 @@
         <item name="backgroundTint">?attr/iconGrayBackground</item>
         <item name="iconTint">?attr/textColor</item>
         <item name="android:textColor">?attr/textColor</item>
-        <item name="rippleColor">?attr/textColor</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was ?attr/textColor (opaque in both themes) -->
     </style>
 
     <style name="SelectableButton" parent="NiceButton">
@@ -897,7 +982,7 @@
     </style>
 
     <style name="SyncButton" parent="NiceButton">
-        <item name="rippleColor">?attr/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was ?attr/white (opaque #FFF on dark themes) -->
         <item name="iconTint">?attr/textColor</item>
         <item name="android:layout_columnWeight">1</item>
         <item name="android:layout_rowWeight">1</item>
@@ -934,7 +1019,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv_attr</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
 
         <item name="iconTint">@color/player_on_button_tv_attr</item>
@@ -961,7 +1046,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv_attr</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
         <item name="iconTint">@color/player_on_button_tv_attr</item>
         <item name="iconGravity">textStart</item>
@@ -990,7 +1075,7 @@
         <item name="strokeColor">@color/transparent</item>
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/player_button_tv</item>
-        <item name="rippleColor">@color/white</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item> <!-- Phase 7.5 FIX-1: was opaque @color/white -->
         <item name="android:shadowColor">@color/transparent</item>
 
         <item name="iconTint">@color/player_on_button_tv</item>
@@ -1063,6 +1148,23 @@
     <style name="RoundedImageView">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- Phase 2: Netflix-style shape appearances, wired into AppTheme above.
+         Built with the same cornerFamily/cornerSize items as RoundedImageView. -->
+    <style name="ShapeAppearanceNetflixSmall">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="ShapeAppearanceNetflixMedium">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+    <style name="ShapeAppearanceNetflixLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
     </style>
 
     <style name="PlayUnderlayProgress">

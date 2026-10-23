@@ -6,9 +6,14 @@
     android:layout_height="match_parent"
     android:background="?attr/primaryBlackBackground">
 
+    <!-- Phase 7.5 FIX-5: bottom padding + clipToPadding=false so the last
+         settings group scrolls out from behind the floating nav but never
+         rests under it (fragment now extends full height). -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -56,56 +61,248 @@
                     tools:text="Quick Brown Fox" />
             </LinearLayout>
 
+            <!-- Phase 5A: main menu grouped into cards (App / Content / System).
+                 Phase 8.6: each entry is now an accordion header in its own
+                 card; the FrameLayout directly below it hosts the group's
+                 settings sub-page as an embedded child fragment (created
+                 lazily by SettingsFragment on first expand, then kept).
+                 All item IDs, texts, icons and the SettingsItem style are
+                 unchanged. Extensions has no PreferenceFragment sub-page,
+                 so it stays a plain navigation row (no container). -->
             <TextView
-                android:id="@+id/settings_general"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp"
+                android:letterSpacing="0.08"
+                android:text="@string/settings_group_app"
+                android:textAllCaps="true"
+                android:textColor="?attr/grayTextColor"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-                style="@style/SettingsItem"
-                android:nextFocusDown="@id/settings_player"
-                android:text="@string/category_general" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settings_general"
+
+                    style="@style/SettingsItem"
+                    android:drawablePadding="14dp"
+                    android:nextFocusDown="@id/settings_player"
+                    android:text="@string/category_general"
+                    app:drawableStartCompat="@drawable/ic_settings_general" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_general_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settings_player"
+                    style="@style/SettingsItem"
+
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_general"
+                    android:nextFocusDown="@id/settings_ui"
+                    android:text="@string/category_player"
+                    app:drawableStartCompat="@drawable/ic_settings_player" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_player_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settings_ui"
+                    style="@style/SettingsItem"
+
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_player"
+                    android:nextFocusDown="@id/settings_providers"
+                    android:text="@string/category_ui"
+                    app:drawableStartCompat="@drawable/ic_settings_layout" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_ui_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
 
             <TextView
-                android:id="@+id/settings_player"
-                style="@style/SettingsItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="8dp"
+                android:letterSpacing="0.08"
+                android:text="@string/settings_group_content"
+                android:textAllCaps="true"
+                android:textColor="?attr/grayTextColor"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-                android:nextFocusUp="@id/settings_general"
-                android:nextFocusDown="@id/settings_providers"
-                android:text="@string/category_player" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settings_providers"
+                    style="@style/SettingsItem"
+
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_ui"
+                    android:nextFocusDown="@id/settings_extensions"
+                    android:text="@string/category_providers"
+                    app:drawableStartCompat="@drawable/ic_settings_providers" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/settings_providers_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settings_extensions"
+                    style="@style/SettingsItem"
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_providers"
+                    android:nextFocusDown="@id/settings_updates"
+                    android:text="@string/extensions"
+                    app:drawableStartCompat="@drawable/ic_settings_extensions" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/settings_providers"
-                style="@style/SettingsItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="8dp"
+                android:letterSpacing="0.08"
+                android:text="@string/settings_group_system"
+                android:textAllCaps="true"
+                android:textColor="?attr/grayTextColor"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-                android:nextFocusUp="@id/settings_player"
-                android:nextFocusDown="@id/settings_ui"
-                android:text="@string/category_providers" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/settings_ui"
-                style="@style/SettingsItem"
+                <TextView
+                    android:id="@+id/settings_updates"
+                    style="@style/SettingsItem"
 
-                android:nextFocusUp="@id/settings_providers"
-                android:nextFocusDown="@id/settings_updates"
-                android:text="@string/category_ui" />
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_extensions"
+                    android:nextFocusDown="@id/settings_credits"
+                    android:text="@string/category_updates"
+                    app:drawableStartCompat="@drawable/ic_settings_update" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/settings_updates"
-                style="@style/SettingsItem"
+            <FrameLayout
+                android:id="@+id/settings_updates_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
 
-                android:nextFocusUp="@id/settings_ui"
-                android:nextFocusDown="@id/settings_credits"
-                android:text="@string/category_updates" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/settings_credits"
-                style="@style/SettingsItem"
-                android:nextFocusUp="@id/settings_updates"
-                android:text="@string/category_account" />
+                <TextView
+                    android:id="@+id/settings_credits"
+                    style="@style/SettingsItem"
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_updates"
+                    android:text="@string/category_account"
+                    app:drawableStartCompat="@drawable/ic_settings_account" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/settings_extensions"
-                style="@style/SettingsItem"
-                android:nextFocusUp="@id/settings_credits"
-                android:text="@string/extensions" />
+            <FrameLayout
+                android:id="@+id/settings_account_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_accordion_panel"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:id="@+id/app_version_info"

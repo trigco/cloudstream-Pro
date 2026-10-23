@@ -16,6 +16,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -804,6 +805,180 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         } catch (e: IllegalArgumentException) {
             Log.e("NavigationError", "Failed to navigate: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Phase 5A: bottom-nav icon pop (1.0 -> 1.2 -> 1.0, ~250ms total).
+     * Best effort only: the BottomNavigationView internals are looked up
+     * defensively, so any structural mismatch simply skips the animation
+     * instead of crashing.
+     */
+    private fun animateNavIconPop(navView: BottomNavigationView, itemId: Int) {
+        try {
+            val menuView = navView.getChildAt(0) as? ViewGroup ?: return
+            for (i in 0 until menuView.childCount) {
+                val itemView = menuView.getChildAt(i)
+                if (itemView.id != itemId) continue
+                val icon = findFirstImageView(itemView) ?: return
+                icon.animate().cancel()
+                icon.scaleX = 1f
+                icon.scaleY = 1f
+                icon.animate()
+                    .scaleX(1.2f)
+                    .scaleY(1.2f)
+                    .setDuration(120)
+                    .withEndAction {
+                        icon.animate()
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(130)
+                            .start()
+                    }
+                    .start()
+                return
+            }
+        } catch (t: Throwable) {
+            logError(t)
+        }
+    }
+
+    private fun findFirstImageView(view: View): ImageView? {
+        if (view is ImageView) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findFirstImageView(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Phase 7: bottom-nav scrub — slide a finger across the bar and the tab
+     * under the finger gets selected, like scrubbing a tab strip.
+     *
+     * Selection goes through the exact same path as a tap: assigning
+     * [BottomNavigationView.selectedItemId] fires the existing
+     * OnItemSelectedListener -> onNavDestinationSelected(), so the NavOptions
+     * (singleTop / popUpTo start destination / transition anims) and the
+     * Phase 5A icon pop behave identically to a tap.
+     *
+     * Why the listener lives on the item views and not on the nav view
+     * itself: BottomNavigationView's item views consume every touch over
+     * them, so an OnTouchListener on the bar would never see gestures that
+     * start on an item (i.e. all of them). The item views are found via the
+     * same menu-view lookup animateNavIconPop() already relies on, and the
+     * shared listener is attached to each item view and its descendants so
+     * whichever inner view is the touch target, the events are observed.
+     * All hit-testing uses raw (screen) coordinates against the item views'
+     * screen bounds, so the listener logic does not care which descendant
+     * delivered the event.
+     *
+     * Tap safety: the listener returns false for ACTION_DOWN and for every
+     * event until a scrub past the movement threshold has actually changed
+     * the selected tab. Only then is ACTION_UP consumed (and MOVE events
+     * while scrubbing), so the pressed item's own click cannot fire
+     * afterwards — a click on the item the gesture started on would
+     * otherwise navigate straight back to it. If the scrub changed nothing
+     * (e.g. every selection was rejected by the 400ms debounce inside
+     * onNavDestinationSelected), ACTION_UP is not consumed and the normal
+     * click proceeds exactly as before.
+     */
+    private fun setupNavScrub(navView: BottomNavigationView) {
+        // Item views are created when the menu is inflated; post{} makes
+        // sure they exist before we walk them.
+        navView.post {
+            try {
+                val menuView = navView.getChildAt(0) as? ViewGroup ?: return@post
+                val thresholdPx = 8.toPx
+                val itemLoc = IntArray(2)
+                var downRawX = 0f
+                var downRawY = 0f
+                var scrubbing = false
+                var selectionChanged = false
+
+                fun itemIdAt(rawX: Float, rawY: Float): Int? {
+                    for (i in 0 until menuView.childCount) {
+                        val child = menuView.getChildAt(i)
+                        if (!child.isVisible) continue
+                        child.getLocationOnScreen(itemLoc)
+                        if (rawX >= itemLoc[0] && rawX < itemLoc[0] + child.width &&
+                            rawY >= itemLoc[1] && rawY < itemLoc[1] + child.height
+                        ) {
+                            return child.id
+                        }
+                    }
+                    return null
+                }
+
+                val listener = View.OnTouchListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            downRawX = event.rawX
+                            downRawY = event.rawY
+                            scrubbing = false
+                            selectionChanged = false
+                            // Never consume DOWN: the item keeps its pressed
+                            // state and the click stays armed for plain taps.
+                            false
+                        }
+
+                        MotionEvent.ACTION_MOVE -> {
+                            if (!scrubbing) {
+                                val movedFarEnough =
+                                    abs(event.rawX - downRawX) > thresholdPx ||
+                                        abs(event.rawY - downRawY) > thresholdPx
+                                if (!movedFarEnough) return@OnTouchListener false
+                                scrubbing = true
+                                // Keep any ancestor from stealing the gesture.
+                                navView.parent?.requestDisallowInterceptTouchEvent(true)
+                            }
+                            val targetId = itemIdAt(event.rawX, event.rawY)
+                            if (targetId != null && targetId != navView.selectedItemId) {
+                                // Same path as a tap. A rejected selection
+                                // (debounce / already-current destination)
+                                // leaves selectedItemId untouched, so a later
+                                // MOVE in this same gesture can retry.
+                                navView.selectedItemId = targetId
+                                if (navView.selectedItemId == targetId) {
+                                    selectionChanged = true
+                                }
+                            }
+                            true
+                        }
+
+                        MotionEvent.ACTION_UP -> {
+                            val consume = selectionChanged
+                            scrubbing = false
+                            selectionChanged = false
+                            navView.parent?.requestDisallowInterceptTouchEvent(false)
+                            consume
+                        }
+
+                        MotionEvent.ACTION_CANCEL -> {
+                            val wasScrubbing = scrubbing
+                            scrubbing = false
+                            selectionChanged = false
+                            navView.parent?.requestDisallowInterceptTouchEvent(false)
+                            wasScrubbing
+                        }
+
+                        else -> false
+                    }
+                }
+
+                fun attach(view: View) {
+                    view.setOnTouchListener(listener)
+                    if (view is ViewGroup) {
+                        for (i in 0 until view.childCount) attach(view.getChildAt(i))
+                    }
+                }
+                for (i in 0 until menuView.childCount) {
+                    attach(menuView.getChildAt(i))
+                }
+            } catch (t: Throwable) {
+                logError(t)
+            }
         }
     }
 
@@ -1702,10 +1877,18 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             itemActiveIndicatorColor = rippleColor
             setupWithNavController(navController)
             setOnItemSelectedListener { item ->
-                onNavDestinationSelected(
+                val handled = onNavDestinationSelected(
                     item,
                     navController
                 )
+                // Phase 5A: pop the selected icon, but only when navigation
+                // actually happened (not on reselection / debounce rejection)
+                if (handled) animateNavIconPop(this, item.itemId)
+                handled
+            }
+            // Phase 7: drag across the bar to scrub between tabs (phone only)
+            if (isLayout(PHONE)) {
+                setupNavScrub(this)
             }
 
         }

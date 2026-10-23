@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E2: surface for the custom toast (layout/toast_custom.xml),
+     inflated by CommonActivity.showToast — the one helper ~all app toasts
+     route through. Same recipe as the dialog surfaces from Phase 8.10-C:
+     ?attr/primaryGrayBackground fill (a visible lift from the pure-black
+     page background the old toast.xml CardView used, which made toasts
+     read as the stock system pill), 18dp corners, and the variant-adaptive
+     1dp outline @color/white_attr_20 (?attr/white at 20% alpha: light line
+     on dark variants, dark line on light ones). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="18dp" />
+    <solid android:color="?attr/primaryGrayBackground" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/white_attr_20" />
+</shape>

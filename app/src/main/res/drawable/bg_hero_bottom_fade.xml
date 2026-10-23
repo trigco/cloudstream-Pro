@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.8: the home hero photo's bottom-edge blend. Transparent at
+     the top, dissolving into the page background (?attr/primaryBlackBackground)
+     at the bottom, so the photo's edge melts into the page instead of
+     ending in a flat straight line. Used as a 90dp strip at the bottom of
+     the 500dp hero frame in fragment_home_head (18% of the frame).
+     Replaces the old gradient_home_hero_scrim, which faded to a hardcoded
+     #141414 — on any theme whose page background is not #141414 (e.g.
+     Dracula #282A36, AMOLED #000000) that mismatch painted a hard-edged
+     dark band at the hero's bottom. Attr colours in gradients are an
+     established pattern in this project (see background_shadow). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="@color/transparent"
+        android:endColor="?attr/primaryBlackBackground"
+        android:type="linear" />
+</shape>

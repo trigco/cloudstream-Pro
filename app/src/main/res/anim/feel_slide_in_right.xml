@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8E: details screen slides in from the right over the current
+     screen (paired with feel_slide_out_left). 250ms, decelerate — a gentle
+     push that stays cheap on old hardware. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator"
+    android:shareInterpolator="true">
+
+    <translate
+        android:duration="250"
+        android:fromXDelta="100%p"
+        android:toXDelta="0" />
+
+    <alpha
+        android:duration="150"
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0" />
+</set>

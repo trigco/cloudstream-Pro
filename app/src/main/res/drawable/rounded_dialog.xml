@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.10-C: bottom-sheet surface (AppModalStyle, used by
+     AppBottomSheetDialogTheme in values/ and values-v31/). Top corners
+     bumped 16dp -> 20dp to match the dialog surface, and the same 1dp
+     theme-adaptive outline as dialog__window_background was added so the
+     sheet's top and side edges stay visible on black backdrops (AMOLED).
+     The bottom edge sits at the screen edge, so its stroke is off-screen. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
        android:shape="rectangle">
     <solid android:color="?attr/boxItemBackground"/>
-    <corners android:topLeftRadius="16dp"
-             android:topRightRadius="16dp"/>
+    <corners android:topLeftRadius="20dp"
+             android:topRightRadius="20dp"/>
+    <stroke
+        android:width="1dp"
+        android:color="@color/white_attr_20" />
 </shape>

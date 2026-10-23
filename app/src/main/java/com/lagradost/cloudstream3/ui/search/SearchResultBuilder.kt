@@ -42,6 +42,29 @@ object SearchResultBuilder {
         }
     }
 
+    /**
+     * Phase 8.10-A: resolve one poster-UI flag with the same semantics the
+     * settings dialog uses — the persisted preference, defaulting to ON.
+     *
+     * Previously bind() read only [showCache] and defaulted every flag to
+     * OFF on a cache miss (`?: false`), while the dialog reads/writes the
+     * preferences with default ON. Any bind that ran without [updateCache]
+     * having populated the exact key (or with a stale cache) therefore hid
+     * all six poster elements — quality/dub/sub/rating/title/episode text —
+     * even though every toggle in the dialog was checked. Now a cache miss
+     * falls back to the preference itself, so an element is hidden only
+     * when the user has explicitly turned it off.
+     */
+    private fun showFlag(context: Context?, keyRes: Int): Boolean {
+        if (context == null) return true
+        val key = context.getString(keyRes)
+        showCache[key]?.let { return it }
+        val value = PreferenceManager.getDefaultSharedPreferences(context)
+            .getBoolean(key, true)
+        showCache[key] = value
+        return value
+    }
+
     @SuppressLint("StringFormatInvalid")
     fun bind(
         clickCallback: (SearchClickCallback) -> Unit,
@@ -79,13 +102,12 @@ object SearchResultBuilder {
         rating?.isVisible = false
         episodeText?.isVisible = false
 
-        val showSub = showCache[textIsDub?.context?.getString(R.string.show_sub_key)] ?: false
-        val showDub = showCache[textIsDub?.context?.getString(R.string.show_dub_key)] ?: false
-        val showTitle = showCache[cardText?.context?.getString(R.string.show_title_key)] ?: false
-        val showEpisodeText = showCache[cardText?.context?.getString(R.string.show_episode_text_key)] ?: false
-        val showHd = showCache[textQuality?.context?.getString(R.string.show_hd_key)] ?: false
-        val showRatingView =
-            showCache[textQuality?.context?.getString(R.string.show_rating_key)] ?: false
+        val showSub = showFlag(textIsDub?.context, R.string.show_sub_key)
+        val showDub = showFlag(textIsDub?.context, R.string.show_dub_key)
+        val showTitle = showFlag(cardText?.context, R.string.show_title_key)
+        val showEpisodeText = showFlag(cardText?.context, R.string.show_episode_text_key)
+        val showHd = showFlag(textQuality?.context, R.string.show_hd_key)
+        val showRatingView = showFlag(textQuality?.context, R.string.show_rating_key)
         if (card is SyncAPI.LibraryItem) {
             val ratingText = card.personalRating?.toStringNull(0.1, 10, 1)
             val showRating = !ratingText.isNullOrBlank()
@@ -134,9 +156,9 @@ object SearchResultBuilder {
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {
             cardView.loadImage(card.posterUrl, card.posterHeaders) {
-                error { getImageFromDrawable(itemView.context, R.drawable.default_cover) }
+                error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
             }
-        } else cardView.loadImage(R.drawable.default_cover)
+        } else cardView.loadImage(R.drawable.poster_placeholder)
 
         fun click(view: View?) {
             clickCallback.invoke(

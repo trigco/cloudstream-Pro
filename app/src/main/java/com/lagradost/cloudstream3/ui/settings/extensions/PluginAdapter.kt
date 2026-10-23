@@ -9,6 +9,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.viewbinding.ViewBinding
+import coil3.request.transformations
+import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getActivity
 import com.lagradost.cloudstream3.PROVIDER_STATUS_DOWN
 import com.lagradost.cloudstream3.R
@@ -156,7 +158,12 @@ class PluginAdapter(
         } else {
             binding.entryIcon.loadImage(
                 url
-            ) { error(getImageFromDrawable(itemView.context, R.drawable.ic_baseline_extension_24)) }
+            ) {
+                // Phase 8.9: circle-mask provider logos — most are square
+                // images, which read much better as circles in the list
+                transformations(CircleCropTransformation())
+                error(getImageFromDrawable(itemView.context, R.drawable.ic_baseline_extension_24))
+            }
         }
 
         binding.extVersion.isVisible = true

@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#E50914</color>
+    <color name="colorPrimary">#FFFFFF</color> <!-- Phase 5A: monochrome accent (dark base) -->
     <color name="colorPrimarySecond">@color/colorPrimary</color>
     <color name="colorSearch">#232323</color> <!--#3444D1 @color/itemBackground-->
     <color name="colorOngoing">#F53B66</color> <!--FF8181-->
-    <color name="colorPrimaryDark">#B20710</color>
-    <color name="colorAccent">#E50914</color> <!-- 818fff-->
+    <color name="colorPrimaryDark">#CCCCCC</color>
+    <color name="colorAccent">#FFFFFF</color> <!-- 818fff-->
 
-    <color name="primaryGrayBackground">#1F1F1F</color> <!--0f0f10 0E0E10 303135 2B2C30-->
-    <color name="primaryBlackBackground">#141414</color> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
+    <color name="primaryGrayBackground">#121212</color> <!-- Phase 5A: near-black surface on pure black --> <!--0f0f10 0E0E10 303135 2B2C30-->
+    <color name="primaryBlackBackground">#000000</color> <!-- Phase 5A: pure black default --> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
     <color name="iconGrayBackground">#1F1F1F</color> <!--141419 202125-->
     <color name="boxItemBackground">#232323</color> <!-- 17171B 1B1B20-->
 
@@ -65,8 +65,8 @@
     <color name="lightBitDarkerGrayBackground">#fff</color>
     <color name="lightGrayBackground">#eeeeee</color>
     <color name="lightItemBackground">#eeeeee</color>
-    <color name="lightTextColor">#202125</color>
-    <color name="lightGrayTextColor">#5f6267</color>
+    <color name="lightTextColor">#111111</color>
+    <color name="lightGrayTextColor">#5F6368</color>
     <color name="lightIconColor">#5f6267</color>
 
     <!--Dracula Theme-->
@@ -88,17 +88,17 @@
     <color name="LavenderIconColor">#7c3aed</color>
 
     <!--Silent Blue Theme-->
-    <color name="SilentBluePrimaryGrayBackground">#282f49</color>
-    <color name="SilentBlueBitDarkerGrayBackground">#151a30</color>
-    <color name="SilentBlueGrayBackground">#3A446A</color>
-    <color name="SilentBlueItemBackground">#3A446A</color>
-    <color name="SilentBlueTextColor">#E0E1F3</color>
-    <color name="SilentBlueGrayTextColor">#7B83B0</color>
-    <color name="SilentBlueIconColor">#7B83B0</color>
+    <color name="SilentBluePrimaryGrayBackground">#1F1F1F</color>
+    <color name="SilentBlueBitDarkerGrayBackground">#141414</color>
+    <color name="SilentBlueGrayBackground">#1F1F1F</color>
+    <color name="SilentBlueItemBackground">#232323</color>
+    <color name="SilentBlueTextColor">#FFFFFF</color>
+    <color name="SilentBlueGrayTextColor">#B3B3B3</color>
+    <color name="SilentBlueIconColor">#B3B3B3</color>
 
     <!--Other Colors -->
     <color name="colorPrimaryBlue">#5664B7</color>
-    <color name="colorPrimaryRed">#E50914</color>
+    <color name="colorPrimaryRed">#E50914</color> <!-- Phase 5A: Play-button red -->
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>
     <color name="colorPrimaryGreenApple">#48E484</color>

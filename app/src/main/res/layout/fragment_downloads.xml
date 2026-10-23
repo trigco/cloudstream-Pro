@@ -5,14 +5,16 @@
     android:id="@+id/download_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/primaryGrayBackground"
+    android:background="?attr/primaryBlackBackground"
     android:orientation="vertical"
     tools:context=".ui.download.DownloadFragment">
 
+    <!-- Phase 8.9: the appbar zone is now the page background so the storage
+         block below can sit on it as a rounded card instead of a flat bar. -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/primaryGrayBackground">
+        android:background="?attr/primaryBlackBackground">
         <!--
         For Scroll add to LinearLayout
         app:layout_scrollFlags="scroll|enterAlways"
@@ -77,7 +79,7 @@
             android:id="@+id/download_appbar"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="?attr/primaryGrayBackground"
+            android:background="?attr/primaryBlackBackground"
             android:baselineAligned="false"
             android:focusable="true"
             android:foreground="@drawable/outline_drawable"
@@ -86,13 +88,22 @@
             android:nextFocusDown="@id/download_list"
             android:orientation="horizontal">
 
+            <!-- Phase 8.9: storage details as a premium rounded card
+                 (bg_settings_group: 20dp radius, ?attr/primaryGrayBackground),
+                 16dp side margins + 16dp inner padding. The usage bar and
+                 legend inside are unchanged. -->
             <LinearLayout
                 android:id="@+id/download_storage_appbar"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_margin="10dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="12dp"
                 android:layout_weight="1"
+                android:background="@drawable/bg_settings_group"
                 android:orientation="vertical"
+                android:padding="16dp"
                 android:visibility="visible">
 
                 <TextView
@@ -299,11 +310,18 @@
             </LinearLayout>
         </com.facebook.shimmer.ShimmerFrameLayout>
 
+        <!-- Phase 7.5 FIX-5: the list viewport grew by the 88dp nav zone
+             (fragment now extends under the floating nav), so the pre-existing
+             100dp bottom padding grows by the same 88dp to keep the last
+             item's rest position (clearance above the queue bar) identical.
+             Phase 8C: +12dp more (200dp) tracking the queue bar's lift from
+             88dp to 100dp bottom margin; rest clearance above the bar is
+             unchanged (50dp). -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/download_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingBottom="100dp"
+            android:paddingBottom="200dp"
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:nextFocusUp="@id/download_stream_button_tv"
@@ -312,6 +330,10 @@
             android:tag="@string/tv_no_focus_tag"
             tools:listitem="@layout/download_header_episode" />
 
+        <!-- Phase 8.9: the queue bar gets the same rounded-card treatment
+             (bg_settings_group, 16dp side margins). Height and bottom margin
+             are unchanged, so the list's bottom-padding math (200dp) and the
+             FAB stack resting on the bar's top edge are unaffected. -->
         <LinearLayout
             android:focusable="true"
             android:nextFocusUp="@id/download_list"
@@ -320,7 +342,10 @@
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:layout_gravity="bottom"
-            android:background="?attr/primaryGrayBackground"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="100dp"
+            android:background="@drawable/bg_settings_group"
             android:orientation="vertical">
 
             <ImageView
@@ -352,11 +377,15 @@
             tools:visibility="visible" />
     </FrameLayout>
 
+    <!-- Phase 7.5 FIX-5: marginBottom 50dp -> 138dp (+88dp nav zone) so the
+         FAB stack keeps its pre-overlay on-screen position.
+         Phase 8C: 138dp -> 150dp, tracking the queue bar's +12dp lift; the
+         stack still rests on the queue bar's top edge as before. -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_marginBottom="50dp"
+        android:layout_marginBottom="150dp"
         android:orientation="vertical">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton

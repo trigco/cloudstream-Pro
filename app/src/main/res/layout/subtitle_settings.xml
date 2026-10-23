@@ -7,6 +7,17 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- Phase 8.11 (clearance fix): the 100dp rest clearance for the
+         floating nav pill now lives as paddingBottom on the INNER
+         LinearLayout, not on this ScrollView. Phase 8.10 put it on the
+         ScrollView itself, but a ScrollView does not add its own bottom
+         padding to its scroll range — the child is measured and scrolled
+         as if the padding were not there, so the last rows (final
+         toggles, "Hold to reset", Apply/Cancel) still came to rest
+         behind the pill on device. Padding on the scrolling child IS
+         part of the scrollable content, so the form's end now rests the
+         full 100dp above the screen bottom. clipToPadding=false stays
+         off: the child padding must always show, never clip. -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -14,7 +25,8 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingBottom="100dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -47,6 +59,22 @@
                     android:layout_gravity="center"
                     android:foregroundGravity="center" />
             </FrameLayout>
+
+            <!-- Phase 8.11: rows grouped into bg_settings_group cards
+                 (16dp side margins, same surface/rhythm as the main
+                 settings page) instead of flat full-bleed rows on black.
+                 Group A: text style. The preview banner above stays
+                 full-bleed. Every row keeps its id, style and focus
+                 chain — this is a pure layout restructure. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
             <TextView
                 android:id="@+id/subs_font"
@@ -137,6 +165,18 @@
                 android:nextFocusDown="@id/subs_subtitle_alignment"
                 android:text="@string/subs_edge_size" />
 
+            </LinearLayout>
+
+            <!-- Phase 8.11: Group B — language / behaviour rows. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
+
             <TextView
                 android:id="@+id/subs_subtitle_alignment"
                 style="@style/SettingsItem"
@@ -176,6 +216,18 @@
                 android:nextFocusUp="@id/subs_auto_select_language"
                 android:nextFocusDown="@id/subtitles_remove_bloat"
                 android:text="@string/subs_download_languages" />
+
+            </LinearLayout>
+
+            <!-- Phase 8.11: Group C — the toggle rows. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/subtitles_remove_bloat"
@@ -261,6 +313,8 @@
                 app:trackTint="@color/toggle_selector"
                 app:drawableEndCompat="@null" />
 
+            </LinearLayout>
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -303,7 +357,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/cancel_btt"
-                    style="@style/BlackButton"
+                    style="@style/OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_gravity="center_vertical|end"
                     android:nextFocusLeft="@id/apply_btt"

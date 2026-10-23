@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.6: background of an expanded settings accordion section.
+     The embedded sub-page paints its own page colour; this matches it so the
+     panel is seamless, and gives the container a rounded silhouette
+     (SettingsFragment also clips the container to a 20dp rounded outline). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="?attr/primaryBlackBackground" />
+</shape>

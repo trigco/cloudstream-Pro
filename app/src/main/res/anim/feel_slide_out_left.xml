@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8E: the screen underneath drifts partway left as the details
+     screen pushes in over it (partial drift mirrors the project's own
+     go_left anim). 250ms, decelerate. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator"
+    android:shareInterpolator="true">
+
+    <translate
+        android:duration="250"
+        android:fromXDelta="0"
+        android:toXDelta="-30%p" />
+</set>

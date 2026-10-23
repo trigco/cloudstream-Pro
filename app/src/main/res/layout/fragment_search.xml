@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_marginTop="@dimen/navbar_height"
-    android:background="?attr/primaryGrayBackground"
+    android:background="?attr/primaryBlackBackground"
     tools:context=".ui.search.SearchFragment">
 
     <LinearLayout
@@ -14,12 +14,19 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+    <!-- Phase 8.8: id so SearchFragment can play a soft drop-in
+         entrance on the search top bar.
+         Phase 8.9: the tag chips row that used to sit under the bar is
+         gone (tag selection lives in the filter sheet now), and the bar
+         zone paints the page background like the home screen, so it
+         blends into the results instead of reading as a grey band. -->
     <LinearLayout
+        android:id="@+id/search_top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingBottom="10dp"
-        android:background="?attr/primaryGrayBackground">
+        android:background="?attr/primaryBlackBackground">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -112,9 +119,8 @@
             </FrameLayout>
         </LinearLayout>
 
-        <include
-            android:id="@+id/tvtypes_chips_scroll"
-            layout="@layout/tvtypes_chips_scroll" />
+        <!-- Phase 8.9: no tag chips row here anymore — tags are picked
+             in the filter sheet opened from the tune icon in the bar. -->
     </LinearLayout>
 
 
@@ -122,6 +128,7 @@
         android:id="@+id/search_autofit_results"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
 
         android:background="?attr/primaryBlackBackground"
         android:clipToPadding="false"
@@ -131,20 +138,26 @@
         android:paddingStart="8dp"
         android:paddingTop="5dp"
         android:paddingEnd="8dp"
+        android:paddingBottom="100dp"
         android:visibility="gone"
         app:spanCount="3"
         tools:listitem="@layout/search_result_grid" />
 
+    <!-- Phase 7.5 FIX-5: bottom padding + clipToPadding=false so results
+         scroll out from behind the floating nav but never rest under it. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/search_master_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
 
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
 
         android:nextFocusLeft="@id/nav_rail_view"
-        android:nextFocusUp="@id/tvtypes_chips"
+        android:nextFocusUp="@id/search_top_bar"
         android:visibility="gone"
         tools:listitem="@layout/homepage_parent" />
 
@@ -152,20 +165,29 @@
         android:id="@+id/search_history_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
         android:nextFocusLeft="@id/nav_rail_view"
-        android:nextFocusUp="@id/tvtypes_chips"
+        android:nextFocusUp="@id/search_top_bar"
         android:visibility="visible"
         tools:listitem="@layout/search_history_item" />
     </LinearLayout>
 
-    <!-- Suggestions overlay - appears on top of content -->
+    <!-- Suggestions overlay - appears on top of content.
+         Phase 8.8: same staggered fade+rise layout animation as the three
+         lists above; SearchFragment schedules it only on the panel's
+         hidden -> shown flip so typing updates never replay it.
+         Phase 8.9: marginTop 100dp -> 74dp — it was sized to clear the
+         bar + chips row; with the chips gone the panel hugs the bar. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/search_suggestions_recycler"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="100dp"
+        android:layout_marginTop="74dp"
+        android:layoutAnimation="@anim/settings_list_layout_animation"
         android:background="?attr/primaryGrayBackground"
         android:elevation="8dp"
         android:visibility="gone"

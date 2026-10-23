@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E1: state_checked item added so the selected row of a
+     CheckedTextView list (sort_bottom_single_choice) brightens exactly
+     like an activated TextView row did; all other consumers are
+     unaffected (they never carry the checked state). -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="?attr/textColor"/>
     <item android:state_activated="true" android:color="?attr/textColor"/>
     <item android:color="?attr/grayTextColor"/>
 </selector>

@@ -1,9 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.8: each provider section is now one rounded card
+     (bg_settings_group = ?attr/primaryGrayBackground, 20dp radius — the
+     same surface as the settings cards and the Continue Watching /
+     Bookmarks cards in fragment_home_head) with 16dp side margins on
+     the unified page background (?attr/primaryBlackBackground, the
+     window background), instead of a flat full-width band whose hard
+     straight edges striped the page. The 12dp top margin is the
+     section rhythm; the card's own paddingBottom (was 6dp) is 12dp so
+     the poster row sits inside the card with a finished bottom inset.
+     Margins live on the item root: ParentItemAdapter inflates this
+     layout with the RecyclerView as parent, so they are preserved, and
+     item recycling is unaffected (background + margins are static). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         xmlns:tools="http://schemas.android.com/tools"
         android:orientation="vertical"
-        android:paddingBottom="6dp"
+        android:background="@drawable/bg_settings_group"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        android:paddingBottom="12dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
@@ -22,7 +38,7 @@
 
     <androidx.recyclerview.widget.RecyclerView
             android:nextFocusUp="@id/home_child_more_info"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="10dp"
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"

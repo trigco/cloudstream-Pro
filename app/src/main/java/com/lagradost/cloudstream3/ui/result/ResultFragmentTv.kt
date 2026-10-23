@@ -465,9 +465,18 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
             ).firstOrNull { it.isVisible }
 
             resultCastItems.setRecycledViewPool(ActorAdaptor.sharedPool)
-            resultCastItems.adapter = ActorAdaptor(aboveCast?.id) {
-                toggleEpisodes(false)
-            }
+            resultCastItems.adapter = ActorAdaptor(
+                nextFocusUpId = aboveCast?.id,
+                focusCallback = {
+                    toggleEpisodes(false)
+                },
+                clickCallback = { item ->
+                    // Phase 5B: cast tap opens the in-app actor overview page.
+                    val sourceTitle =
+                        (viewModel.page.value as? Resource.Success)?.value?.title
+                    ActorFragment.openActor(activity, item, sourceTitle)
+                }
+            )
 
             if (isLayout(EMULATOR)) {
                 episodesShadow.setOnClickListener {
@@ -720,7 +729,7 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                     }, {
                         popupDialog = null
                         popup.callback(it)
-                    }
+                    }, icons = popup.getIcons()
                 )
             }
         }
@@ -932,8 +941,14 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                         )
 
                         resultCastText.setText(if (showCast) d.actorsText else null)
-                        resultCastItems.isGone = !showCast || d.actors.isNullOrEmpty()
-                        (resultCastItems.adapter as? ActorAdaptor)?.submitList(if (showCast) d.actors else emptyList())
+                        // Phase 8.10: ResultData.actors is always populated
+                        // now (the phone page renders the row in every case),
+                        // but TV keeps its previous exclusive choice — the
+                        // text line when no actor has an image (actorsText
+                        // non-null), the row otherwise.
+                        val showCastRow = showCast && d.actorsText == null
+                        resultCastItems.isGone = !showCastRow || d.actors.isNullOrEmpty()
+                        (resultCastItems.adapter as? ActorAdaptor)?.submitList(if (showCastRow) d.actors else emptyList())
 
                         if (d.contentRatingText == null) {
                             // If there is no rating to display, we don't want an empty gap

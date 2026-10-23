@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E1: state_checked item added for CheckedTextView rows
+     (sort_bottom_single_choice), whose drawable state carries checked
+     instead of activated. Order matters: checked is matched first; the
+     activated item still serves TextView rows in choice-mode lists, and
+     the transparent default keeps the check hidden everywhere else. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="?attr/textColor"/>
     <item android:state_activated="true" android:color="?attr/textColor"/>
     <item android:color="@color/transparent"/>
 </selector>

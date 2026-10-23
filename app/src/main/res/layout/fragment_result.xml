@@ -266,10 +266,79 @@
                                 app:tint="?attr/textColor" />
                     </LinearLayout>
                 </FrameLayout>-->
+                <!-- Phase 7: backdrop as a floating rounded card (inset margins,
+                     clipped corners) instead of full-bleed edge-to-edge. The card
+                     scrolls with the page; the floating circle buttons in
+                     fragment_result_swipe.xml overlay its top corners.
+                     Phase 7.5 FIX-3: the card now sits in a plain wrapper that
+                     carries the margins and also holds the corner mask below.
+                     The mask must be a SIBLING of the card, not a child: the
+                     holder's own outline clip (clipToOutline) clips its
+                     children to the rounded outline, so a child mask could
+                     never paint the corner squares it exists to cover. The
+                     trailer's TextureView escapes that clip on older GPUs,
+                     which is why the trailer showed square corners while the
+                     static backdrop clipped fine.
+                     Phase 8.5B: the margins moved one level up into
+                     result_top_card_wrap (clipChildren=false), and the mask
+                     moved out of the frame into the wrap with -12dp margins,
+                     so its bounds extend 12dp past the card on every side.
+                     On device, backdrop pixels were escaping the holder's
+                     clip in the ~6dp zone just outside the top corners
+                     (small "ears" floating above the card) — outside the
+                     old frame-bounds mask's reach. The enlarged mask paints
+                     page colour over the whole exterior corner zone; see
+                     bg_details_corner_mask.xml for the new geometry.
+                     Phase 8.6: that geometry REGRESSED the inside edge —
+                     on device the mask painted a ~21.5dp black frame
+                     INSIDE the card's straight edges (AMOLED Jailer 2
+                     screenshot, pixel-measured: image inset 43px per
+                     side vs the Phase 8 build's 18px). Cause, measured:
+                     the -12dp margins on the match_parent mask view
+                     delivered only ~3dp of real outset on device, so
+                     the 24dp stroke reached ~21dp inside the card.
+                     Fix: the outset is no longer entrusted to negative
+                     margins on the mask. The FRAME now carries a plain
+                     POSITIVE layout_margin of 20dp inside the wrap, so
+                     the wrap (and the mask, a match_parent child of the
+                     wrap with no margins of its own) is the card rect
+                     outset by a guaranteed 20dp on every side. The
+                     wrap's own margins are the arithmetic compensation
+                     (15dp page inset − 20dp = −5dp sides, 16dp top −
+                     20dp = −4dp top, −20dp bottom), so the card lands
+                     at exactly its old position (15dp sides / 16dp top)
+                     and the wrap's flow footprint is unchanged; even if
+                     a compensation margin under-delivers, only the
+                     whole header shifts a few dp — the card/mask
+                     relationship cannot break. See
+                     bg_details_corner_mask.xml for the re-derived
+                     stroke geometry (radius 44dp / stroke 20dp: inner
+                     edge exactly on the card's 24dp arc, ZERO paint
+                     inside the card's straight edges). -->
+                <FrameLayout
+                    android:id="@+id/result_top_card_wrap"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-5dp"
+                    android:layout_marginTop="-4dp"
+                    android:layout_marginEnd="-5dp"
+                    android:layout_marginBottom="-20dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                <FrameLayout
+                    android:id="@+id/result_top_card_frame"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="20dp">
+
                 <FrameLayout
                     android:id="@+id/result_top_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="200dp">
+                    android:layout_height="200dp"
+                    android:background="@drawable/bg_details_backdrop"
+                    android:clipToOutline="true"
+                    android:elevation="6dp">
 
                     <FrameLayout
                         android:id="@+id/result_smallscreen_holder"
@@ -315,6 +384,56 @@
 
                     </FrameLayout>
                 </FrameLayout>
+                </FrameLayout>
+
+                <!-- Phase 7.5 FIX-3: corner mask. Paints the page background
+                     over the four corner squares outside the card's 24dp
+                     rounded corner so the trailer's un-clippable TextureView
+                     surface reads as rounded. Overlays the whole card but
+                     paints nothing inside the corner arc, so the backdrop,
+                     watermark and trailer intro overlay are untouched. It
+                     deliberately never consumes touches: the trailer's
+                     center play button and the poster stay interactive.
+                     Phase 8B: the mask needs elevation ABOVE the holder's
+                     6dp. ViewGroup draws siblings in Z order, so at 0dp the
+                     mask composited UNDER the holder subtree — the trailer
+                     surface painted straight over it and the corners stayed
+                     square in the trailer states (the backdrop state never
+                     noticed: the holder's own clip handled it). 8dp puts
+                     the mask back on top; outlineProvider="none" keeps it
+                     from casting a rectangular shadow of its own.
+                     Phase 8.5B: the mask now lives in result_top_card_wrap
+                     (not the frame) with -12dp margins on all sides, so its
+                     bounds extend 12dp past the card and its paint covers
+                     the exterior corner zone too — that is where the
+                     on-device "ears" sat (poster pixels escaping the
+                     holder's outline clip just outside the top corners,
+                     beyond the old frame-bounds mask). It still paints
+                     nothing inside the card's 24dp arc, so the backdrop,
+                     watermark and trailer overlay stay untouched, and it
+                     still never consumes touches.
+                     Phase 8.6: the -12dp margins are GONE — measured on
+                     device they delivered only ~3dp of outset, letting
+                     the old 24dp stroke paint ~21.5dp inside the card's
+                     straight edges (the black frame the user reported).
+                     The mask is now a plain match_parent child of the
+                     wrap; its 20dp outset from the card comes from the
+                     frame's +20dp positive margin inside the wrap, and
+                     the drawable was re-derived for that outset (radius
+                     44dp, stroke 20dp — inner edge exactly on the card's
+                     24dp arc, paint strictly outside the card's straight
+                     edges, exterior ear zone still covered). -->
+                <View
+                    android:id="@+id/result_top_corner_mask"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_details_corner_mask"
+                    android:elevation="8dp"
+                    android:outlineProvider="none"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:importantForAccessibility="no" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -325,12 +444,16 @@
                     android:paddingEnd="@dimen/result_padding">
 
 
+                    <!-- Phase 7: was a horizontal row (poster beside text); now a
+                         vertical stack so the title and meta line can be centered
+                         full-width directly under the backdrop card. The poster
+                         holder stays (gone on phone) to preserve its binding. -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="14dp"
                         android:layout_marginBottom="15dp"
-                        android:orientation="horizontal"
+                        android:orientation="vertical"
                         android:visibility="visible">
 
 
@@ -359,18 +482,23 @@
 
                             <TextView
                                 android:id="@+id/result_title"
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginBottom="5dp"
+                                android:gravity="center"
                                 android:maxLines="2"
                                 android:textColor="?attr/textColor"
                                 android:textSize="20sp"
                                 android:textStyle="bold"
                                 tools:text="The Perfect Run The Perfect Run" />
 
+                            <!-- Phase 7: wrap_content + center_horizontal centers the
+                                 provider/type/year meta line under the title
+                                 (FlowLayout itself packs children from the left). -->
                             <com.lagradost.cloudstream3.widget.FlowLayout
-                                android:layout_width="match_parent"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:layout_gravity="center_horizontal"
                                 app:itemSpacing="10dp">
 
                                 <com.google.android.material.button.MaterialButton
@@ -414,10 +542,15 @@
                             <!--
                             This has half margin and half padding to make TV focus on description look better.
                             The focus outline now settles between the poster and text.
+                            Phase 7 (phone layout only): the block is now a rounded
+                            card with internal padding.
                             -->
                             <FrameLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:background="@drawable/bg_details_card"
+                                android:padding="16dp">
 
                                 <TextView
                                     android:id="@+id/result_description"
@@ -425,7 +558,8 @@
                                     android:layout_height="wrap_content"
                                     android:ellipsize="end"
                                     android:foreground="@drawable/outline_drawable"
-                                    android:maxLines="10"
+                                    android:justificationMode="inter_word"
+                                    android:maxLines="5"
                                     android:nextFocusUp="@id/result_back"
                                     android:nextFocusDown="@id/result_bookmark_Button"
                                     android:paddingTop="5dp"
@@ -469,6 +603,11 @@
                                                 tools:visibility="visible" />
                     -->
 
+                    <!-- Phase 8.10: hidden on phone — the cast is presented
+                         by result_cast_items below in every case (photo or
+                         initials avatar). Kept in the layout only so the
+                         generated binding and ResultFragmentPhone's explicit
+                         isGone assignment stay valid; it is never shown. -->
                     <TextView
                         android:id="@+id/result_cast_text"
                         android:layout_width="wrap_content"
@@ -478,6 +617,7 @@
                         android:maxLines="2"
                         android:textColor="?attr/grayTextColor"
                         android:textSize="15sp"
+                        android:visibility="gone"
                         tools:text="Cast: Joe Ligma" />
 
                     <androidx.recyclerview.widget.RecyclerView
@@ -537,11 +677,19 @@
                         android:textStyle="normal"
                         android:visibility="gone" />
 
+                    <!-- Phase 7: genre/tag chips sat inside a rounded card
+                         (hidden by ResultFragmentPhone when there are no tags).
+                         Phase 8.5B: the card surface is gone at the user's
+                         request — only the rounded chip pills themselves
+                         remain, directly on the page background. The
+                         description block above keeps its own bg_details_card
+                         FrameLayout; it is a separate view and is untouched. -->
                     <com.google.android.material.chip.ChipGroup
                         android:id="@+id/result_tag"
                         style="@style/ChipParent"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp" />
                     <!--<com.lagradost.cloudstream3.widget.FlowLayout
                             android:id="@+id/result_tag"
                             android:layout_width="match_parent"
@@ -711,8 +859,12 @@
                                     android:nextFocusUp="@id/result_bookmark_Button"
                                     android:nextFocusDown="@id/result_download_movie"
                                     android:text="@string/play_movie_button"
+                                    android:textColor="@color/white"
                                     android:visibility="visible"
-                                    app:icon="@drawable/ic_baseline_play_arrow_24">
+                                    app:backgroundTint="@color/colorPrimaryRed"
+                                    app:icon="@drawable/ic_baseline_play_arrow_24"
+                                    app:iconTint="@color/white"
+                                    app:strokeColor="@color/transparent">
 
                                     <requestFocus />
 
@@ -794,6 +946,7 @@
                                     android:paddingStart="10dp"
                                     android:paddingEnd="5dp"
                                     android:visibility="gone"
+                                    app:cornerRadius="24dp"
                                     tools:text="Season 1"
                                     tools:visibility="visible" />
 

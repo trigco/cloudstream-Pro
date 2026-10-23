@@ -8,6 +8,7 @@
 
     android:clickable="true"
     android:focusable="true"
+    android:stateListAnimator="@animator/feel_card_press"
     android:foreground="@drawable/outline_drawable"
     android:orientation="vertical">
 

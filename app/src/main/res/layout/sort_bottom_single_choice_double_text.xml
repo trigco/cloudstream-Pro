@@ -21,11 +21,17 @@
     android:paddingVertical="10dp"
     android:orientation="horizontal">
 
+    <!-- Phase 8.11-E1: duplicateParentState lets the ListView's activated
+         state (set on this row root in CHOICE_MODE_SINGLE) reach the check
+         image and the texts, so the check vector's stateful tint and the
+         text color selector can actually discriminate the selected row.
+         Without it the check rendered on every row. -->
     <ImageView
         android:id="@+id/drawable_start"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="center"
+        android:duplicateParentState="true"
         android:paddingHorizontal="10dp"
         android:src="@drawable/ic_baseline_check_24_listview"
         tools:ignore="ContentDescription" />
@@ -34,12 +40,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_weight="1"
+        android:duplicateParentState="true"
         android:gravity="center"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/main_text"
             style="@style/CheckLabel"
+            android:duplicateParentState="true"
             android:foreground="@null"
             android:minHeight="@null"
             app:drawableStartCompat="@null"
@@ -48,6 +56,7 @@
         <TextView
             android:id="@+id/secondary_text"
             style="@style/CheckLabel"
+            android:duplicateParentState="true"
             android:foreground="@null"
             android:minHeight="@null"
             android:padding="0dp"

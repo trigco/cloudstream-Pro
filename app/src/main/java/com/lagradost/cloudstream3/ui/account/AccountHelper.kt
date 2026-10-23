@@ -5,12 +5,20 @@ import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
 import android.text.Editable
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
+import androidx.cardview.widget.CardView
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.widget.doOnTextChanged
@@ -38,6 +46,7 @@ import com.lagradost.cloudstream3.utils.DataStoreHelper.getDefaultAccount
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
 import com.lagradost.cloudstream3.utils.UIHelper.hideProgress
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.UIHelper.showInputMethod
 import com.lagradost.cloudstream3.utils.UIHelper.showProgress
@@ -171,6 +180,82 @@ object AccountHelper {
             val sheetBinding = BottomInputDialogBinding.inflate(LayoutInflater.from(context))
             bottomSheetDialog.setContentView(sheetBinding.root)
             bottomSheetDialog.show()
+
+            // Phase 8.11: preset avatar picker, built in code because the
+            // shared bottom_input_dialog layout also backs the nginx text
+            // input dialog. Tapping a preset mirrors the URL flow below:
+            // it stages the choice on currentEditAccount (persisted by the
+            // edit dialog's Apply button) and refreshes the preview.
+            val thumbSize = 52.toPx
+            val presetRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(10.toPx, 2.toPx, 10.toPx, 10.toPx)
+            }
+            // The vector presets were appended after the seven original
+            // JPG backgrounds in profileImages - show the new ones first.
+            val presetOrder = DataStoreHelper.profileImages.indices
+                .sortedBy { index -> index < 7 }
+            for (index in presetOrder) {
+                val ring = View(context).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setBackgroundResource(R.drawable.bg_preset_ring)
+                    isVisible = currentEditAccount.customImage == null &&
+                        currentEditAccount.defaultImageIndex == index
+                }
+                val card = CardView(context).apply {
+                    layoutParams = FrameLayout.LayoutParams(thumbSize, thumbSize).apply {
+                        gravity = Gravity.CENTER
+                    }
+                    radius = thumbSize / 2f
+                    cardElevation = 0f
+                }
+                card.addView(ImageView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setImageResource(DataStoreHelper.profileImages[index])
+                })
+                val cell = FrameLayout(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        thumbSize + 8.toPx, thumbSize + 8.toPx
+                    ).apply {
+                        marginStart = 2.toPx
+                        marginEnd = 2.toPx
+                    }
+                    isFocusable = true
+                    isClickable = true
+                    setOnClickListener {
+                        currentEditAccount = currentEditAccount.copy(
+                            customImage = null,
+                            defaultImageIndex = index
+                        )
+                        binding.accountImage.loadImage(currentEditAccount.image)
+                        showToast(
+                            R.string.edit_profile_image_success,
+                            Toast.LENGTH_SHORT
+                        )
+                        bottomSheetDialog.dismissSafe()
+                    }
+                }
+                cell.addView(ring)
+                cell.addView(card)
+                presetRow.addView(cell)
+            }
+            val presetScroll = HorizontalScrollView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                isHorizontalScrollBarEnabled = false
+                addView(presetRow)
+            }
+            // Between the sheet title and the URL field.
+            (sheetBinding.root as? ViewGroup)?.addView(presetScroll, 1)
 
             sheetBinding.apply {
                 text1.text = context.getString(R.string.edit_profile_image_title)

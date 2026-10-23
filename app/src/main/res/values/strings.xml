@@ -182,6 +182,9 @@
     <string name="search">Search</string>
     <string name="library">Library</string>
     <string name="category_account">Accounts and Security</string>
+    <string name="settings_group_app">App</string>
+    <string name="settings_group_content">Content</string>
+    <string name="settings_group_system">System</string>
     <string name="category_updates">Updates and Backup</string>
     <string name="settings_info">Info</string>
     <string name="advanced_search">Advanced Search</string>
@@ -380,6 +383,13 @@
     <string name="random_button_settings_desc">Show random button on Homepage and Library</string>
     <string name="provider_lang_settings">Extension languages</string>
     <string name="app_layout">App Layout</string>
+    <string name="app_icon_settings">App icon</string>
+    <string name="app_icon_default">Default</string>
+    <string name="app_icon_midnight">Midnight</string>
+    <string name="app_icon_inverse">Inverse</string>
+    <string name="app_icon_crimson">Crimson</string>
+    <string name="app_icon_carbon">Carbon</string>
+    <string name="app_icon_changed">App icon changed</string>
     <string name="preferred_media_settings">Preferred media</string>
     <string name="enable_nsfw_on_providers">Enable NSFW on supported Extensions</string>
     <string name="subtitles_encoding">Subtitle encoding</string>
@@ -454,6 +464,9 @@
     <string name="actor_main">Main</string>
     <string name="actor_supporting">Supporting</string>
     <string name="actor_background">Background</string>
+    <string name="actor_overview">Overview</string>
+    <string name="actor_search_titles" formatted="true">Search titles: %s</string>
+    <string name="actor_in_format" formatted="true">in %s</string>
     <string name="home_source">Source</string>
     <string name="home_random">Random</string>
     <string name="coming_soon">Coming soon…</string>

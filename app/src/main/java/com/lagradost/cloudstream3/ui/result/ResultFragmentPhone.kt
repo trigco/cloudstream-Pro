@@ -32,6 +32,7 @@ import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.DubStatus
@@ -97,6 +98,7 @@ import com.lagradost.cloudstream3.utils.UIHelper.populateChips
 import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
 import com.lagradost.cloudstream3.utils.UIHelper.setListViewHeightBasedOnItems
 import com.lagradost.cloudstream3.utils.UIHelper.setNavigationBarColorCompat
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement.getBasePath
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
@@ -204,6 +206,10 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
     protected fun uiReset() {
         isShowing = false
+        // Phase 8B: player UI resets (incl. entering/leaving trailer
+        // fullscreen, which routes through here) collapse the top bar
+        // actions instantly, so the thumbnail comes back clean.
+        setTopBarActionsExpanded(false, animate = false)
         updateUIVisibility()
     }
 
@@ -243,6 +249,101 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             playerHostView?.playerError(exception)
         } else {
             nextMirror()
+        }
+    }
+
+    /**
+     * Phase 3: providers often append quality/source junk to titles, e.g.
+     * "Eyes (2026) Hindi S01 Complete SONYLIV | 720p x265". Strip that from the
+     * phone details title only — stored data and other screens are untouched.
+     */
+    private fun cleanDisplayTitle(raw: String): String {
+        var title = raw.replace(
+            Regex(
+                """[\[(](480p|720p|1080p|2160p|4k|x264|x265|hevc)[)\]]""",
+                RegexOption.IGNORE_CASE
+            ), " "
+        )
+        val pipe = title.indexOf(" | ")
+        if (pipe >= 0) {
+            val tail = title.substring(pipe + 3)
+            val junk = listOf(
+                "480p", "720p", "1080p", "2160p", "4k", "x264", "x265", "hevc",
+                "web-dl", "webrip", "bluray", "hdrip", "camrip", "complete"
+            )
+            if (junk.any { tail.contains(it, ignoreCase = true) }) {
+                title = title.substring(0, pipe)
+            }
+        }
+        // Provider titles often append language/source/episode junk AFTER the
+        // year: "Eyes (2026) Hindi S01 Complete SONYLIV" -> "Eyes (2026)".
+        val year = Regex("""\((?:19|20)\d{2}\)""").find(title)
+        if (year != null && year.range.first > 0) {
+            title = title.substring(0, year.range.last + 1)
+        }
+        return title.replace(Regex("""\s+"""), " ").trim(' ', '|', '-')
+    }
+
+    // Phase 8B: the details top bar collapses to just back + MORE so the
+    // thumbnail stays clean. The action circles (cast, subscribe, favorite,
+    // share, browser, search, recommendations) live in result_actions_row
+    // and are only shown on demand. Collapsing toggles ONLY that container,
+    // never the buttons themselves, so the per-button visibility logic
+    // elsewhere in this file (and the async cast callback) cannot fight it.
+    private var topBarActionsExpanded = false
+
+    private val topBarCollapseRunnable = Runnable {
+        setTopBarActionsExpanded(false)
+    }
+
+    private fun setTopBarActionsExpanded(expanded: Boolean, animate: Boolean = true) {
+        topBarActionsExpanded = expanded
+        val swipeBinding = binding ?: return
+        val row = swipeBinding.resultActionsRow
+        row.removeCallbacks(topBarCollapseRunnable)
+        swipeBinding.resultMore.setImageResource(
+            if (expanded) R.drawable.ic_baseline_clear_24
+            else R.drawable.ic_baseline_more_vert_24
+        )
+        if (expanded) {
+            row.isVisible = true
+            if (animate) {
+                row.animate().cancel()
+                row.alpha = 0f
+                row.translationX = 16.toPx.toFloat()
+                row.animate()
+                    .alpha(1f)
+                    .translationX(0f)
+                    .setDuration(180L)
+                    .start()
+            } else {
+                row.alpha = 1f
+                row.translationX = 0f
+            }
+            // Auto-collapse again after a few seconds.
+            row.postDelayed(topBarCollapseRunnable, 3_500L)
+        } else if (row.isVisible) {
+            if (animate) {
+                row.animate().cancel()
+                row.animate()
+                    .alpha(0f)
+                    .translationX(16.toPx.toFloat())
+                    .setDuration(150L)
+                    .withEndAction {
+                        // A re-expand may have cancelled this animation;
+                        // only hide if we are still meant to be collapsed.
+                        if (!topBarActionsExpanded) {
+                            row.isGone = true
+                        }
+                        row.alpha = 1f
+                        row.translationX = 0f
+                    }
+                    .start()
+            } else {
+                row.isGone = true
+                row.alpha = 1f
+                row.translationX = 0f
+            }
         }
     }
 
@@ -340,6 +441,8 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
 
         updateUIEvent -= ::updateUI
+        // Phase 8B: never let the auto-collapse timer outlive the view.
+        binding?.resultActionsRow?.removeCallbacks(topBarCollapseRunnable)
         playerHostView?.release()
         playerBinding = null
         resultBinding?.resultScroll?.setOnClickListener(null)
@@ -527,7 +630,12 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 this.orientation = RecyclerView.HORIZONTAL
             }*/
             resultCastItems.setRecycledViewPool(ActorAdaptor.sharedPool)
-            resultCastItems.adapter = ActorAdaptor()
+            resultCastItems.adapter = ActorAdaptor(clickCallback = { item ->
+                // Phase 5B: cast tap opens the in-app actor overview page.
+                val sourceTitle =
+                    (viewModel.page.value as? Resource.Success)?.value?.title
+                ActorFragment.openActor(activity, item, sourceTitle)
+            })
             resultEpisodes.setRecycledViewPool(EpisodeAdapter.sharedPool)
             resultEpisodes.adapter =
                 EpisodeAdapter(
@@ -573,6 +681,8 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
             resultScroll.setOnScrollChangeListener(NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                 val dy = scrollY - oldScrollY
+                // Phase 8B: scrolling the page collapses the top bar actions.
+                if (topBarActionsExpanded) setTopBarActionsExpanded(false)
                 if (dy > 0) { //check for scroll down
                     binding.resultBookmarkFab.shrink()
                 } else if (dy < -5) {
@@ -593,6 +703,11 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             resultOverlappingPanels.setEndPanelLockState(OverlappingPanelsLayout.LockState.CLOSE)
             resultBack.setOnClickListener {
                 activity?.popCurrentPage()
+            }
+
+            // Phase 8B: MORE toggles the collapsed action row.
+            resultMore.setOnClickListener {
+                setTopBarActionsExpanded(!topBarActionsExpanded)
             }
 
             activity?.attachBackPressedCallback(this@ResultFragmentPhone.toString()) {
@@ -937,7 +1052,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     resultVpn.setText(d.vpnText)
                     resultInfo.setText(d.metaText)
                     resultNoEpisodes.setText(d.noEpisodesFoundText)
-                    resultTitle.setText(d.titleText)
+                    resultTitle.text = cleanDisplayTitle(d.titleText.asString(resultTitle.context))
                     resultMetaSite.setText(d.apiName)
                     resultMetaType.setText(d.typeText)
                     resultMetaYear.setText(d.yearText)
@@ -945,14 +1060,18 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     resultMetaRating.setText(d.ratingText)
                     resultMetaStatus.setText(d.onGoingText)
                     resultMetaContentRating.setText(d.contentRatingText)
-                    resultCastText.setText(d.actorsText)
+                    // Phase 8.10: the plain "Cast: ..." text line is no
+                    // longer shown on phone — the cast row below renders
+                    // every cast (photos where available, initials avatars
+                    // where not). The view stays in the layout, gone.
+                    resultCastText.isGone = true
                     resultNextAiring.setText(d.nextAiringEpisode)
                     resultNextAiringTime.setText(d.nextAiringDate)
                     resultPoster.loadImage(d.posterImage, headers = d.posterHeaders) {
                         error {
                             getImageFromDrawable(
                                 context ?: return@error null,
-                                R.drawable.default_cover
+                                R.drawable.poster_placeholder
                             )
                         }
                     }
@@ -963,7 +1082,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                         error {
                             getImageFromDrawable(
                                 context ?: return@error null,
-                                R.drawable.default_cover
+                                R.drawable.poster_placeholder
                             )
                         }
                     }
@@ -982,11 +1101,27 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                             isExpanded = !isExpanded
                             maxLines = if (isExpanded) {
                                 Integer.MAX_VALUE
-                            } else 10
+                            } else 5
                         }
                     }
 
                     populateChips(resultTag, d.tags)
+                    // Phase 7.5: the shared ChipFilled fill resolves to the
+                    // same primaryGrayBackground as the new details card, and
+                    // its stroke is transparent unless focused, so the genre
+                    // chips looked like plain text on the card. Restyle only
+                    // these phone-details chips as separate pills; populateChips
+                    // already gives them a 100dp (full-pill) corner radius.
+                    for (i in 0 until resultTag.childCount) {
+                        (resultTag.getChildAt(i) as? Chip)?.apply {
+                            setChipBackgroundColorResource(R.color.bg_details_chip)
+                            setChipStrokeColorResource(R.color.bg_details_chip_stroke)
+                            chipStrokeWidth = 1.toPx.toFloat()
+                        }
+                    }
+                    // Phase 7: result_tag now has a card background + padding, so
+                    // hide it entirely when there are no tags (no empty card bar).
+                    resultTag.isVisible = d.tags.isNotEmpty()
 
                     resultComingSoon.isVisible = d.comingSoon
                     resultDataHolder.isGone = d.comingSoon
@@ -1094,7 +1229,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }, {
                         popupDialog = null
                         popup.callback(it)
-                    }
+                    }, icons = popup.getIcons()
                 )
             }
         }

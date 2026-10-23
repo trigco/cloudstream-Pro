@@ -217,16 +217,26 @@
             android:textColor="?attr/textColor" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/home_master_recycler"
+    <!-- Phase 6A-2: pull-to-refresh wrapper (phone). Takes the RecyclerView's
+         place in the root; the RecyclerView itself is unchanged. -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/home_swipe_refresh"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:descendantFocusability="afterDescendants"
-        android:layoutAnimation="@anim/home_master_layout_animation"
-        android:nextFocusLeft="@id/nav_rail_view"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/homepage_parent"
-        tools:visibility="gone" />
+        android:layout_height="wrap_content">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/home_master_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:paddingBottom="100dp"
+            android:descendantFocusability="afterDescendants"
+            android:layoutAnimation="@anim/home_master_layout_animation"
+            android:nextFocusLeft="@id/nav_rail_view"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/homepage_parent"
+            tools:visibility="gone" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <TextClock
             android:id="@+id/home_clock"
@@ -234,9 +244,23 @@
             android:layout_height="wrap_content"
             android:visibility="gone" />
 
+    <!-- Phase 7.5 FIX-5: bottom margin = style margin 16dp + 88dp nav zone,
+         so the FAB keeps its pre-overlay on-screen position above the
+         floating nav (the fragment now extends full height).
+         Phase 8C: layout_gravity is now EXPLICIT in the layout (bottom|end,
+         marginBottom 104dp = 88dp nav zone + 16dp gap, marginEnd 16dp).
+         Phase 8.5C: these XML values are now only the pre-layout FALLBACK.
+         On device the FAB's position measured exactly right whenever it
+         was drawn — the real failure was it not being drawn at all in the
+         top-of-home state. HomeFragment.anchorHomeApiFab() now recomputes
+         the bottom margin from the activity's measured nav view at runtime
+         and the FAB no longer shrink()es on scroll (see PHASE85C_CHANGES.md). -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/home_api_fab"
         style="@style/ExtendedFloatingActionButton"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="104dp"
         android:text="@string/home_source"
         android:textColor="?attr/textColor"
         android:visibility="gone"
@@ -248,6 +272,7 @@
         android:id="@+id/home_random"
         style="@style/ExtendedFloatingActionButton"
         android:layout_gravity="bottom|start"
+        android:layout_marginBottom="104dp"
         android:text="@string/home_random"
         android:textColor="?attr/textColor"
         android:visibility="gone"

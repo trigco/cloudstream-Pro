@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 7.5: details-page genre/tag chip stroke. The shared
+     white_transparent_toggle selector is transparent unless focused, so the
+     old chips had no visible border in normal use. This details-only selector
+     keeps a mid-grey outline in every state. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/iconColor" android:state_checked="true" />
+    <item android:color="@color/iconColor" android:state_focused="true" />
+    <item android:color="@color/iconColor" />
+</selector>

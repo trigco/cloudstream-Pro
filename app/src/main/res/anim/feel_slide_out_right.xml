@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.5D: mirror of feel_slide_in_right — a settings sub-page slides
+     off to the right when it is popped back to the settings main page.
+     250ms slide, 150ms fade, decelerate. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator"
+    android:shareInterpolator="true">
+
+    <translate
+        android:duration="250"
+        android:fromXDelta="0"
+        android:toXDelta="100%p" />
+
+    <alpha
+        android:duration="150"
+        android:fromAlpha="1.0"
+        android:toAlpha="0.0" />
+</set>

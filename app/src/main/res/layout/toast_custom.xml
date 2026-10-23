@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E2: custom toast view, inflated by CommonActivity.showToast
+     via ToastCustomBinding (replaces the old layout/toast.xml). The old
+     layout was a pure-black CardView with 10dp corners, no outline and no
+     Inter font, so toasts were indistinguishable from the stock Android
+     pill — and invisible-edged on black pages. This root is wrap_content
+     (the old one was match_parent x match_parent, which a Toast window
+     cannot honour) with the bg_toast surface: ?attr/primaryGrayBackground
+     fill + 1dp white_attr_20 outline + 18dp corners, and Inter text in
+     the theme text colour. The TextView keeps the id @+id/text so the
+     helper binds it the same way as before. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_toast"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="18dp"
+    android:paddingTop="11dp"
+    android:paddingEnd="18dp"
+    android:paddingBottom="11dp">
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/inter"
+        android:gravity="center"
+        android:textColor="?attr/textColor"
+        android:textSize="14sp" />
+
+</LinearLayout>

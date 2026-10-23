@@ -1,15 +1,19 @@
 package com.lagradost.cloudstream3.utils
 
+import android.content.Context
 import android.app.Activity
 import android.app.Dialog
 import android.text.Spanned
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.view.marginLeft
@@ -27,6 +31,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
+import com.lagradost.cloudstream3.utils.UIHelper.getResourceColor
 import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
 
 object SingleSelectionHelper {
@@ -105,7 +110,8 @@ object SingleSelectionHelper {
         isMultiSelect: Boolean,
         callback: (List<Int>) -> Unit,
         dismissCallback: () -> Unit,
-        itemLayout: Int = R.layout.sort_bottom_single_choice
+        itemLayout: Int = R.layout.sort_bottom_single_choice,
+        icons: List<Int?>? = null
     ) {
         if (this == null) return
 
@@ -131,8 +137,11 @@ object SingleSelectionHelper {
         textView.text = name
         textView.isGone = name.isBlank()
 
-        val arrayAdapter = ArrayAdapter<String>(this, itemLayout)
-        arrayAdapter.addAll(items)
+        val arrayAdapter: ArrayAdapter<String> = if (icons == null) {
+            ArrayAdapter<String>(this, itemLayout).apply { addAll(items) }
+        } else {
+            IconArrayAdapter(this, itemLayout, items, icons)
+        }
 
         listView.adapter = arrayAdapter
         if (isMultiSelect) {
@@ -326,6 +335,7 @@ object SingleSelectionHelper {
         name: String,
         dismissCallback: () -> Unit,
         callback: (Int) -> Unit,
+        icons: List<Int?>? = null,
     ): BottomSheetDialog {
         val builder =
             BottomSheetDialog(this)
@@ -347,7 +357,8 @@ object SingleSelectionHelper {
             isMultiSelect = false,
             callback = { if (it.isNotEmpty()) callback.invoke(it.first()) },
             dismissCallback = dismissCallback,
-            itemLayout = R.layout.sort_bottom_single_choice_no_checkmark
+            itemLayout = R.layout.sort_bottom_single_choice_no_checkmark,
+            icons = icons
         )
         return builder
     }
@@ -397,5 +408,32 @@ object SingleSelectionHelper {
         }
 
         dialog.show()
+    }
+}
+
+/**
+ * ArrayAdapter that additionally draws a per-row start icon on the row's
+ * text view (the row style already reserves drawablePadding for it).
+ * Icons are tinted with the theme's iconColor; a null entry clears the icon
+ * so recycled rows never show a stale glyph.
+ */
+private class IconArrayAdapter(
+    context: Context,
+    resource: Int,
+    items: List<String>,
+    private val icons: List<Int?>,
+) : ArrayAdapter<String>(context, resource, items) {
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val view = super.getView(position, convertView, parent)
+        val textView = view.findViewById<TextView>(android.R.id.text1) ?: return view
+        val iconRes = icons.getOrNull(position)
+        if (iconRes == null) {
+            textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+            return view
+        }
+        val drawable = ContextCompat.getDrawable(context, iconRes)?.mutate() ?: return view
+        DrawableCompat.setTint(drawable, context.getResourceColor(R.attr.iconColor))
+        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(drawable, null, null, null)
+        return view
     }
 }

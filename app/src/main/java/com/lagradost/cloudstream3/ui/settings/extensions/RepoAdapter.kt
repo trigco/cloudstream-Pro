@@ -2,6 +2,9 @@ package com.lagradost.cloudstream3.ui.settings.extensions
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.view.isGone
+import coil3.request.transformations
+import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.RepositoryItemBinding
 import com.lagradost.cloudstream3.databinding.RepositoryItemTvBinding
@@ -67,9 +70,15 @@ class RepoAdapter(
                         clickCallback(item)
                     }
                     mainText.text = item.name
-                    subText.text = item.url
+                    // Phase 8.11: no link/host line under the name at all.
+                    // Set GONE explicitly at bind time because PluginAdapter
+                    // reuses this layout (and this very view) to show plugin
+                    // descriptions, so a recycled holder may arrive visible.
+                    subText.isGone = true
                     if (!item.iconUrl.isNullOrEmpty()) {
                         entryIcon.loadImage(item.iconUrl) {
+                            // Phase 8.9: circle-mask real repo icons/avatars
+                            transformations(CircleCropTransformation())
                             error(
                                 getImageFromDrawable(
                                     binding.root.context,
@@ -107,9 +116,17 @@ class RepoAdapter(
                     }
 
                     mainText.text = item.name
-                    subText.text = item.url
+                    // Phase 8.11: no link/host line under the name at all
+                    // (the full URL still powers row clicks and the
+                    // long-press copy action below; this is display-only).
+                    // Set GONE explicitly at bind time because PluginAdapter
+                    // reuses this layout (and this very view) to show plugin
+                    // descriptions, so a recycled holder may arrive visible.
+                    subText.isGone = true
                     if (!item.iconUrl.isNullOrEmpty()) {
                         entryIcon.loadImage(item.iconUrl) {
+                            // Phase 8.9: circle-mask real repo icons/avatars
+                            transformations(CircleCropTransformation())
                             error(
                                 getImageFromDrawable(
                                     binding.root.context,

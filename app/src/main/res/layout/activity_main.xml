@@ -39,24 +39,36 @@
             android:layout_height="@dimen/nav_view_height"
             android:layout_width="0dp"
             app:labelVisibilityMode="unlabeled"
-            android:background="?attr/primaryGrayBackground"
+            android:background="@drawable/bg_nav_floating"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="18dp"
+            android:elevation="12dp"
 
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
-            app:itemActiveIndicatorColor="@color/navIndicatorRed"
 
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:menu="@menu/bottom_nav_menu" />
 
+        <!-- Phase 7.5 FIX-5: the NavHost extends to the parent's bottom so
+             fragment content flows UNDERNEATH the floating bottom nav instead
+             of stopping above it (the old chain navHost -> cast holder ->
+             nav_view reserved a layout slab for the bar, which read as an
+             opaque black band attached to the pill). The cast holder keeps
+             its bottom chained to the top of nav_view, so the mini controller
+             keeps its exact on-screen position above the pill. Main tab
+             screens compensate with bottom padding on their scrolling lists
+             (see fragment_home/library/downloads/search, main_settings). -->
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/nav_host_fragment"
             android:name="androidx.navigation.fragment.NavHostFragment"
             android:layout_width="0dp"
             android:layout_height="0dp"
             app:defaultNavHost="true"
-            app:layout_constraintBottom_toTopOf="@+id/cast_mini_controller_holder"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@+id/nav_rail_view"
             app:layout_constraintTop_toTopOf="parent"
@@ -83,9 +95,4 @@
                 tools:ignore="FragmentTagUsage" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <androidx.compose.ui.platform.ComposeView
-        android:id="@+id/compose_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
 </FrameLayout>

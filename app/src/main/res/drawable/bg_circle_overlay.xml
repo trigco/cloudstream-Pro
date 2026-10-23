@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 6A: circular translucent-black button surface for actions that
+     float over imagery (details top bar). Modelled on the project's own
+     rounded_select_ripple.xml: a ripple whose item + mask are ovals, so the
+     press feedback stays inside the circle. Base colour is the project's
+     existing @color/black_overlay (#66000000). -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/black_overlay" />
+        </shape>
+    </item>
+
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+</ripple>

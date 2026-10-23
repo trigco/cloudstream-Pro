@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 preset avatar: deep blue aurora. Abstract gradient + orbs + wave, no text. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M0,0h100v100h-100z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="100"
+                android:endY="100">
+                <item android:offset="0" android:color="#0A1C46" />
+                <item android:offset="1" android:color="#2B62D9" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M80,20 m-24,0 a24,24 0 1,0 48,0 a24,24 0 1,0 -48,0"
+        android:fillColor="#2EFFFFFF" />
+
+    <path
+        android:pathData="M16,80 m-13,0 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0"
+        android:fillColor="#1AFFFFFF" />
+
+    <path
+        android:pathData="M0,74 C22,62 38,86 58,76 C76,67 90,72 100,64 L100,100 L0,100 Z"
+        android:fillColor="#14FFFFFF" />
+</vector>

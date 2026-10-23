@@ -145,3 +145,5 @@ No resource was renamed or deleted. Edits are in the working tree only (not push
 - No Kotlin/Java files were modified. `.github/workflows` untouched. Nothing pushed.
 - Not compile-verified (no Android SDK in this environment) — first CI build on
   the fork is the compile check.
+
+Build run triggered after enabling Actions on the fork.

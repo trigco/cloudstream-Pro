@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.9: repository / plugin list item card.
+     Same surface language as the settings cards (bg_settings_group: 20dp
+     radius, ?attr/primaryGrayBackground) wrapped in a ripple so the whole
+     row keeps its tap feedback; the mask item clips the ripple to the
+     rounded corners. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="?attr/primaryGrayBackground" />
+        </shape>
+    </item>
+</ripple>

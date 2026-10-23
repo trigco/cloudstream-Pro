@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Phase 8.7: zero-height stand-in for a PreferenceCategory header row, used
+    only inside the settings accordion (see BasePreferenceFragmentCompat),
+    where the accordion header already names the group. The category itself
+    stays in the preference tree — only its title row renders as nothing.
+-->
+<View xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="0dp" />

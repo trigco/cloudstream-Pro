@@ -5,10 +5,14 @@
     android:id="@+id/repository_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/selectableItemBackground"
+    android:layout_marginStart="16dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="6dp"
+    android:background="@drawable/bg_repository_card"
     android:nextFocusRight="@id/action_button"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:padding="14dp">
 
     <ImageView
         android:id="@+id/entry_icon"
@@ -95,6 +99,10 @@
 
         </LinearLayout>
 
+        <!-- Phase 8.11: the host/URL line under the repository name is
+             gone for good (user request) - RepoAdapter keeps it GONE at
+             bind time; PluginAdapter reuses this layout and drives this
+             view with the plugin description instead. -->
         <TextView
             android:id="@+id/sub_text"
             android:layout_width="wrap_content"
@@ -102,6 +110,7 @@
             android:singleLine="true"
             android:textColor="?attr/grayTextColor"
             android:textSize="12sp"
+            android:visibility="gone"
             tools:text="https://github.com/..." />
 
         <com.google.android.material.button.MaterialButton

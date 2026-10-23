@@ -100,6 +100,8 @@
                 android:paddingEnd="@dimen/preference_seekbar_padding_horizontal"
                 android:paddingTop="@dimen/preference_seekbar_padding_vertical"
                 android:paddingBottom="@dimen/preference_seekbar_padding_vertical"
+                android:progressDrawable="@drawable/settings_seekbar_progress"
+                android:thumb="@drawable/settings_seekbar_thumb"
                 android:background="@null"/>
 
             <!-- If the value is shown, we reserve a minimum width of 36dp to allow for consistent
@@ -108,12 +110,16 @@
             <TextView
                 android:id="@+id/seekbar_value"
                 android:minWidth="@dimen/preference_seekbar_value_minWidth"
-                android:paddingStart="8dp"
-                android:paddingEnd="0dp"
+                android:background="@drawable/settings_value_chip"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="end"
+                android:gravity="center"
                 android:singleLine="true"
+                android:textStyle="bold"
                 android:textAppearance="?android:attr/textAppearanceListItem"
                 android:ellipsize="marquee"
                 android:fadingEdge="horizontal"

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 5A: rounded container behind a group of settings main-menu items.
+     Solid follows the theme's surface attr so it flips per variant (same pattern as bg_nav_floating). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="?attr/primaryGrayBackground" />
+</shape>

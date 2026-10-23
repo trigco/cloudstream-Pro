@@ -244,6 +244,76 @@
             </intent-filter>
         </activity>
 
+        <!-- Launcher icon pack (Phase 8.11-F): one disabled-by-default
+             alias per alternative icon, all targeting the real launcher
+             activity above. AppIconHelper enables exactly one component
+             (the activity itself for Default, or one alias) at a time.
+             Do not enable an alias here — existing installs must keep
+             the default icon until the user picks another. -->
+        <activity-alias
+            android:name=".icon.IconMidnight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_midnight"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_midnight"
+            android:targetActivity=".ui.account.AccountSelectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".icon.IconInverse"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_inverse"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_inverse"
+            android:targetActivity=".ui.account.AccountSelectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".icon.IconCrimson"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_crimson"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_crimson"
+            android:targetActivity=".ui.account.AccountSelectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".icon.IconCarbon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_carbon"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_carbon"
+            android:targetActivity=".ui.account.AccountSelectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <receiver
             android:name=".receivers.VideoDownloadRestartReceiver"
             android:enabled="false"

@@ -6,9 +6,11 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -17,6 +19,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.net.toUri
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
@@ -51,6 +55,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
 import com.lagradost.cloudstream3.ui.search.SEARCH_ACTION_LOAD
@@ -82,6 +87,7 @@ import com.lagradost.cloudstream3.utils.SubtitleHelper.getFlagFromIso
 import com.lagradost.cloudstream3.utils.TvChannelUtils
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.getResourceColor
 import com.lagradost.cloudstream3.utils.UIHelper.getSpanCount
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
@@ -442,6 +448,43 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
                         val name = getItem(position)
                         titleText?.text = name
+
+                        // Phase 8.11-E1: the row's CheckLabel check is a static
+                        // compound drawable whose stateful tint never
+                        // discriminated on device (every row rendered
+                        // checked). Drive it from the ListView's checked
+                        // state explicitly instead — updateList() seeds it
+                        // via setItemChecked before filling the adapter, and
+                        // both branches run on every bind so recycled rows
+                        // never keep a stale check. Same explicit-tint
+                        // pattern as SingleSelectionHelper's IconArrayAdapter.
+                        val isChecked =
+                            (parent as? ListView)?.isItemChecked(position) == true
+                        if (isChecked) {
+                            val checkDrawable = ContextCompat.getDrawable(
+                                view.context, R.drawable.ic_baseline_check_24_listview
+                            )?.mutate()
+                            if (checkDrawable != null) {
+                                DrawableCompat.setTint(
+                                    checkDrawable,
+                                    view.context.getResourceColor(R.attr.textColor)
+                                )
+                                titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                                    checkDrawable, null, null, null
+                                )
+                            }
+                            titleText?.setTextColor(
+                                view.context.getResourceColor(R.attr.textColor)
+                            )
+                        } else {
+                            titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                                0, 0, 0, 0
+                            )
+                            titleText?.setTextColor(
+                                view.context.getResourceColor(R.attr.grayTextColor)
+                            )
+                        }
+
                         val providerApi = currentValidApis[position]
                         val isPinned =
                             pinnedphashset.contains(providerApi.name)
@@ -615,6 +658,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun onDestroyView() {
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
+        // Never leave a pull-to-refresh spinner behind on a destroyed view
+        binding?.homeSwipeRefresh?.isRefreshing = false
         super.onDestroyView()
     }
 
@@ -669,6 +714,101 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
         // Fix grid
         configEvent.invoke()
+
+        // Phase 8.5C: re-anchor the provider switcher (rotation lands here)
+        anchorHomeApiFab()
+    }
+
+    /** Phase 8.5C: anchor the provider switcher (home_api_fab) from the
+     * activity's REAL bottom-nav view instead of a hand-computed dp constant.
+     * The switcher's XML margins were already right on paper twice (7.5, 8C)
+     * and the on-device failure turned out not to be the margin at all: in
+     * the top-of-home state the FAB was not drawn at all (pixel-verified in
+     * PHASE85C_CHANGES.md). This makes the placement self-correcting:
+     * bottom margin = the nav view's measured height + the nav's own bottom
+     * margin + the original 16dp gap, recomputed on binding creation, on
+     * every successful page load, and on every fixLayout (rotation) — so it
+     * also tracks the API 30+ inset growth MainActivity applies to the pill.
+     * The XML 104dp margin remains as the pre-layout fallback. */
+    private fun anchorHomeApiFab() {
+        if (!isLayout(PHONE)) return
+        val fab = binding?.homeApiFab ?: return
+        val nav = activity?.findViewById<View>(R.id.nav_view) ?: return
+        val apply = {
+            if (nav.isVisible && nav.height > 0) {
+                val navBottomMargin =
+                    (nav.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                val desired = nav.height + navBottomMargin + 16.toPx
+                val lp = fab.layoutParams as? FrameLayout.LayoutParams
+                if (lp != null && lp.bottomMargin != desired) {
+                    lp.gravity = Gravity.BOTTOM or Gravity.END
+                    lp.bottomMargin = desired
+                    lp.marginEnd = 16.toPx
+                    fab.layoutParams = lp
+                }
+            }
+        }
+        if (nav.height > 0) apply() else nav.post { apply() }
+    }
+
+    /**
+     * Phase 8.10: hero scroll-collapse (phone only; wired in
+     * [onBindingCreated]). As the home list scrolls, the hero frame
+     * (`home_preview_viewpager_text` — photo, bottom fade, search row and
+     * the None/Play/Info row as one visual unit) continuously shrinks,
+     * fades and lags slightly behind the scroll, dissolving into the
+     * page; scrolling back to the top restores it exactly, because every
+     * value is a pure function of the current scroll offset. Visual
+     * transforms only — no layout heights change, so there is no
+     * re-layout jank, and the 8.8 bottom fade / clear photo / auto-slide
+     * are untouched.
+     *
+     * This never fights [HomeScrollTransformer]: the transformer runs on
+     * the pager's *horizontal* page changes and only writes page padding,
+     * while this writes scale/alpha/translationY on the outer frame from
+     * the *vertical* list scroll — disjoint properties on disjoint views.
+     */
+    private fun setupHeroScrollCollapse(recyclerView: RecyclerView) {
+        fun applyHeroCollapse() {
+            val header = recyclerView.findViewHolderForAdapterPosition(0)?.itemView ?: return
+            val frame = header.findViewById<View>(R.id.home_preview_viewpager_text) ?: return
+            // No preview loaded: the frame is hidden and the alternate
+            // account row shows instead — nothing to collapse.
+            if (!frame.isVisible) return
+            val height = frame.height
+            if (height <= 0) return
+            // Layout positions only (itemView top within the list plus the
+            // frame's top within the header); transforms never feed back
+            // into them, so the mapping stays exact in both directions.
+            val scrolled = -(header.top + frame.top)
+            val ratio = (scrolled.toFloat() / height).coerceIn(0f, 1f)
+            val scale = 1f - 0.08f * ratio
+            frame.scaleX = scale
+            frame.scaleY = scale
+            frame.alpha = 1f - 0.75f * ratio
+            // Slight parallax lag: the frame drifts down against the
+            // scroll by 20% of the scrolled distance while it dissolves.
+            frame.translationY = scrolled * 0.2f
+        }
+
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                applyHeroCollapse()
+            }
+        })
+        // Re-apply when the header scrolls back into view: while it is
+        // detached there is no holder to transform, and the frame may
+        // still carry the values from when it left the screen.
+        recyclerView.addOnChildAttachStateChangeListener(
+            object : RecyclerView.OnChildAttachStateChangeListener {
+                override fun onChildViewAttachedToWindow(view: View) {
+                    if (recyclerView.getChildAdapterPosition(view) == 0) {
+                        view.post { applyHeroCollapse() }
+                    }
+                }
+
+                override fun onChildViewDetachedFromWindow(view: View) = Unit
+            })
     }
 
     @SuppressLint("SetTextI18n")
@@ -698,7 +838,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             homeMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             homeMasterRecycler.adapter = homeMasterAdapter
 
+            // Phase 8.10 (phone only): provider sections glide in as they
+            // scroll into view instead of popping, and the hero shrinks /
+            // dissolves as it scrolls off. TV and emulator layouts keep
+            // the stock behaviour.
+            if (isLayout(PHONE)) {
+                SectionEntranceAnimator(firstAnimatedPosition = 1)
+                    .attachTo(homeMasterRecycler)
+                setupHeroScrollCollapse(homeMasterRecycler)
+            }
+
             homeApiFab.isVisible = isLayout(PHONE)
+            anchorHomeApiFab()
 
             homePreviewReloadProvider.setOnClickListener {
                 homeViewModel.loadAndCancel(
@@ -707,6 +858,35 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     fromUI = true
                 )
                 showToast(R.string.action_reload, Toast.LENGTH_SHORT)
+            }
+
+            // Phase 6A-2: pull-to-refresh on the home feed (phone only; the TV
+            // layout mirrors the wrapper for the shared binding but is never
+            // wired). A pull runs the exact same reload as the reload-provider
+            // button above, and the spinner is stopped by the page observer
+            // below, in the same places that hide the loading shimmer.
+            if (isLayout(PHONE)) {
+                homeSwipeRefresh.apply {
+                    setColorSchemeColors(
+                        ContextCompat.getColor(context, R.color.white),
+                        ContextCompat.getColor(context, R.color.grayTextColor)
+                    )
+                    setProgressBackgroundColorSchemeColor(
+                        ContextCompat.getColor(context, R.color.primaryGrayBackground)
+                    )
+                    // Soft, unhurried feel: the spinner starts slightly above
+                    // the top edge, settles lower, and needs a deep pull
+                    // before it lets go.
+                    setProgressViewOffset(false, (-40).toPx, 72.toPx)
+                    setDistanceToTriggerSync(120.toPx)
+                    setOnRefreshListener {
+                        homeViewModel.loadAndCancel(
+                            homeViewModel.apiName.value ?: noneApi.name,
+                            forceReload = true,
+                            fromUI = true
+                        )
+                    }
+                }
             }
 
             homePreviewSearchButton.setOnClickListener { _ ->
@@ -750,12 +930,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (isLayout(PHONE)) {
                         // Fab is only relevant to Phone
+                        // Phase 8.5C: the provider switcher (homeApiFab) no
+                        // longer shrink()es. The RecyclerView also reports
+                        // dy > 0 while it first populates, so a shrink could
+                        // land before the FAB's extended size was ever
+                        // measured — leaving the switcher undrawn at the top
+                        // of the feed until a scroll-up happened to extend()
+                        // it (see PHASE85C_CHANGES.md). As the primary
+                        // provider control it now stays extended; the Random
+                        // FAB keeps the original shrink/extend behaviour.
                         if (dy > 0) { //check for scroll down
-                            homeApiFab.shrink() // hide
                             homeRandom.shrink()
                         } else if (dy < -5) {
                             if (isLayout(PHONE)) {
-                                homeApiFab.extend() // show
                                 homeRandom.extend()
                             }
                         }
@@ -850,6 +1037,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoadingError.isVisible = false
                         homeMasterRecycler.isVisible = true
                         homeLoadingShimmer.stopShimmer()
+                        homeSwipeRefresh.isRefreshing = false
+
+                        // Phase 8.5C: whenever content is on screen the
+                        // provider switcher must be too — re-assert its
+                        // visibility and re-anchor it above the real nav
+                        // view on every successful load, so no earlier
+                        // state can leave it missing (see PHASE85C_CHANGES.md).
+                        homeApiFab.isVisible = isLayout(PHONE)
+                        anchorHomeApiFab()
 
                         //home_loaded?.isVisible = true
                         if (toggleRandomButton) {
@@ -887,6 +1083,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoading.isVisible = false
                         homeLoadingError.isVisible = true
                         homeMasterRecycler.isInvisible = true
+                        homeSwipeRefresh.isRefreshing = false
 
                         // Based on https://github.com/recloudstream/cloudstream/pull/1438
                         val hasNoNetworkConnection = context?.isNetworkAvailable() == false

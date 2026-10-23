@@ -153,16 +153,26 @@
             android:textColor="?attr/textColor" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/home_master_recycler"
+    <!-- Phase 6A-2: structural mirror of the phone layout's pull-to-refresh
+         wrapper. HomeFragment binds both layouts with FragmentHomeBinding, so
+         every phone id must exist here. Inert on TV: the fragment only wires
+         the refresh behavior on PHONE layouts. -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/home_swipe_refresh"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:descendantFocusability="afterDescendants"
-        android:nextFocusLeft="@id/navigation_home"
-        android:nextFocusUp="@id/home_bookmarked_child_recyclerview"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/homepage_parent_tv"
-        tools:visibility="gone" />
+        android:layout_height="wrap_content">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/home_master_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:descendantFocusability="afterDescendants"
+            android:nextFocusLeft="@id/navigation_home"
+            android:nextFocusUp="@id/home_bookmarked_child_recyclerview"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/homepage_parent_tv"
+            tools:visibility="gone" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <TextClock
             android:id="@+id/home_clock"
