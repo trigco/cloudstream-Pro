@@ -816,16 +816,17 @@
     </style>
 
     <!-- Phase 8.11-E1: row style for sort_bottom_single_choice, whose root is
-         now a CheckedTextView. The widget itself draws the check mark (start
-         side) only while the ListView marks the row checked, so no static
-         compound drawable is set here. android:checkMarkGravity is a
-         framework CheckedTextView attr (API 24+); on API 23 it is ignored
-         and the mark falls back to the widget's default end side.
-         NoCheckLabel's android:drawablePadding supplies the gap between the
-         mark and the text, exactly as it did for the compound drawable. -->
+         now a CheckedTextView. The widget itself draws the check mark only
+         while the ListView marks the row checked, so no static compound
+         drawable is set here. NOTE: android:checkMarkGravity turned out to
+         be a PRIVATE framework attr — AAPT refused to link it (run #102) —
+         so it is not set and the mark renders at the widget's default
+         end side. -->
     <style name="CheckedLabel" parent="@style/NoCheckLabel">
         <item name="android:checkMark">@drawable/ic_baseline_check_24_listview</item>
-        <item name="android:checkMarkGravity">start</item>
+        <!-- No android:checkMarkGravity here: that framework attr is
+             PRIVATE (AAPT link error, Phase 8.11 run #102), so the check
+             renders at CheckedTextView's default end side. -->
     </style>
 
 
