@@ -25,7 +25,7 @@
         android:nextFocusRight="@id/cancel_btt"
         android:nextFocusLeft="@id/apply_btt"
         android:layout_marginBottom="60dp"
-        android:layout_marginHorizontal="10dp"
+        android:layout_marginHorizontal="16dp"
         android:paddingTop="10dp"
         android:requiresFadingEdge="vertical"
         android:layout_width="match_parent"

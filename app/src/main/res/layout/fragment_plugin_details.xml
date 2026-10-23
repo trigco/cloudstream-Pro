@@ -76,13 +76,15 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_description" />
 
@@ -92,7 +94,6 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
 
                 android:ellipsize="none"
 
@@ -107,13 +108,15 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_authors" />
 
@@ -137,13 +140,15 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_version" />
 
@@ -167,13 +172,15 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_status" />
 
@@ -197,13 +204,15 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_size" />
 
@@ -227,14 +236,16 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
 
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_types" />
 
@@ -258,14 +269,16 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:padding="8dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <!--marquee_forever-->
 
             <com.google.android.material.button.MaterialButton
                 style="@style/SmallBlackButton"
                 android:layout_gravity="center"
-                android:layout_marginStart="10dp"
                 android:focusable="false"
                 android:text="@string/extension_language" />
 

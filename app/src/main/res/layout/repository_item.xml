@@ -99,6 +99,10 @@
 
         </LinearLayout>
 
+        <!-- Phase 8.11: the host/URL line under the repository name is
+             gone for good (user request) - RepoAdapter keeps it GONE at
+             bind time; PluginAdapter reuses this layout and drives this
+             view with the plugin description instead. -->
         <TextView
             android:id="@+id/sub_text"
             android:layout_width="wrap_content"
@@ -106,6 +110,7 @@
             android:singleLine="true"
             android:textColor="?attr/grayTextColor"
             android:textSize="12sp"
+            android:visibility="gone"
             tools:text="https://github.com/..." />
 
         <com.google.android.material.button.MaterialButton

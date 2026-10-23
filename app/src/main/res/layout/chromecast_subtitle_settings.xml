@@ -6,18 +6,20 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- Phase 8.10: same nav-pill clearance as subtitle_settings.xml —
-         the form's last row must rest above the floating pill (88dp zone). -->
+    <!-- Phase 8.11: same clearance mechanism as subtitle_settings.xml —
+         the 100dp nav-pill rest clearance is paddingBottom on the INNER
+         LinearLayout (part of the scrollable content). Phase 8.10 put it
+         on this ScrollView, whose own bottom padding is not added to its
+         scroll range, so the form's end still rested behind the pill. -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingBottom="100dp">
+        android:layout_height="match_parent">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingBottom="100dp">
 
             <TextView
                 android:paddingStart="20dp"
@@ -52,6 +54,20 @@
                     android:foregroundGravity="center"
                     android:layout_height="match_parent" />
             </FrameLayout>
+
+            <!-- Phase 8.11: all rows in ONE bg_settings_group card
+                 (16dp side margins, same surface as the main settings
+                 page) instead of flat full-bleed rows on black. Every
+                 row keeps its id, style and focus chain (including the
+                 gone subs_window_color row, kept for binding parity). -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical">
 
             <TextView
                 android:nextFocusDown="@id/subs_font_size"
@@ -123,6 +139,8 @@
                 android:text="@string/subs_edge_type"
                 style="@style/SettingsItem" />
 
+            </LinearLayout>
+
             <TextView
                 android:gravity="center"
                 android:text="@string/subs_hold_to_reset_to_default"
@@ -153,10 +171,15 @@
                     <requestFocus />
                 </com.google.android.material.button.MaterialButton>
 
+                <!-- Phase 8.11: Cancel gets the outlined-pill background
+                     (@drawable/bg_button_outlined, created by a sibling
+                     workstream in this phase) so it reads as a button on
+                     the black page, while Apply keeps its filled
+                     WhiteButton pill. -->
                 <com.google.android.material.button.MaterialButton
                     android:nextFocusUp="@id/subs_edge_type"
                     android:nextFocusLeft="@id/apply_btt"
-                    style="@style/BlackButton"
+                    style="@style/OutlinedButton"
                     android:layout_gravity="center_vertical|end"
                     android:text="@string/sort_cancel"
                     android:id="@+id/cancel_btt"

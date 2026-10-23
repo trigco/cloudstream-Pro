@@ -97,6 +97,7 @@
 
         </LinearLayout>
 
+        <!-- Phase 8.11: host/URL line removed visually, same as phone. -->
         <TextView
             android:id="@+id/sub_text"
             android:layout_width="wrap_content"
@@ -104,6 +105,7 @@
             android:singleLine="true"
             android:textColor="?attr/grayTextColor"
             android:textSize="12sp"
+            android:visibility="gone"
             tools:text="https://github.com/..." />
 
         <com.google.android.material.button.MaterialButton

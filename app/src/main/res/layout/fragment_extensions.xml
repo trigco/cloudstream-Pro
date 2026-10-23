@@ -91,20 +91,41 @@
         <!--            android:text="@string/view_public_repositories_button" />-->
     </LinearLayout>
 
+    <!-- Phase 8.11: the anchored bar's own background now blends with the
+         page/list background (?attr/primaryBlackBackground) and its content
+         sits in ONE rounded bg_settings_group card (the inner wrapper
+         below), like the downloads queue bar (Phase 8.9). Only the bar's
+         background changed — its id, height (80dp), gravity and focus
+         attributes are untouched, so the Phase 8.10 phone lift in
+         ExtensionsFragment (bottomMargin 88dp on this root, list margins
+         168dp, FAB translationY -168dp) composes exactly as before. -->
     <LinearLayout
         android:id="@+id/plugin_storage_appbar"
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:layout_gravity="bottom"
-        android:background="?attr/primaryGrayBackground"
+        android:background="?attr/primaryBlackBackground"
         android:baselineAligned="false"
         android:focusable="true"
         android:foreground="@drawable/outline_drawable"
         android:nextFocusRight="@id/add_repo_button_imageview"
         android:nextFocusUp="@id/repo_recycler_view"
         android:orientation="horizontal"
-        android:padding="10dp"
         android:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_settings_group"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="4dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -246,6 +267,8 @@
 
                 android:src="@drawable/ic_baseline_add_24"
                 app:tint="?attr/textColor" />
+        </LinearLayout>
+
         </LinearLayout>
 
     </LinearLayout>

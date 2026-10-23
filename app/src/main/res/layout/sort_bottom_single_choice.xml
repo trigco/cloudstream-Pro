@@ -1,20 +1,17 @@
-<!--<CheckedTextView
-        xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
-        android:id="@android:id/text1"
-        android:layout_width="match_parent"
-        android:layout_height="?android:attr/listPreferredItemHeightSmall"
-        android:textAppearance="?android:attr/textAppearanceListItemSmall"
-        android:gravity="center_vertical"
-        android:textColor="?attr/textColor"
-        tools:text="Example Text"
-        android:background="?attr/bitDarkerGrayBackground"
-        android:checkMark="?android:attr/listChoiceIndicatorSingle"
-        android:paddingStart="?android:attr/listPreferredItemPaddingStart"
-        android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"/>
--->
-
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11-E1: this row is a real CheckedTextView again (the widget the
+     original upstream layout used before it was replaced by a plain
+     TextView). Every consumer drives it through a ListView choice mode
+     (SingleSelectionHelper, setup screens, player lists, ...), and the
+     ListView calls setChecked() on Checkable rows; CheckedTextView draws
+     its android:checkMark ONLY while checked, so exactly the selected
+     row(s) show a check in both single- and multi-choice lists.
+     The previous TextView version drew the CheckLabel style's static
+     compound check on every row and relied on the vector's stateful tint
+     (check_selection_color, default transparent) to hide it — on device
+     the tint never discriminated, so every row rendered checked. -->
+<CheckedTextView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@android:id/text1"
-    style="@style/CheckLabel"
+    style="@style/CheckedLabel"
     tools:text="hello" />

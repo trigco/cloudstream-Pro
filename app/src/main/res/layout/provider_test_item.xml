@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.11 (audit): test-provider rows were the last flat full-bleed
+     list rows on a phone settings page — now the same card as the
+     repository/plugin items (bg_repository_card: 20dp rounded
+     ?attr/primaryGrayBackground with built-in ripple, 16dp side margins,
+     6dp vertical rhythm). Inflated with the RecyclerView as parent by
+     TestResultAdapter, so the margins are preserved. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/selectableItemBackground"
+    android:layout_marginStart="16dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="6dp"
+    android:background="@drawable/bg_repository_card"
     android:nextFocusRight="@id/action_button"
     android:orientation="horizontal"
     android:padding="12dp">
