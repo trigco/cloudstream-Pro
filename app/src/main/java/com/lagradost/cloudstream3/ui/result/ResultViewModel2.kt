@@ -52,6 +52,9 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.VPNStatus
 import com.lagradost.cloudstream3.actions.AlwaysAskAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
+import com.lagradost.cloudstream3.actions.temp.CopyClipboardAction
+import com.lagradost.cloudstream3.actions.temp.PlayInBrowserAction
+import com.lagradost.cloudstream3.actions.temp.fcast.FcastAction
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.isEpisodeBased
 import com.lagradost.cloudstream3.isLiveStream
@@ -411,6 +414,7 @@ sealed class SelectPopup {
     data class SelectArray(
         val text: UiText,
         val options: List<Pair<UiText, Int>>,
+        val icons: List<Int?>? = null,
         val callback: (Int?) -> Unit
     ) : SelectPopup()
 }
@@ -435,6 +439,14 @@ fun SelectPopup.getTitle(context: Context): String {
     return when (this) {
         is SelectPopup.SelectArray -> text.asString(context)
         is SelectPopup.SelectText -> text.asString(context)
+    }
+}
+
+/** Per-row drawable resources aligned with [SelectPopup.getOptions], or null for text-only sheets. */
+fun SelectPopup.getIcons(): List<Int?>? {
+    return when (this) {
+        is SelectPopup.SelectArray -> icons
+        is SelectPopup.SelectText -> null
     }
 }
 
@@ -1173,12 +1185,14 @@ class ResultViewModel2 : ViewModel() {
     private fun postPopup(
         text: UiText,
         options: List<Pair<UiText, Int>>,
+        icons: List<Int?>? = null,
         callback: suspend (Int?) -> Unit
     ) {
         _selectPopup.postValue(
             SelectPopup.SelectArray(
                 text,
                 options,
+                icons,
             ) { value ->
                 viewModelScope.launchSafe {
                     _selectPopup.postValue(null)
@@ -1354,6 +1368,31 @@ class ResultViewModel2 : ViewModel() {
     }
 
 
+    /** Hugeicons-style row icon for one episode-options sheet entry, keyed by its action id. */
+    private fun episodeActionIcon(action: Int, isWatched: Boolean): Int {
+        return when (action) {
+            ACTION_PLAY_EPISODE_IN_PLAYER -> R.drawable.ic_sheet_play
+            ACTION_CHROME_CAST_EPISODE, ACTION_CHROME_CAST_MIRROR -> R.drawable.ic_sheet_cast
+            ACTION_DOWNLOAD_EPISODE -> R.drawable.ic_sheet_download
+            ACTION_DOWNLOAD_MIRROR -> R.drawable.ic_sheet_download_mirror
+            ACTION_DOWNLOAD_EPISODE_SUBTITLE_MIRROR -> R.drawable.ic_sheet_subtitles
+            ACTION_RELOAD_EPISODE -> R.drawable.ic_sheet_reload
+            ACTION_MARK_AS_WATCHED ->
+                if (isWatched) R.drawable.ic_sheet_eye_off else R.drawable.ic_sheet_eye
+
+            ACTION_MARK_WATCHED_UP_TO_THIS_EPISODE ->
+                if (isWatched) R.drawable.ic_sheet_eye_off else R.drawable.ic_sheet_check_double
+
+            // VideoClickActionHolder entries (ids >= 1000): external players and link actions
+            else -> when (VideoClickActionHolder.getActionById(action)) {
+                is PlayInBrowserAction -> R.drawable.ic_sheet_browser
+                is CopyClipboardAction -> R.drawable.ic_sheet_copy
+                is FcastAction -> R.drawable.ic_sheet_cast
+                else -> R.drawable.ic_sheet_play
+            }
+        }
+    }
+
     private suspend fun handleEpisodeClickEvent(click: EpisodeClickEvent) {
         when (click.action) {
             ACTION_SHOW_OPTIONS -> {
@@ -1383,9 +1422,11 @@ class ResultViewModel2 : ViewModel() {
                 )
 
                 // Do not add mark as watched on movies
+                var episodeIsWatched = false
                 if (!listOf(TvType.Movie, TvType.AnimeMovie).contains(click.data.tvType)) {
                     val isWatched =
                         getVideoWatchState(click.data.id) == VideoWatchState.Watched
+                    episodeIsWatched = isWatched
 
                     val watchedText = if (isWatched) R.string.action_remove_from_watched
                     else R.string.action_mark_as_watched
@@ -1406,7 +1447,10 @@ class ResultViewModel2 : ViewModel() {
                             click.data.season
                         ) ?: ""
                     ), // TODO FIX
-                    options
+                    options,
+                    options.map { (_, action) ->
+                        episodeActionIcon(action, episodeIsWatched)
+                    }
                 ) { result ->
                     handleEpisodeClickEvent(
                         click.copy(action = result ?: return@postPopup)

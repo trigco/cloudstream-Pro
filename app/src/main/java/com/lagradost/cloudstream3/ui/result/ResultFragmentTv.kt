@@ -729,7 +729,7 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                     }, {
                         popupDialog = null
                         popup.callback(it)
-                    }
+                    }, icons = popup.getIcons()
                 )
             }
         }
