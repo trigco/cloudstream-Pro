@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
@@ -358,6 +359,7 @@ abstract class BasePreferenceFragmentCompat() : PreferenceFragmentCompat() {
  * visibility changes (hidden prefs, dynamically toggled rows) re-group
  * automatically, and preference clicks/dependencies are never touched.
  */
+@SuppressLint("RestrictedApi") // PreferenceGroupAdapter is LIBRARY_GROUP-restricted in androidx.preference; same suppression the project already uses in CommonActivity/AppContextUtils
 private class SettingsGroupCardDecoration(context: Context) :
     RecyclerView.ItemDecoration() {
 
