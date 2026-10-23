@@ -60,9 +60,13 @@ class HomeScrollAdapter(
         when (binding) {
             is HomeScrollViewBinding -> {
                 binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders)
-                // Phase 7: the hero is an inset rounded card and the title
-                // is back on it (bottom-left, over the scrim), with a meta
-                // line underneath. Tags/logo stay hidden (Phase 6A).
+                // Phase 8.8: the hero photo must read CLEAR — no title,
+                // meta, tags or logo overlaid on it. The views still exist
+                // in home_scroll_view.xml (inside a visibility=gone block)
+                // because the binding references them; here they are kept
+                // gone on every bind so no code path can resurrect them.
+                // The item's title/meta are still available via the
+                // None/Play/Info row in fragment_home_head (header holder).
                 // bindLogo is intentionally not called here: it force-toggles
                 // title/logo visibility and would undo this state.
                 binding.homeScrollPreviewTags.apply {
@@ -71,7 +75,7 @@ class HomeScrollAdapter(
                     maxLines = 2
                 }
                 binding.homeScrollPreviewTitle.text = item.name.html()
-                binding.homeScrollPreviewTitle.isGone = false
+                binding.homeScrollPreviewTitle.isGone = true
 
                 // Meta line: "year • ★ rating • type" — only the parts
                 // that exist for this item. Score formatting mirrors the
@@ -106,7 +110,10 @@ class HomeScrollAdapter(
                 )
                 binding.homeScrollPreviewMeta.apply {
                     text = metaParts.joinToString(" • ")
-                    isGone = metaParts.isEmpty()
+                    // Phase 8.8: always gone — see the title note above.
+                    // The meta text is still computed so the value is
+                    // there if the overlay ever returns.
+                    isGone = true
                 }
 
                 binding.homePreviewLogo.isGone = true

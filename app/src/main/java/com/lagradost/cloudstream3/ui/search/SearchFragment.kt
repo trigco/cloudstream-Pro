@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -79,6 +80,7 @@ import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.attachBackPres
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.detachBackPressedCallback
 import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.UIHelper.getSpanCount
 import com.lagradost.cloudstream3.utils.UIHelper.hideKeyboard
 import java.util.Locale
@@ -112,6 +114,11 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
     private val searchViewModel: SearchViewModel by activityViewModels()
     private var bottomSheetDialog: BottomSheetDialog? = null
+
+    /** Phase 8.8: whether the suggestions panel was shown at the last
+     * suggestions update, so its entrance layout animation is scheduled
+     * only on the hidden -> shown flip, never per keystroke. */
+    private var suggestionsPanelWasShown = false
 
     private val speechRecognizerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -234,6 +241,23 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         binding: FragmentSearchBinding,
         savedInstanceState: Bundle?
     ) {
+        // Phase 8.8: the search top bar (search field + filter chips)
+        // fades and drops in softly when the screen opens. Phone layout
+        // only — the TV search screen keeps its own focus-driven flow.
+        // Presentation only; runs once per view creation.
+        if (isLayout(PHONE)) {
+            binding.searchTopBar.apply {
+                alpha = 0f
+                translationY = (-12).toPx.toFloat()
+                animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(250)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+            }
+        }
+
         reloadRepos()
         binding.apply {
             val adapter =
@@ -679,6 +703,19 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             val hasSuggestions = suggestions.isNotEmpty()
             binding.searchSuggestionsRecycler.isVisible = hasSuggestions
             (binding.searchSuggestionsRecycler.adapter as? SearchSuggestionAdapter?)?.submitList(suggestions)
+
+            // Phase 8.8: when the suggestions panel appears, play its
+            // staggered fade+rise layout animation (the controller the
+            // results lists already use) exactly once for that
+            // appearance. It is scheduled only on the hidden -> shown
+            // flip, so the submitList updates that arrive per keystroke
+            // never replay it and the panel cannot strobe while typing.
+            if (isLayout(PHONE)) {
+                if (hasSuggestions && !suggestionsPanelWasShown) {
+                    binding.searchSuggestionsRecycler.scheduleLayoutAnimation()
+                }
+                suggestionsPanelWasShown = hasSuggestions
+            }
 
             // On non-phone layouts, redirect focus and handle back button
             if (!isLayout(PHONE)) {
