@@ -25,6 +25,8 @@ import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.hideOn
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setPaddingBottom
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setToolBarScrollFlags
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.setUpToolbar
+import com.lagradost.cloudstream3.utils.AppIconHelper
+import com.lagradost.cloudstream3.utils.AppIconHelper.getSelectedAppIcon
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showBottomDialog
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showDialog
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showMultiDialog
@@ -127,6 +129,22 @@ class SettingsUI : BasePreferenceFragmentCompat() {
                 }
             )
             return@setOnPreferenceClickListener true
+        }
+
+        // Phase 8.11-F: launcher icon pack. The summary mirrors the
+        // persisted selection from AppIconHelper (DataStore), and the
+        // picker applies a choice immediately.
+        getPref(R.string.app_icon_key)?.let { appIconPref ->
+            context?.let { ctx ->
+                appIconPref.summary = getString(ctx.getSelectedAppIcon().nameRes)
+            }
+            appIconPref.setOnPreferenceClickListener {
+                val act = activity ?: return@setOnPreferenceClickListener true
+                AppIconHelper.showAppIconPicker(act) { selected ->
+                    appIconPref.summary = getString(selected.nameRes)
+                }
+                return@setOnPreferenceClickListener true
+            }
         }
 
         getPref(R.string.app_theme_key)?.setOnPreferenceClickListener {
