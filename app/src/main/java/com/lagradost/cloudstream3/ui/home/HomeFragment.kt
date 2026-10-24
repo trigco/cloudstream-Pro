@@ -69,6 +69,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.filterProviderByPreferredMedia
+import com.lagradost.cloudstream3.utils.hapticTick
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiProviderLangSettings
 import com.lagradost.cloudstream3.utils.AppContextUtils.isNetworkAvailable
 import com.lagradost.cloudstream3.utils.AppContextUtils.isRecyclerScrollable
@@ -851,7 +852,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             homeApiFab.isVisible = isLayout(PHONE)
             anchorHomeApiFab()
 
-            homePreviewReloadProvider.setOnClickListener {
+            homePreviewReloadProvider.setOnClickListener { view ->
+                view.hapticTick()
                 homeViewModel.loadAndCancel(
                     homeViewModel.apiName.value ?: noneApi.name,
                     forceReload = true,
@@ -880,6 +882,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     setProgressViewOffset(false, (-40).toPx, 72.toPx)
                     setDistanceToTriggerSync(120.toPx)
                     setOnRefreshListener {
+                        homeSwipeRefresh.hapticTick()
                         homeViewModel.loadAndCancel(
                             homeViewModel.apiName.value ?: noneApi.name,
                             forceReload = true,
@@ -1033,9 +1036,24 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
                         saveHomepageToTV(d)
 
-                        homeLoading.isVisible = false
+                        // Phase 8.16: the skeleton crossfades into the
+                        // content instead of cutting, when it was on screen.
+                        if (homeLoading.isVisible) {
+                            homeLoading.animate().alpha(0f).setDuration(250)
+                                .withEndAction {
+                                    homeLoading.isVisible = false
+                                    homeLoading.alpha = 1f
+                                }.start()
+                            homeMasterRecycler.alpha = 0f
+                            homeMasterRecycler.isVisible = true
+                            homeMasterRecycler.animate().alpha(1f)
+                                .setDuration(250).start()
+                        } else {
+                            homeLoading.isVisible = false
+                            homeMasterRecycler.alpha = 1f
+                            homeMasterRecycler.isVisible = true
+                        }
                         homeLoadingError.isVisible = false
-                        homeMasterRecycler.isVisible = true
                         homeLoadingShimmer.stopShimmer()
                         homeSwipeRefresh.isRefreshing = false
 

@@ -360,6 +360,11 @@ class HomeViewModel : ViewModel() {
                     val items = data.value.mapNotNull { it?.items }.flatten()
 
 
+                    // Phase 8.16: remember which poster opens the hero,
+                    // so a refresh never deals the same opener twice in a
+                    // row (the list itself is reshuffled on every load).
+                    val previousPreviewFirstUrl = previewResponses.firstOrNull()?.url
+
                     previewResponses.clear()
                     previewResponsesAdded.clear()
 
@@ -385,6 +390,14 @@ class HomeViewModel : ViewModel() {
                             _randomItems.postValue(randomItems)
                             currentShuffledList = randomItems
                         }
+                    }
+                    // Phase 8.16: if the fresh shuffle still opens on the
+                    // same poster as last time, rotate it to the back — the
+                    // hero visibly re-deals on every refresh.
+                    if (previousPreviewFirstUrl != null && previewResponses.size > 1 &&
+                        previewResponses.firstOrNull()?.url == previousPreviewFirstUrl
+                    ) {
+                        previewResponses.add(previewResponses.removeAt(0))
                     }
                     if (previewResponses.isEmpty()) {
                         _preview.postValue(
