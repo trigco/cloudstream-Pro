@@ -236,7 +236,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (!handedOff && !FeedPlayer.minimized) {
             FeedPlayer.stop()
         }
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
+        // After a handoff the main player owns the orientation; only
+        // restore it when this page is really being left behind.
+        if (!handedOff) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
+        }
         super.onDestroyView()
     }
 
@@ -249,6 +253,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             FeedPlayer.Status.LOADING -> {
                 binding.feedWatchErrorBox.isVisible = false
                 binding.feedWatchControls.isVisible = false
+                // The poster carries the loading state; the (empty) video
+                // surface stays hidden until the first frame is ready.
+                binding.feedWatchPlayer.isVisible = false
                 binding.feedWatchPoster.isVisible = FeedPlayer.currentPoster != null
                 FeedPlayer.currentPoster?.let {
                     binding.feedWatchPoster.loadImage(it)
@@ -261,6 +268,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             FeedPlayer.Status.READY -> {
                 binding.feedWatchLoadingBox.isVisible = false
                 binding.feedWatchPoster.isVisible = false
+                binding.feedWatchPlayer.isVisible = true
                 binding.feedWatchErrorBox.isVisible = false
                 showControls()
             }
@@ -268,6 +276,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             FeedPlayer.Status.ERROR -> {
                 binding.feedWatchLoadingBox.isVisible = false
                 binding.feedWatchPoster.isVisible = false
+                binding.feedWatchPlayer.isVisible = false
                 binding.feedWatchControls.isVisible = false
                 binding.feedWatchErrorBox.isVisible = true
                 binding.feedWatchPlayMain.isVisible = FeedPlayer.generator != null
@@ -280,7 +289,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
             )
         }
-        binding.feedWatchQuality.isVisible = FeedPlayer.links.size > 1
+        binding.feedWatchQuality.isVisible = FeedPlayer.qualities.size > 1
         binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
         updateHeader()
         val current = FeedPlayer.currentUrl
@@ -306,7 +315,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private fun updateHeader() {
         val binding = binding ?: return
         val name = FeedPlayer.currentName ?: return
-        binding.feedWatchTitle.text = cleanPosterTitle(name)
+        binding.feedWatchTitle.text = FeedAdapter.displayTitle(
+            name, FeedPlayer.currentUrl ?: ""
+        )
         val ep = FeedPlayer.currentEpisode
         val apiName = FeedPlayer.currentApiName ?: ""
         val typeText = ep?.let { FeedAdapter.typeLabel(it.tvType) } ?: ""
@@ -388,16 +399,16 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     private fun showQuality() {
         val context = context ?: return
-        val links = FeedPlayer.links
-        if (links.size < 2) return
-        val labels = links.map { link ->
-            val quality = if (link.quality > 0) "${link.quality}p" else ""
-            listOf(quality, link.name).filter { it.isNotBlank() }.joinToString(" • ")
-                .ifBlank { link.url }
+        val qualities = FeedPlayer.qualities
+        if (qualities.size < 2) return
+        // Resolution tags only — links that share a resolution stay
+        // under the one tag, and the fallback walks them automatically.
+        val labels = qualities.map { quality ->
+            if (quality > 0) "${quality}p" else "Auto"
         }.toTypedArray()
         AlertDialog.Builder(context)
             .setTitle(R.string.feed_quality)
-            .setItems(labels) { _, which -> FeedPlayer.selectLink(which) }
+            .setItems(labels) { _, which -> FeedPlayer.selectQuality(qualities[which]) }
             .show()
     }
 
@@ -510,6 +521,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (handedOff) return
         handedOff = true
         FeedPlayer.pause()
+        // Unlock into landscape BEFORE navigating, so the main player
+        // never flashes its portrait layout on the way over.
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity.navigate(
             R.id.global_to_navigation_player,
             GeneratorPlayer.newInstance(gen, FeedPlayer.episodeIndex)

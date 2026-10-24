@@ -26,6 +26,7 @@
             android:id="@+id/feed_watch_player"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            app:resize_mode="zoom"
             app:show_buffering="never"
             app:use_controller="false" />
 

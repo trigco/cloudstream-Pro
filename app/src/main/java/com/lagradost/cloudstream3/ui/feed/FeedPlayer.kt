@@ -9,6 +9,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -36,19 +37,27 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Phase 8.20 — the Feed's shared playback engine. The ExoPlayer lives
- * here, not in a fragment, so playback survives the trip between the
- * watch page and the Feed's mini player: surfaces come and go, the
+ * Phase 8.20/8.21 — the Feed's shared playback engine. The ExoPlayer
+ * lives here, not in a fragment, so playback survives the trip between
+ * the watch page and the Feed's mini player: surfaces come and go, the
  * player (and its position) stays.
  *
  * It mirrors the app's real player where it matters: the same
  * FixedNextRenderersFactory (nextlib extension decoders), the same
- * episode-id scheme for resume positions, and — when a link fails —
- * it walks down the link list before giving up, like the main player
- * does with its sources.
+ * episode-id scheme for resume positions, playback that starts on the
+ * first extracted link instead of waiting for every extractor, and a
+ * fallback walk down the link list when a source fails — preferring
+ * other links of the chosen resolution first.
+ *
+ * Every load carries a generation stamp: starting another video bumps
+ * it, and any stale load that finishes late drops its results instead
+ * of overwriting the video the viewer actually picked.
  */
 @UnstableApi
 object FeedPlayer {
@@ -89,9 +98,16 @@ object FeedPlayer {
     val isPlaying: Boolean get() = exo?.isPlaying == true
     val hasActiveItem: Boolean get() = currentUrl != null && status != Status.IDLE
 
+    /** Distinct resolutions on offer, best first (the quality picker). */
+    val qualities: List<Int>
+        get() = links.map { it.quality }.distinct().sortedDescending()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var loadJob: Job? = null
+    private var generation = 0
     private var resumeSeekDone = false
+    private var preferredQuality = 0
+    private val triedLinks = mutableSetOf<Int>()
     private var appContext: Context? = null
     private val listeners = mutableSetOf<() -> Unit>()
 
@@ -128,8 +144,15 @@ object FeedPlayer {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         }
+        // A preview player should start fast: ~1 s of media buffered is
+        // enough to show the first frame (the app default waits ~2.5 s).
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_000)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         val player = ExoPlayer.Builder(appContext)
             .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
             .build()
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -161,10 +184,18 @@ object FeedPlayer {
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // Walk down the link list before declaring failure — the
-                // main player survives bad sources the same way.
-                if (linkIndex < links.lastIndex) {
-                    linkIndex++
+                // Walk the link list before declaring failure — other
+                // links of the chosen resolution first, then anything.
+                val nextSame = links.indices.firstOrNull {
+                    it != linkIndex && it !in triedLinks &&
+                        links[it].quality == preferredQuality
+                }
+                val nextAny = links.indices.firstOrNull {
+                    it != linkIndex && it !in triedLinks
+                }
+                val next = nextSame ?: nextAny
+                if (next != null) {
+                    linkIndex = next
                     playCurrentLink(keepPosition = true)
                 } else {
                     status = Status.ERROR
@@ -196,6 +227,7 @@ object FeedPlayer {
         val player = ensurePlayer(context)
         savePosition()
         loadJob?.cancel()
+        val gen = ++generation
         minimized = false
         currentUrl = url
         currentApiName = apiName
@@ -206,6 +238,7 @@ object FeedPlayer {
         links = emptyList()
         subs = emptyList()
         linkIndex = 0
+        triedLinks.clear()
         notifyListeners()
         player.stop()
         player.clearMediaItems()
@@ -213,18 +246,23 @@ object FeedPlayer {
         loadJob = scope.launch {
             val api = getApiFromNameNull(apiName)
             if (api == null) {
-                status = Status.ERROR
-                notifyListeners()
+                if (gen == generation) {
+                    status = Status.ERROR
+                    notifyListeners()
+                }
                 return@launch
             }
             val response = when (val res = APIRepository(api).load(url)) {
                 is Resource.Success -> res.value
                 else -> {
-                    status = Status.ERROR
-                    notifyListeners()
+                    if (gen == generation) {
+                        status = Status.ERROR
+                        notifyListeners()
+                    }
                     return@launch
                 }
             }
+            if (gen != generation) return@launch
             episodes = buildResultEpisodes(response)
             if (episodes.isEmpty()) {
                 status = Status.ERROR
@@ -232,7 +270,7 @@ object FeedPlayer {
                 return@launch
             }
             generator = RepoLinkGenerator(episodes, page = response)
-            extractAndPlay(0)
+            extractAndPlay(0, gen)
         }
     }
 
@@ -246,48 +284,95 @@ object FeedPlayer {
     fun playEpisode(index: Int) {
         if (index !in episodes.indices) return
         savePosition()
+        val gen = ++generation
         status = Status.LOADING
         notifyListeners()
         loadJob?.cancel()
-        loadJob = scope.launch { extractAndPlay(index) }
+        loadJob = scope.launch { extractAndPlay(index, gen) }
     }
 
     fun nextEpisode() {
         if (hasNextEpisode) playEpisode(episodeIndex + 1)
     }
 
-    private suspend fun extractAndPlay(index: Int) {
-        episodeIndex = index
-        resumeSeekDone = false
-        val gen = generator ?: run {
-            status = Status.ERROR
-            notifyListeners()
-            return
-        }
-        val newLinks = mutableListOf<ExtractorLink>()
-        val newSubs = mutableListOf<SubtitleData>()
-        val ok = gen.generateLinks(
-            clearCache = false,
-            sourceTypes = LOADTYPE_INAPP,
-            callback = { pair -> pair.first?.let { newLinks.add(it) } },
-            subtitleCallback = { newSubs.add(it) },
-            offset = index,
-            isCasting = false
-        )
-        val playable = newLinks.filter {
+    private fun playableOf(all: List<ExtractorLink>): List<ExtractorLink> =
+        all.filter {
             it.type == ExtractorLinkType.VIDEO ||
                 it.type == ExtractorLinkType.M3U8 ||
                 it.type == ExtractorLinkType.DASH
         }.sortedByDescending { it.quality }
-        if (!ok || playable.isEmpty()) {
+
+    private suspend fun extractAndPlay(index: Int, gen: Int) = coroutineScope {
+        episodeIndex = index
+        resumeSeekDone = false
+        triedLinks.clear()
+        val gen2 = generator ?: run {
             status = Status.ERROR
             notifyListeners()
-            return
+            return@coroutineScope
         }
-        links = playable
-        subs = newSubs
-        linkIndex = 0
-        playCurrentLink(keepPosition = false)
+        val newLinks = mutableListOf<ExtractorLink>()
+        val newSubs = mutableListOf<SubtitleData>()
+        val deferred = async {
+            gen2.generateLinks(
+                clearCache = false,
+                sourceTypes = LOADTYPE_INAPP,
+                callback = { pair ->
+                    pair.first?.let { synchronized(newLinks) { newLinks.add(it) } }
+                },
+                subtitleCallback = { synchronized(newSubs) { newSubs.add(it) } },
+                offset = index,
+                isCasting = false
+            )
+        }
+
+        // Start on the first playable link instead of waiting for every
+        // extractor to finish — the main player behaves the same way.
+        while (deferred.isActive) {
+            val snapshot = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
+            if (snapshot.isNotEmpty()) break
+            delay(50)
+        }
+        var startedLink: ExtractorLink? = null
+        val first = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
+        if (first.isNotEmpty() && gen == generation) {
+            links = first
+            subs = synchronized(newSubs) { ArrayList(newSubs) }
+            linkIndex = 0
+            preferredQuality = first.first().quality
+            startedLink = first.first()
+            playCurrentLink(keepPosition = false)
+            notifyListeners()
+        }
+
+        val ok = try {
+            deferred.await()
+        } catch (e: Exception) {
+            false
+        }
+        if (gen != generation) return@coroutineScope
+        val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
+        if (full.isEmpty() || !ok && startedLink == null) {
+            if (startedLink == null) {
+                status = Status.ERROR
+                notifyListeners()
+            }
+            return@coroutineScope
+        }
+        // Extraction finished: swap in the complete list (picker +
+        // fallback), keeping the link that is playing selected.
+        links = full
+        subs = synchronized(newSubs) { ArrayList(newSubs) }
+        val started = startedLink
+        if (started != null) {
+            val idx = full.indexOfFirst {
+                it.url == started.url && it.name == started.name
+            }
+            if (idx >= 0) {
+                linkIndex = idx
+                triedLinks.add(idx)
+            }
+        }
         notifyListeners()
     }
 
@@ -295,6 +380,7 @@ object FeedPlayer {
         val link = links.getOrNull(linkIndex) ?: return
         val player = exo ?: return
         val context = appContext ?: return
+        triedLinks.add(linkIndex)
         val keepPos = if (keepPosition) player.currentPosition else 0L
         val dataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(link.getAllHeaders())
@@ -335,10 +421,19 @@ object FeedPlayer {
         if (keepPosition) resumeSeekDone = true
     }
 
-    /** Switches to another extracted link (the quality picker). */
-    fun selectLink(index: Int) {
-        if (index !in links.indices || index == linkIndex) return
-        linkIndex = index
+    /**
+     * Switches resolution (the quality picker). Several links can share
+     * one resolution; picking it starts at its first link and the error
+     * fallback stays inside the same resolution before moving on.
+     */
+    fun selectQuality(quality: Int) {
+        if (links.none { it.quality == quality }) return
+        preferredQuality = quality
+        val idx = links.indexOfFirst { it.quality == quality && it !in triedLinks }
+            .takeIf { it >= 0 }
+            ?: links.indexOfFirst { it.quality == quality }
+        if (idx == linkIndex) return
+        linkIndex = idx
         playCurrentLink(keepPosition = true)
         notifyListeners()
     }
@@ -355,6 +450,7 @@ object FeedPlayer {
 
     fun stop() {
         savePosition()
+        generation++
         loadJob?.cancel()
         handler.removeCallbacks(saveRunnable)
         exo?.stop()

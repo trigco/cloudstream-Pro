@@ -18,11 +18,20 @@
             android:id="@+id/skeleton_poster"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:background="@color/grayShimmer"
+            android:background="@drawable/feed_skeleton_poster"
             app:layout_constraintDimensionRatio="2:3"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+
+        <View
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/feed_skeleton_circle"
+            app:layout_constraintBottom_toBottomOf="@id/skeleton_poster"
+            app:layout_constraintEnd_toEndOf="@id/skeleton_poster" />
 
         <View
             android:id="@+id/skeleton_title"
@@ -31,7 +40,7 @@
             android:layout_marginStart="10dp"
             android:layout_marginTop="10dp"
             android:layout_marginEnd="30dp"
-            android:background="@color/grayShimmer"
+            android:background="@drawable/feed_skeleton_bar"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/skeleton_poster" />
@@ -43,7 +52,7 @@
             android:layout_marginTop="6dp"
             android:layout_marginEnd="70dp"
             android:layout_marginBottom="12dp"
-            android:background="@color/grayShimmer"
+            android:background="@drawable/feed_skeleton_bar"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"

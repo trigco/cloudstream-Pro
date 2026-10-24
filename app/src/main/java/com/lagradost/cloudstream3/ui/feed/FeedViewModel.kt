@@ -58,6 +58,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                     page = 1
                     entries = buildFeed(page)
                 }
+                entries = withLikedBoost(entries)
                 FeedPool.entries = entries
                 feed.postValue(
                     if (entries.isEmpty()) {
@@ -72,6 +73,40 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 building = false
             }
         }
+    }
+
+    /**
+     * Phase 8.21: liking should FETCH more of the liked kind, not just
+     * reorder what the homepages happened to offer. Search providers
+     * for the most-liked type and weave the fresh hits through the
+     * front of the feed.
+     */
+    private suspend fun withLikedBoost(entries: List<FeedEntry>): List<FeedEntry> {
+        if (entries.isEmpty()) return entries
+        val liked = FeedLikes.getAll(getApplication())
+        if (liked.isEmpty()) return entries
+        val topType = liked.groupingBy { it.typeName }.eachCount()
+            .maxByOrNull { it.value }?.key
+        val label = when (topType) {
+            "Anime" -> "Anime"
+            "AsianDrama" -> "Drama"
+            "TvSeries" -> "Series"
+            "Movie" -> "Movie"
+            "Cartoon" -> "Cartoon"
+            "Documentary" -> "Documentary"
+            else -> null
+        } ?: return entries
+        val have = entries.map { it.response.url }.toSet()
+        val boosted = searchAll(label).filter { it.response.url !in have }
+        if (boosted.isEmpty()) return entries
+        val out = mutableListOf<FeedEntry>()
+        var b = 0
+        var r = 0
+        while (b < boosted.size || r < entries.size) {
+            if (b < boosted.size) out.add(boosted[b++])
+            if (r < entries.size) out.add(entries[r++])
+        }
+        return out
     }
 
     /** Phase 8.19: search every provider at once (used by the feed search). */

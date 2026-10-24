@@ -43,7 +43,7 @@ class FeedAdapter(
             binding.feedCardPoster.loadImage(response.posterUrl, response.posterHeaders) {
                 error { getImageFromDrawable(context, R.drawable.poster_placeholder) }
             }
-            binding.feedCardTitle.text = cleanPosterTitle(response.name)
+            binding.feedCardTitle.text = displayTitle(response.name, response.url)
             binding.feedCardMeta.text = "${entry.apiName} • ${typeLabel(response.type)}"
             bindLike(entry)
 
@@ -85,6 +85,21 @@ class FeedAdapter(
     }
 
     companion object {
+        /**
+         * The title a card/header shows. Some providers hand back a
+         * blank (or all-decoration) name — fall back to a readable
+         * slug from the URL so the title slot is never empty.
+         */
+        fun displayTitle(name: String, url: String): String {
+            val cleaned = cleanPosterTitle(name)
+            if (cleaned.isNotBlank()) return cleaned
+            val slug = url.substringBefore('?').trimEnd('/')
+                .substringAfterLast('/')
+                .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+                .trim()
+            return slug.replaceFirstChar { it.uppercase() }.ifBlank { "Untitled" }
+        }
+
         fun typeLabel(type: TvType?): String = when (type) {
             TvType.Movie, TvType.AnimeMovie -> "Movie"
             TvType.TvSeries -> "Series"
