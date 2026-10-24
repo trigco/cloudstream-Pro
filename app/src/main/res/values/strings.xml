@@ -352,6 +352,8 @@
     <string name="feed_sources">Sources</string>
     <string name="feed_next_episode">Next episode</string>
     <string name="feed_play_main">Play in main player</string>
+    <string name="feed_hide">Hide</string>
+    <string name="feed_hide_message">Hide this from your feed? It will not show again.</string>
     <string name="feed_search_hint">Search feed…</string>
     <string name="feed_quality">Quality</string>
     <string name="feed_subtitles">Subtitles</string>

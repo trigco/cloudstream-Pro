@@ -24,12 +24,14 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.FragmentFeedWatchBinding
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.player.GeneratorPlayer
+import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
+import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
@@ -68,15 +70,33 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var orientationListener: OrientationEventListener? = null
     private var landscapeSince = 0L
 
-    private val upNextAdapter = FeedAdapter(onPlay = { entry ->
-        context?.let {
-            FeedPlayer.play(
-                it, entry.response.url, entry.apiName,
-                entry.response.name, entry.response.posterUrl
-            )
-        }
-        binding?.feedWatchUpnext?.scrollToPosition(0)
-    })
+    private val upNextAdapter = FeedAdapter(
+        onPlay = { entry ->
+            context?.let {
+                FeedPlayer.play(
+                    it, entry.response.url, entry.apiName,
+                    entry.response.name, entry.response.posterUrl
+                )
+            }
+            binding?.feedWatchUpnext?.scrollToPosition(0)
+        },
+        onHide = { entry -> confirmHide(entry) }
+    )
+
+    /** Phase 8.22: long-press a card → offer to hide it for good. */
+    private fun confirmHide(entry: FeedEntry) {
+        val context = context ?: return
+        AlertDialog.Builder(context)
+            .setTitle(FeedAdapter.displayTitle(entry.response.name, entry.response.url))
+            .setMessage(R.string.feed_hide_message)
+            .setPositiveButton(R.string.feed_hide) { _, _ ->
+                FeedHidden.hide(context, entry.response.url)
+                FeedPool.hide(entry.response.url)
+                FeedPlayer.currentUrl?.let { refreshUpNext(it) }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
 
     private val stateListener: () -> Unit = { updatePlaybackUi() }
 
@@ -260,8 +280,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 FeedPlayer.currentPoster?.let {
                     binding.feedWatchPoster.loadImage(it)
                 }
-                binding.feedWatchStatus.setText(R.string.feed_loading_video)
-                binding.feedWatchStatus.isVisible = true
                 binding.feedWatchLoadingBox.isVisible = true
             }
 
@@ -305,7 +323,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (FeedPlayer.status == FeedPlayer.Status.READY &&
             exo.playbackState == Player.STATE_BUFFERING
         ) {
-            binding.feedWatchStatus.isVisible = false
             binding.feedWatchLoadingBox.isVisible = true
         } else if (FeedPlayer.status == FeedPlayer.Status.READY) {
             binding.feedWatchLoadingBox.isVisible = false
@@ -521,12 +538,26 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (handedOff) return
         handedOff = true
         FeedPlayer.pause()
+        // Hand over a generator whose episodes carry the LIVE saved
+        // positions, exactly as GeneratorPlayer refreshes them itself —
+        // the feed's copies were stamped when playback started.
+        val page = FeedPlayer.currentPage
+        val liveGen = if (page != null) {
+            val refreshed = FeedPlayer.episodes.map { ep ->
+                DataStoreHelper.getViewPos(ep.id)
+                    ?.let { pd -> ep.copy(position = pd.position, duration = pd.duration) }
+                    ?: ep
+            }
+            RepoLinkGenerator(refreshed, page = page)
+        } else {
+            gen
+        }
         // Unlock into landscape BEFORE navigating, so the main player
         // never flashes its portrait layout on the way over.
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity.navigate(
             R.id.global_to_navigation_player,
-            GeneratorPlayer.newInstance(gen, FeedPlayer.episodeIndex)
+            GeneratorPlayer.newInstance(liveGen, FeedPlayer.episodeIndex)
         )
     }
 

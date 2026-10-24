@@ -53,7 +53,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     BindingCreator.Inflate(FragmentFeedBinding::inflate)
 ), FeedScrollTop {
     private val viewModel: FeedViewModel by viewModels()
-    private val adapter = FeedAdapter(onPlay = { entry -> openWatch(entry) })
+    private val adapter = FeedAdapter(
+        onPlay = { entry -> openWatch(entry) },
+        onHide = { entry -> confirmHide(entry) }
+    )
+
+    /** RecyclerView position, kept across watch-page trips. */
+    private var listState: android.os.Parcelable? = null
 
     private var pool: List<FeedEntry> = emptyList()
     private var searchJob: Job? = null
@@ -111,11 +117,19 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     binding.feedSwipeRefresh.isRefreshing = false
                     binding.feedLoading.isVisible = false
                     hideSkeleton(binding)
-                    pool = resource.value
+                    // Hidden items stay hidden even in a replayed value.
+                    val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
+                    pool = resource.value.filterNot { it.response.url in hidden }
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
-                        binding.feedEmpty.isVisible = resource.value.isEmpty()
-                        adapter.submitList(resource.value)
+                        binding.feedEmpty.isVisible = pool.isEmpty()
+                        adapter.submitList(pool) {
+                            listState?.let { state ->
+                                binding.feedRecycler.layoutManager
+                                    ?.onRestoreInstanceState(state)
+                                listState = null
+                            }
+                        }
                     } else {
                         applySearch(query)
                     }
@@ -145,11 +159,36 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     override fun onDestroyView() {
+        // Remember where the list was scrolled to — opening a video and
+        // coming back must not throw the viewer back to the top.
+        listState = binding?.feedRecycler?.layoutManager?.onSaveInstanceState()
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
         searchJob?.cancel()
         headerAnimator?.cancel()
         FeedPlayer.removeListener(miniListener)
         super.onDestroyView()
+    }
+
+    /** Phase 8.22: long-press a card → offer to hide it for good. */
+    private fun confirmHide(entry: FeedEntry) {
+        val context = context ?: return
+        androidx.appcompat.app.AlertDialog.Builder(context)
+            .setTitle(FeedAdapter.displayTitle(entry.response.name, entry.response.url))
+            .setMessage(R.string.feed_hide_message)
+            .setPositiveButton(R.string.feed_hide) { _, _ ->
+                FeedHidden.hide(context, entry.response.url)
+                FeedPool.hide(entry.response.url)
+                pool = pool.filterNot { it.response.url == entry.response.url }
+                val query = binding?.feedSearchInput?.text?.toString()?.trim().orEmpty()
+                if (query.isEmpty()) {
+                    binding?.feedEmpty?.isVisible = pool.isEmpty()
+                    adapter.submitList(pool)
+                } else {
+                    applySearch(query)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Called by MainActivity when the Feed nav item is re-tapped. */
@@ -351,7 +390,10 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     return@launch
                 }
                 val seen = local.map { it.response.url }.toMutableSet()
-                val merged = local + remote.filter { seen.add(it.response.url) }
+                val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
+                val merged = local + remote.filter {
+                    it.response.url !in hidden && seen.add(it.response.url)
+                }
                 binding.feedEmpty.isVisible = merged.isEmpty()
                 adapter.submitList(merged)
             }

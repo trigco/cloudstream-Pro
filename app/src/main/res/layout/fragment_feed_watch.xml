@@ -30,6 +30,13 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
+        <View
+            android:id="@+id/feed_watch_blend"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/feed_blend_gradient" />
+
         <LinearLayout
             android:id="@+id/feed_watch_loading_box"
             android:layout_width="wrap_content"
@@ -43,16 +50,6 @@
                 android:id="@+id/feed_watch_loading"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
-
-            <TextView
-                android:id="@+id/feed_watch_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:padding="4dp"
-                android:textAlignment="center"
-                android:textColor="@android:color/white"
-                android:textSize="13sp" />
         </LinearLayout>
 
         <LinearLayout

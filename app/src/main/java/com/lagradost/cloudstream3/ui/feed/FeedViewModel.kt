@@ -18,6 +18,11 @@ data class FeedEntry(val response: SearchResponse, val apiName: String)
 object FeedPool {
     @Volatile
     var entries: List<FeedEntry> = emptyList()
+
+    /** Phase 8.22: drop an item everywhere at once (hide action). */
+    fun hide(url: String) {
+        entries = entries.filterNot { it.response.url == url }
+    }
 }
 
 /**
@@ -59,6 +64,11 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                     entries = buildFeed(page)
                 }
                 entries = withLikedBoost(entries)
+                // Phase 8.22: hidden items never surface.
+                val hidden = FeedHidden.getAll(getApplication())
+                if (hidden.isNotEmpty()) {
+                    entries = entries.filterNot { it.response.url in hidden }
+                }
                 FeedPool.entries = entries
                 feed.postValue(
                     if (entries.isEmpty()) {

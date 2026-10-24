@@ -22,7 +22,8 @@ import com.lagradost.cloudstream3.utils.hapticTick
  */
 class FeedAdapter(
     private val onPlay: (FeedEntry) -> Unit,
-    private val onLikeChanged: (FeedEntry, Boolean) -> Unit = { _, _ -> }
+    private val onLikeChanged: (FeedEntry, Boolean) -> Unit = { _, _ -> },
+    private val onHide: (FeedEntry) -> Unit = {}
 ) : ListAdapter<FeedEntry, FeedAdapter.ViewHolder>(Diff) {
 
     object Diff : DiffUtil.ItemCallback<FeedEntry>() {
@@ -48,6 +49,12 @@ class FeedAdapter(
             bindLike(entry)
 
             binding.root.setOnClickListener { onPlay(entry) }
+            // Phase 8.22: long-press offers to hide the item for good.
+            binding.root.setOnLongClickListener {
+                binding.root.hapticTick()
+                onHide(entry)
+                true
+            }
             binding.feedCardLike.setOnClickListener { view ->
                 val nowLiked = !FeedLikes.isLiked(context, entry.response.url)
                 FeedLikes.setLiked(context, entry, nowLiked)

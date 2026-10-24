@@ -8,7 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -20,6 +20,8 @@ import com.lagradost.cloudstream3.LiveStreamLoadResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.player.FixedNextRenderersFactory
@@ -78,6 +80,10 @@ object FeedPlayer {
         private set
 
     var generator: RepoLinkGenerator? = null
+        private set
+
+    /** The loaded page behind the generator (kept for handoffs). */
+    var currentPage: LoadResponse? = null
         private set
     var episodes: List<ResultEpisode> = emptyList()
         private set
@@ -159,7 +165,19 @@ object FeedPlayer {
                 if (state == Player.STATE_READY) {
                     if (!resumeSeekDone) {
                         resumeSeekDone = true
-                        val resume = currentEpisode?.getRealPosition() ?: 0L
+                        // Read the saved position from the store directly
+                        // (the episode objects' fields can be stale),
+                        // with the same 5–95% rule getRealPosition uses.
+                        val resume = currentEpisode?.id?.let { id ->
+                            DataStoreHelper.getViewPos(id)
+                        }?.let { pd ->
+                            if (pd.duration <= 0) {
+                                0L
+                            } else {
+                                val pct = pd.position * 100 / pd.duration
+                                if (pct <= 5 || pct >= 95) 0L else pd.position
+                            }
+                        } ?: 0L
                         if (resume > 0 && player.currentPosition < 1_000) {
                             player.seekTo(resume)
                         }
@@ -269,6 +287,7 @@ object FeedPlayer {
                 notifyListeners()
                 return@launch
             }
+            currentPage = response
             generator = RepoLinkGenerator(episodes, page = response)
             extractAndPlay(0, gen)
         }
@@ -382,9 +401,17 @@ object FeedPlayer {
         val context = appContext ?: return
         triedLinks.add(linkIndex)
         val keepPos = if (keepPosition) player.currentPosition else 0L
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
+        // Same transport as the main player: the app's OkHttp client
+        // and its browser user-agent (or the link's own). Plain
+        // URLConnection requests get refused by some CDNs — DASH
+        // manifests in particular — which is why a few videos only
+        // played in the feed after the main player had warmed them.
+        val userAgent = link.headers.entries.find {
+            it.key.equals("User-Agent", ignoreCase = true)
+        }?.value ?: USER_AGENT
+        val dataSourceFactory = OkHttpDataSource.Factory(app.baseClient)
+            .setUserAgent(userAgent)
             .setDefaultRequestProperties(link.getAllHeaders())
-            .setAllowCrossProtocolRedirects(true)
         val item = MediaItem.Builder()
             .setUri(link.url)
             .setMimeType(
