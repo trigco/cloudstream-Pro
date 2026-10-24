@@ -255,75 +255,45 @@
     </array>
 
     <string-array name="themes_overlay_names">
-        <item>Normal</item>
-        <item>Dandelion Yellow</item>
-        <item>Carnation Pink</item>
-        <item>Orange</item>
-        <item>Dark Green</item>
-        <item>Maroon</item>
-        <item>Navy Blue</item>
-        <item>Grey</item>
-        <item>White</item>
-        <item>Cool Blue</item>
-        <item>Brown</item>
-        <item>Cool</item>
-        <item>Fire</item>
-        <item>Burple</item>
-        <item>Green</item>
-        <item>Apple</item>
-        <item>Banana</item>
-        <item>Party</item>
-        <item>Pink Pain</item>
-        <item>Lavender</item>
+        <item>Default</item>
         <item>Material You</item>
         <item>Material You (Secondary)</item>
+        <item>Red</item>
+        <item>Blue</item>
+        <item>Purple</item>
+        <item>Green</item>
+        <item>Pink</item>
+        <item>Orange</item>
+        <item>White</item>
+        <item>Grey</item>
     </string-array>
     <string-array name="themes_overlay_names_values">
         <item>Normal</item>
-        <item>DandelionYellow</item>
-        <item>CarnationPink</item>
-        <item>Orange</item>
-        <item>DarkGreen</item>
-        <item>Maroon</item>
-        <item>NavyBlue</item>
-        <item>Grey</item>
-        <item>White</item>
-        <item>CoolBlue</item>
-        <item>Brown</item>
-        <item>Blue</item>
-        <item>Red</item>
-        <item>Purple</item>
-        <item>Green</item>
-        <item>GreenApple</item>
-        <item>Banana</item>
-        <item>Party</item>
-        <item>Pink</item>
-        <item>Lavender</item>
         <item>Monet</item>
         <item>Monet2</item>
+        <item>Red</item>
+        <item>CoolBlue</item>
+        <item>Purple</item>
+        <item>Green</item>
+        <item>Pink</item>
+        <item>Orange</item>
+        <item>White</item>
+        <item>Grey</item>
     </string-array>
 
     <string-array name="themes_names">
         <item>Dark</item>
-        <item>Gray</item>
-        <item>Amoled</item>
-        <item>Flashbang</item>
         <item>System</item>
+        <item>Light</item>
+        <item>AMOLED</item>
         <item>Material You</item>
-        <item>Dracula</item>
-        <item>Lavender Dreams</item>
-        <item>Silent Blue</item>
     </string-array>
     <string-array name="themes_names_values">
         <item>AmoledLight</item>
-        <item>Black</item>
-        <item>Amoled</item>
-        <item>Light</item>
         <item>System</item>
+        <item>Light</item>
+        <item>Amoled</item>
         <item>Monet</item>
-        <item>Dracula</item>
-        <item>Lavender</item>
-        <item>SilentBlue</item>
     </string-array>
 
     <string-array name="extension_statuses">
