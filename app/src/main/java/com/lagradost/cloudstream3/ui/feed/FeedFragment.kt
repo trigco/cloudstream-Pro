@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.feed
 
 import android.os.Bundle
+import android.view.View
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -9,6 +10,10 @@ import com.lagradost.cloudstream3.databinding.FragmentFeedBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.TV
+import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
+import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 
 /**
@@ -21,6 +26,14 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 ) {
     private val viewModel: FeedViewModel by viewModels()
     private val adapter = FeedAdapter(onPlay = { entry -> openWatch(entry) })
+
+    override fun fixLayout(view: View) {
+        fixSystemBarsPadding(
+            view,
+            padBottom = isLandscape(),
+            padLeft = isLayout(TV or EMULATOR)
+        )
+    }
 
     override fun onBindingCreated(binding: FragmentFeedBinding) {
         binding.feedRecycler.layoutManager = LinearLayoutManager(context)

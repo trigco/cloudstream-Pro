@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.OrientationEventListener
+import android.view.View
 import android.widget.SeekBar
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
@@ -35,7 +36,12 @@ import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.player.SubtitleData
 import com.lagradost.cloudstream3.ui.result.ResultEpisode
 import com.lagradost.cloudstream3.ui.result.buildResultEpisode
+import com.lagradost.cloudstream3.ui.result.getId
 import com.lagradost.cloudstream3.ui.result.getRealPosition
+import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.TV
+import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
+import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
@@ -90,6 +96,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         playFeedItem(entry.response.url, entry.apiName, entry.response.name)
         binding?.feedWatchUpnext?.scrollToPosition(0)
     })
+
+    override fun fixLayout(view: View) {
+        fixSystemBarsPadding(
+            view,
+            padBottom = isLandscape(),
+            padLeft = isLayout(TV or EMULATOR)
+        )
+    }
 
     override fun onBindingCreated(binding: FragmentFeedWatchBinding) {
         binding.feedWatchUpnext.layoutManager = LinearLayoutManager(context)
@@ -414,8 +428,8 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             }
 
             is AnimeLoadResponse -> {
-                val dub = if (response.episodes.containsKey(DubStatus.Sub)) {
-                    DubStatus.Sub
+                val dub = if (response.episodes.containsKey(DubStatus.Subbed)) {
+                    DubStatus.Subbed
                 } else {
                     response.episodes.keys.firstOrNull()
                 } ?: return emptyList()
@@ -427,7 +441,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                     buildResultEpisode(
                         response.name, ep.name, ep.posterUrl, episodeIndex,
                         ep.season, ep.season, ep.data, response.apiName, id, index,
-                        ep.score, ep.description, ep.isFiller, response.type, mainId,
+                        ep.score, ep.description, null, response.type, mainId,
                         null, airDate = ep.date, runTime = ep.runTime
                     )
                 }

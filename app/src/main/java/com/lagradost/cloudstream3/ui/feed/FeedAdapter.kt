@@ -85,7 +85,7 @@ class FeedAdapter(
     }
 
     companion object {
-        fun typeLabel(type: TvType): String = when (type) {
+        fun typeLabel(type: TvType?): String = when (type) {
             TvType.Movie, TvType.AnimeMovie -> "Movie"
             TvType.TvSeries -> "Series"
             TvType.Anime, TvType.OVA -> "Anime"
@@ -93,7 +93,7 @@ class FeedAdapter(
             TvType.Cartoon -> "Cartoon"
             TvType.Documentary -> "Documentary"
             TvType.Live -> "Live"
-            else -> type.name
+            else -> type?.name ?: ""
         }
     }
 }

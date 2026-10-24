@@ -99,10 +99,10 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         // Taste boost: liked types/providers get every third slot.
         val liked = FeedLikes.getAll(getApplication())
         if (liked.isEmpty()) return interleaved
-        val likedTypes = liked.map { it.type }.toSet()
+        val likedTypes = liked.map { it.typeName }.toSet()
         val likedApis = liked.map { it.apiName }.toSet()
         fun boosted(e: FeedEntry) =
-            e.response.type in likedTypes || e.apiName in likedApis
+            e.response.type?.name in likedTypes || e.apiName in likedApis
         val hot = interleaved.filter { boosted(it) }
         if (hot.isEmpty()) return interleaved
         val rest = interleaved.filter { !boosted(it) }

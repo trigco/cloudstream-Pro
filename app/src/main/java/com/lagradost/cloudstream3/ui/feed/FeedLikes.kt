@@ -2,7 +2,6 @@ package com.lagradost.cloudstream3.ui.feed
 
 import android.content.Context
 import androidx.preference.PreferenceManager
-import com.lagradost.cloudstream3.TvType
 
 /**
  * Phase 8.18 — the Feed's taste memory. A like stores the item's provider
@@ -12,7 +11,7 @@ import com.lagradost.cloudstream3.TvType
  * record-separator entries).
  */
 object FeedLikes {
-    data class Liked(val url: String, val apiName: String, val type: TvType)
+    data class Liked(val url: String, val apiName: String, val typeName: String)
 
     private const val KEY = "feed_likes_v1"
     private const val FIELD = "\u001F"
@@ -24,9 +23,7 @@ object FeedLikes {
         return raw.split(RECORD).mapNotNull { entry ->
             val parts = entry.split(FIELD)
             if (parts.size != 3) return@mapNotNull null
-            val type = runCatching { TvType.valueOf(parts[2]) }.getOrNull()
-                ?: return@mapNotNull null
-            Liked(parts[0], parts[1], type)
+            Liked(parts[0], parts[1], parts[2])
         }
     }
 
@@ -38,14 +35,14 @@ object FeedLikes {
         current.removeAll { it.url == entry.response.url }
         if (liked) {
             current.add(
-                Liked(entry.response.url, entry.apiName, entry.response.type)
+                Liked(entry.response.url, entry.apiName, entry.response.type?.name ?: "")
             )
         }
         PreferenceManager.getDefaultSharedPreferences(context).edit()
             .putString(
                 KEY,
                 current.joinToString(RECORD) {
-                    listOf(it.url, it.apiName, it.type.name).joinToString(FIELD)
+                    listOf(it.url, it.apiName, it.typeName).joinToString(FIELD)
                 }
             )
             .apply()
