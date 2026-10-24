@@ -2024,6 +2024,9 @@ class GeneratorPlayer : FullScreenPlayer() {
         // Phase 8.14c: mirror the title into the portrait panel (present
         // only in layout-port; findViewById returns null in landscape).
         view?.findViewById<TextView>(R.id.player_portrait_title)?.text = playerVideoTitle
+        // The panel starts hidden so the loading state shows no empty
+        // buttons; reveal it with the first real title.
+        view?.findViewById<View>(R.id.player_portrait_panel)?.isVisible = true
         loadPortraitRecommendations()
         playerBinding?.offlinePin?.isVisible = viewModel.generator is DownloadFileGenerator
     }

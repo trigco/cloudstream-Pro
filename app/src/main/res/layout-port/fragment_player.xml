@@ -25,13 +25,14 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio="16:9"
         app:show_timeout="0" />
 
     <FrameLayout
         android:id="@+id/player_loading_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:background="@android:color/black"
         android:backgroundTint="@android:color/black"
         app:layout_constraintBottom_toBottomOf="@id/player_view"
@@ -135,6 +136,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:fillViewport="true"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -170,7 +172,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/video_source"
+                    android:textSize="13sp"
+                    app:iconPadding="4dp"
                     app:icon="@drawable/ic_sheet_play" />
 
                 <com.google.android.material.button.MaterialButton
@@ -180,7 +185,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/episodes"
+                    android:textSize="13sp"
+                    app:iconPadding="4dp"
                     app:icon="@drawable/ic_baseline_playlist_play_24" />
 
                 <com.google.android.material.button.MaterialButton
@@ -189,7 +197,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/rotate_video"
+                    android:textSize="13sp"
+                    app:iconPadding="4dp"
                     app:icon="@drawable/screen_rotation" />
             </LinearLayout>
 
@@ -206,7 +217,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/portrait_tracks"
+                    android:textSize="13sp"
+                    app:iconPadding="4dp"
                     app:icon="@drawable/ic_baseline_tune_24" />
 
                 <com.google.android.material.button.MaterialButton
@@ -215,7 +229,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/portrait_download"
+                    android:textSize="13sp"
+                    app:iconPadding="4dp"
                     app:icon="@drawable/baseline_downloading_24" />
             </LinearLayout>
 
@@ -233,7 +250,7 @@
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/player_portrait_recs"
                 android:layout_width="match_parent"
-                android:layout_height="172dp"
+                android:layout_height="202dp"
                 android:layout_marginTop="10dp"
                 android:clipToPadding="false"
                 android:visibility="gone" />
