@@ -338,6 +338,8 @@
     <string name="video_buffer_length_settings">Video buffer length</string>
     <string name="video_buffer_disk_settings">Video cache on disk</string>
     <string name="video_buffer_clear_settings">Clear video and image cache</string>
+    <string name="auto_clear_cache_settings">Auto-clear cache</string>
+    <string name="auto_clear_cache_settings_summary">Clears video and image cache every time the app starts</string>
     <string name="android_tv_interface_on_seek_settings">Player Shown - Seek Amount</string>
     <string name="android_tv_interface_on_seek_settings_summary">The seek amount used when the player is visible</string>
     <string name="android_tv_interface_off_seek_settings">Player Hidden - Seek Amount</string>

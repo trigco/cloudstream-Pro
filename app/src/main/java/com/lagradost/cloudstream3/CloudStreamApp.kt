@@ -9,6 +9,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import androidx.preference.PreferenceManager
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -74,6 +75,22 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
         // If we want to initialize Coil as early as possible, maybe when
         // loading an image or GIF in a splash screen activity.
         // buildImageLoader(applicationContext)
+
+        // Auto-clear cache on start (Settings → Player → Cache), when the
+        // viewer turned it on. Same clear the manual "Clear video and image
+        // cache" row runs. Best-effort and off the main thread: a failure
+        // here must never block or crash startup.
+        try {
+            val autoClear = PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean(getString(R.string.auto_clear_cache_key), false)
+            if (autoClear) {
+                val dir = cacheDir
+                thread {
+                    runCatching { dir.deleteRecursively() }
+                }
+            }
+        } catch (_: Exception) {
+        }
 
         ExceptionHandler(filesDir.resolve("last_error")) {
             val intent = context!!.packageManager.getLaunchIntentForPackage(context!!.packageName)
