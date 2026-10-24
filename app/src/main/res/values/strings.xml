@@ -705,11 +705,6 @@
     <string name="rotate_video_desc">Display a toggle button for screen orientation</string>
     <string name="auto_rotate_video_desc">Enable automatic switching of screen orientation based on video orientation</string>
     <string name="auto_rotate_video">Auto rotate</string>
-    <string name="portrait_player">Portrait player</string>
-    <string name="portrait_tracks">Audio &amp; Quality</string>
-    <string name="portrait_download">Download</string>
-    <string name="portrait_recs_title">More like this</string>
-    <string name="portrait_player_desc">Open the player in portrait with the title and shortcuts below the video, YouTube style. Use the rotate button anytime for fullscreen landscape.</string>
     <string name="favorite">Favorite</string>
     <string name="unfavorite">Unfavorite</string>
     <!-- For Biometrics -->

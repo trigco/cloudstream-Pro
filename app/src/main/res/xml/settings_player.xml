@@ -111,12 +111,6 @@
             app:defaultValue="true"
             app:key="@string/auto_rotate_video_key" />
         <SwitchPreference
-            android:icon="@drawable/screen_rotation"
-            android:summary="@string/portrait_player_desc"
-            android:title="@string/portrait_player"
-            app:defaultValue="true"
-            app:key="@string/portrait_player_key" />
-        <SwitchPreference
             android:icon="@drawable/preview_seekbar_24"
             android:summary="@string/preview_seekbar_desc"
             android:title="@string/preview_seekbar"
