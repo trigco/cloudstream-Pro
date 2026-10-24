@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -38,6 +39,7 @@ import kotlinx.coroutines.launch
  * [FeedPlayer]; when a video is minimised it keeps playing in the mini
  * player floating over this grid.
  */
+@UnstableApi
 class FeedFragment : BaseFragment<FragmentFeedBinding>(
     BindingCreator.Inflate(FragmentFeedBinding::inflate)
 ) {
