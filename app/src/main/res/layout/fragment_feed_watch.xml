@@ -14,6 +14,14 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <ImageView
+            android:id="@+id/feed_watch_poster"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
         <androidx.media3.ui.PlayerView
             android:id="@+id/feed_watch_player"
             android:layout_width="match_parent"
@@ -21,22 +29,30 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
-        <ProgressBar
-            android:id="@+id/feed_watch_loading"
+        <LinearLayout
+            android:id="@+id/feed_watch_loading_box"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:visibility="gone" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/feed_watch_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:padding="16dp"
-            android:textAlignment="center"
-            android:textColor="@android:color/white"
-            android:visibility="gone" />
+            <ProgressBar
+                android:id="@+id/feed_watch_loading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/feed_watch_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="4dp"
+                android:textAlignment="center"
+                android:textColor="@android:color/white"
+                android:textSize="13sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/feed_watch_error_box"
@@ -51,6 +67,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/feed_open_details" />
+
+            <Button
+                android:id="@+id/feed_watch_play_main"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/feed_play_main"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/feed_watch_retry"
@@ -205,6 +229,15 @@
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/feed_fullscreen"
                     android:src="@drawable/baseline_fullscreen_24" />
+
+                <ImageButton
+                    android:id="@+id/feed_watch_next"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/feed_next_episode"
+                    android:src="@drawable/ic_baseline_skip_next_24"
+                    android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
     </FrameLayout>

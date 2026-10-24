@@ -1,7 +1,6 @@
 package com.lagradost.cloudstream3.ui.feed
 
 import android.content.pm.ActivityInfo
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,83 +12,45 @@ import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
-import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
 import androidx.media3.common.C.TRACK_TYPE_TEXT
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
-import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
-import com.lagradost.cloudstream3.AnimeLoadResponse
-import com.lagradost.cloudstream3.DubStatus
-import com.lagradost.cloudstream3.LiveStreamLoadResponse
-import com.lagradost.cloudstream3.LoadResponse
-import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.R
-import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.databinding.FragmentFeedWatchBinding
-import com.lagradost.cloudstream3.mvvm.Resource
-import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.player.GeneratorPlayer
-import com.lagradost.cloudstream3.ui.player.LOADTYPE_INAPP
-import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
-import com.lagradost.cloudstream3.ui.player.SubtitleData
-import com.lagradost.cloudstream3.ui.result.ResultEpisode
-import com.lagradost.cloudstream3.ui.result.buildResultEpisode
-import com.lagradost.cloudstream3.ui.result.getId
-import com.lagradost.cloudstream3.ui.result.getRealPosition
+import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
-import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
-import com.lagradost.cloudstream3.utils.DataStoreHelper
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.hapticTick
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 /**
- * Phase 8.18 — the Feed watch page (YouTube-style, portrait): a small
- * custom player on top, the feed continuing underneath as "Up next".
- *
- * Playback is direct: the tapped item's page is loaded in the background,
- * its links are extracted with the app's own RepoLinkGenerator, and the
- * best link plays in a plain ExoPlayer with custom controls. Positions
- * are saved with the same episode ids the main player uses, so handing
- * off to the main player (fullscreen button, or turning the phone to
- * landscape) resumes exactly where the feed player stopped.
+ * Phase 8.18–8.20 — the Feed watch page (YouTube-style, portrait).
+ * Playback itself lives in [FeedPlayer] (shared with the mini player);
+ * this fragment is the full-screen UI over it: custom controls,
+ * double-tap skip, quality/subtitle/audio pickers, next episode,
+ * drag-down to minimise into the Feed, and the landscape/fullscreen
+ * handoff to the main player.
  */
 @UnstableApi
 class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     BindingCreator.Inflate(FragmentFeedWatchBinding::inflate)
 ) {
-    private var player: ExoPlayer? = null
-    private var playJob: Job? = null
-    private var generator: RepoLinkGenerator? = null
-    private var episodes: List<ResultEpisode> = emptyList()
-    private var currentIndex = 0
-    private var currentLinks: List<ExtractorLink> = emptyList()
-    private var currentSubs: List<SubtitleData> = emptyList()
-    private var currentUrl: String? = null
-    private var currentApiName: String? = null
-    private var currentName: String? = null
-    private var resumeSeekDone = false
     private var handedOff = false
     private var seeking = false
     private var tickCount = 0
+    private var lastShownUrl: String? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -99,14 +60,40 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
     private val hideControlsRunnable = Runnable { binding?.feedWatchControls?.isVisible = false }
+    private val skipHideRunnable = Runnable {
+        binding?.feedWatchSkipBack?.isVisible = false
+        binding?.feedWatchSkipForward?.isVisible = false
+    }
 
     private var orientationListener: OrientationEventListener? = null
     private var landscapeSince = 0L
 
     private val upNextAdapter = FeedAdapter(onPlay = { entry ->
-        playFeedItem(entry.response.url, entry.apiName, entry.response.name)
+        context?.let {
+            FeedPlayer.play(
+                it, entry.response.url, entry.apiName,
+                entry.response.name, entry.response.posterUrl
+            )
+        }
         binding?.feedWatchUpnext?.scrollToPosition(0)
     })
+
+    private val stateListener: () -> Unit = { updatePlaybackUi() }
+
+    private val iconListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            val binding = binding ?: return
+            binding.feedWatchPlayer.keepScreenOn = isPlaying
+            binding.feedWatchPlayPause.setImageResource(
+                if (isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
+            )
+            if (isPlaying) scheduleHideControls() else showControls()
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            updateBuffering()
+        }
+    }
 
     override fun fixLayout(view: View) {
         fixSystemBarsPadding(
@@ -117,43 +104,23 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     override fun onBindingCreated(binding: FragmentFeedWatchBinding) {
+        FeedPlayer.warmUp(requireContext())
+        binding.feedWatchPlayer.player = FeedPlayer.exo
+        FeedPlayer.exo?.addListener(iconListener)
+        FeedPlayer.addListener(stateListener)
+
         binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
         binding.feedWatchUpnext.adapter = upNextAdapter
 
-        player = ExoPlayer.Builder(requireContext()).build().also { exo ->
-            binding.feedWatchPlayer.player = exo
-            exo.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_BUFFERING) {
-                        binding.feedWatchLoading.isVisible = true
-                    } else {
-                        binding.feedWatchLoading.isVisible = false
-                    }
-                    if (state == Player.STATE_READY && !resumeSeekDone) {
-                        resumeSeekDone = true
-                        val resume = episodes.getOrNull(currentIndex)?.getRealPosition() ?: 0L
-                        if (resume > 0 && exo.currentPosition < 1_000) {
-                            exo.seekTo(resume)
-                        }
-                    }
-                }
+        val url = arguments?.getString("url") ?: return
+        val apiName = arguments?.getString("apiName") ?: return
+        val name = arguments?.getString("name") ?: url
+        val poster = arguments?.getString("posterUrl")
+        refreshUpNext(url)
+        FeedPlayer.play(requireContext(), url, apiName, name, poster)
 
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    binding.feedWatchPlayer.keepScreenOn = isPlaying
-                    binding.feedWatchPlayPause.setImageResource(
-                        if (isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
-                    )
-                    if (isPlaying) scheduleHideControls() else showControls()
-                }
-
-                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    showError()
-                }
-            })
-        }
-
-        // Single tap toggles the controls; double tap skips ∓10 seconds
-        // (left half back, right half forward), YouTube-style.
+        // Single tap toggles controls; double tap skips ∓10 s; a long
+        // downward drag minimises into the Feed's mini player.
         val gestureDetector = GestureDetector(
             requireContext(),
             object : GestureDetector.SimpleOnGestureListener() {
@@ -173,17 +140,34 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             }
         )
+        var downY = 0f
+        var dragHandled = false
         binding.feedWatchPlayer.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downY = event.y
+                    dragHandled = false
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragHandled && event.y - downY > 160f && FeedPlayer.isPlaying) {
+                        dragHandled = true
+                        minimizeToFeed()
+                    }
+                }
+            }
             gestureDetector.onTouchEvent(event)
             true
         }
-        binding.feedWatchPlayPause.setOnClickListener {
-            val exo = player ?: return@setOnClickListener
-            if (exo.isPlaying) exo.pause() else exo.play()
-        }
+
+        binding.feedWatchPlayPause.setOnClickListener { FeedPlayer.togglePlay() }
         binding.feedWatchFullscreen.setOnClickListener { view ->
             view.hapticTick()
             openInMainPlayer()
+        }
+        binding.feedWatchNext.setOnClickListener { view ->
+            view.hapticTick()
+            FeedPlayer.nextEpisode()
         }
         binding.feedWatchQuality.setOnClickListener { showQuality() }
         binding.feedWatchSubtitles.setOnClickListener { showSubtitlePicker() }
@@ -192,10 +176,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    val exo = player ?: return
+                    val exo = FeedPlayer.exo ?: return
                     val duration = exo.duration.takeIf { it > 0 } ?: return
-                    binding?.feedWatchTimeCurrent?.text =
-                        formatTime(duration * progress / 1000)
+                    binding.feedWatchTimeCurrent.text = formatTime(duration * progress / 1000)
                 }
             }
 
@@ -205,192 +188,216 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 seeking = false
-                val exo = player ?: return
+                val exo = FeedPlayer.exo ?: return
                 val duration = exo.duration.takeIf { it > 0 } ?: return
                 exo.seekTo(duration * (seekBar?.progress ?: 0) / 1000)
             }
         })
         binding.feedWatchRetry.setOnClickListener {
-            val url = currentUrl ?: return@setOnClickListener
-            val apiName = currentApiName ?: return@setOnClickListener
-            playFeedItem(url, apiName, currentName ?: url, force = true)
+            context?.let { FeedPlayer.replayCurrent(it) }
         }
-
-        val url = arguments?.getString("url") ?: return
-        val apiName = arguments?.getString("apiName") ?: return
-        val name = arguments?.getString("name") ?: url
-        playFeedItem(url, apiName, name)
+        binding.feedWatchPlayMain.setOnClickListener { openInMainPlayer() }
+        binding.feedWatchOpenDetails.setOnClickListener {
+            val current = FeedPlayer.currentUrl ?: return@setOnClickListener
+            FeedPool.entries.firstOrNull { it.response.url == current }?.let { entry ->
+                activity.loadSearchResult(entry.response)
+            }
+        }
+        setupOrientationHandoff()
+        updatePlaybackUi()
     }
 
     override fun onResume() {
         super.onResume()
-        // The watch page lives in portrait; the main player restores its
-        // own orientation when it takes over.
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         handler.post(progressRunnable)
         orientationListener?.enable()
         if (handedOff) {
             handedOff = false
-            val url = currentUrl
-            val apiName = currentApiName
-            if (url != null && apiName != null) {
-                playFeedItem(url, apiName, currentName ?: url, force = true)
-            }
+            context?.let { FeedPlayer.replayCurrent(it) }
         }
     }
 
     override fun onPause() {
-        savePosition()
-        player?.pause()
+        FeedPlayer.savePosition()
         handler.removeCallbacks(progressRunnable)
         orientationListener?.disable()
         super.onPause()
     }
 
     override fun onDestroyView() {
-        playJob?.cancel()
-        savePosition()
+        FeedPlayer.removeListener(stateListener)
+        FeedPlayer.exo?.removeListener(iconListener)
         handler.removeCallbacksAndMessages(null)
         orientationListener?.disable()
         orientationListener = null
-        player?.release()
-        player = null
+        binding?.feedWatchPlayer?.player = null
+        // Leaving for good (not minimised, not handed off) stops playback.
+        if (!handedOff && !FeedPlayer.minimized) {
+            FeedPlayer.stop()
+        }
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
         super.onDestroyView()
     }
 
-    // ---------- playback ----------
+    // ---------- UI state ----------
 
-    private fun playFeedItem(url: String, apiName: String, name: String, force: Boolean = false) {
-        if (!force && url == currentUrl && player?.playbackState != Player.STATE_IDLE) return
-        currentUrl = url
-        currentApiName = apiName
-        currentName = name
-        resumeSeekDone = false
-        currentLinks = emptyList()
-        playJob?.cancel()
+    private fun updatePlaybackUi() {
         val binding = binding ?: return
-        binding.feedWatchTitle.text = cleanPosterTitle(name)
-        binding.feedWatchMeta.text = apiName
-        binding.feedWatchErrorBox.isVisible = false
-        binding.feedWatchControls.isVisible = false
-        binding.feedWatchStatus.setText(R.string.feed_loading_video)
-        binding.feedWatchStatus.isVisible = true
-        binding.feedWatchLoading.isVisible = true
-        player?.stop()
-        player?.clearMediaItems()
-
-        playJob = viewLifecycleOwner.lifecycleScope.launch {
-            val api = getApiFromNameNull(apiName)
-            if (api == null) {
-                showError()
-                return@launch
-            }
-            val repo = APIRepository(api)
-            val response = when (val res = repo.load(url)) {
-                is Resource.Success -> res.value
-                else -> {
-                    showError()
-                    return@launch
+        val exo = FeedPlayer.exo
+        when (FeedPlayer.status) {
+            FeedPlayer.Status.LOADING -> {
+                binding.feedWatchErrorBox.isVisible = false
+                binding.feedWatchControls.isVisible = false
+                binding.feedWatchPoster.isVisible = FeedPlayer.currentPoster != null
+                FeedPlayer.currentPoster?.let {
+                    binding.feedWatchPoster.loadImage(it)
                 }
+                binding.feedWatchStatus.setText(R.string.feed_loading_video)
+                binding.feedWatchStatus.isVisible = true
+                binding.feedWatchLoadingBox.isVisible = true
             }
 
-            episodes = buildResultEpisodes(response)
-            if (episodes.isEmpty()) {
-                showError()
-                return@launch
+            FeedPlayer.Status.READY -> {
+                binding.feedWatchLoadingBox.isVisible = false
+                binding.feedWatchPoster.isVisible = false
+                binding.feedWatchErrorBox.isVisible = false
+                showControls()
             }
-            currentIndex = 0
-            val gen = RepoLinkGenerator(episodes, page = response)
-            generator = gen
 
-            val links = mutableListOf<ExtractorLink>()
-            val subs = mutableListOf<SubtitleData>()
-            val ok = gen.generateLinks(
-                clearCache = false,
-                sourceTypes = LOADTYPE_INAPP,
-                callback = { pair -> pair.first?.let { links.add(it) } },
-                subtitleCallback = { subs.add(it) },
-                offset = currentIndex,
-                isCasting = false
+            FeedPlayer.Status.ERROR -> {
+                binding.feedWatchLoadingBox.isVisible = false
+                binding.feedWatchPoster.isVisible = false
+                binding.feedWatchControls.isVisible = false
+                binding.feedWatchErrorBox.isVisible = true
+                binding.feedWatchPlayMain.isVisible = FeedPlayer.generator != null
+            }
+
+            FeedPlayer.Status.IDLE -> Unit
+        }
+        if (exo != null) {
+            binding.feedWatchPlayPause.setImageResource(
+                if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
             )
-            val playable = links.filter {
-                it.type == ExtractorLinkType.VIDEO ||
-                    it.type == ExtractorLinkType.M3U8 ||
-                    it.type == ExtractorLinkType.DASH
-            }.sortedByDescending { it.quality }
-            if (!ok || playable.isEmpty()) {
-                showError()
-                return@launch
-            }
-            currentLinks = playable
-            currentSubs = subs
-            binding.feedWatchStatus.isVisible = false
-            binding.feedWatchQuality.isVisible = playable.size > 1
-            updateHeaderMeta(apiName, response)
-            refreshUpNext(url)
-            setupOrientationHandoff()
-            playLink(playable.first(), subs)
+        }
+        binding.feedWatchQuality.isVisible = FeedPlayer.links.size > 1
+        binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
+        updateHeader()
+        val current = FeedPlayer.currentUrl
+        if (current != null && current != lastShownUrl) {
+            lastShownUrl = current
+            refreshUpNext(current)
         }
     }
 
-    private fun playLink(link: ExtractorLink, subs: List<SubtitleData>) {
-        val context = context ?: return
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(link.getAllHeaders())
-            .setAllowCrossProtocolRedirects(true)
-        val exo = player ?: return
-        val item = MediaItem.Builder()
-            .setUri(link.url)
-            .setMimeType(
-                when (link.type) {
-                    ExtractorLinkType.M3U8 -> MimeTypes.APPLICATION_M3U8
-                    ExtractorLinkType.DASH -> MimeTypes.APPLICATION_MPD
-                    else -> null
-                }
-            )
-            .setSubtitleConfigurations(subs.mapNotNull { sub ->
-                val mime = when {
-                    sub.mimeType.contains("/") -> sub.mimeType
-                    sub.url.endsWith(".vtt", true) -> MimeTypes.TEXT_VTT
-                    sub.url.endsWith(".srt", true) -> MimeTypes.APPLICATION_SUBRIP
-                    sub.url.endsWith(".ass", true) || sub.url.endsWith(".ssa", true) ->
-                        MimeTypes.TEXT_SSA
-
-                    else -> MimeTypes.TEXT_VTT
-                }
-                MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
-                    .setMimeType(mime)
-                    .setLanguage(sub.languageCode)
-                    .build()
-            })
-            .build()
-        exo.setMediaSource(
-            DefaultMediaSourceFactory(context)
-                .setDataSourceFactory(dataSourceFactory)
-                .createMediaSource(item)
-        )
-        exo.prepare()
-        exo.playWhenReady = true
-        showControls()
+    private fun updateBuffering() {
+        val binding = binding ?: return
+        val exo = FeedPlayer.exo ?: return
+        if (FeedPlayer.status == FeedPlayer.Status.READY &&
+            exo.playbackState == Player.STATE_BUFFERING
+        ) {
+            binding.feedWatchStatus.isVisible = false
+            binding.feedWatchLoadingBox.isVisible = true
+        } else if (FeedPlayer.status == FeedPlayer.Status.READY) {
+            binding.feedWatchLoadingBox.isVisible = false
+        }
     }
+
+    private fun updateHeader() {
+        val binding = binding ?: return
+        val name = FeedPlayer.currentName ?: return
+        binding.feedWatchTitle.text = cleanPosterTitle(name)
+        val ep = FeedPlayer.currentEpisode
+        val apiName = FeedPlayer.currentApiName ?: ""
+        val typeText = ep?.let { FeedAdapter.typeLabel(it.tvType) } ?: ""
+        val epText = if (ep != null && ep.episode > 0) {
+            " • S${ep.season ?: 1} E${ep.episode}"
+        } else {
+            ""
+        }
+        binding.feedWatchMeta.text =
+            listOf(apiName, typeText).filter { it.isNotBlank() }.joinToString(" • ") + epText
+    }
+
+    private fun refreshUpNext(exceptUrl: String) {
+        upNextAdapter.submitList(
+            FeedPool.entries.filter { it.response.url != exceptUrl }
+        )
+    }
+
+    // ---------- controls ----------
+
+    private fun updateProgress() {
+        val exo = FeedPlayer.exo ?: return
+        val binding = binding ?: return
+        val duration = exo.duration.takeIf { it > 0 } ?: 0L
+        if (!seeking && duration > 0) {
+            binding.feedWatchSeek.progress =
+                (exo.currentPosition * 1000 / duration).toInt()
+        }
+        binding.feedWatchTimeCurrent.text = formatTime(exo.currentPosition)
+        binding.feedWatchTimeTotal.text = formatTime(duration)
+        if (++tickCount % 10 == 0) FeedPlayer.savePosition()
+    }
+
+    private fun toggleControls() {
+        val binding = binding ?: return
+        if (FeedPlayer.status != FeedPlayer.Status.READY) return
+        if (binding.feedWatchControls.isVisible) {
+            binding.feedWatchControls.isVisible = false
+            handler.removeCallbacks(hideControlsRunnable)
+        } else {
+            showControls()
+        }
+    }
+
+    private fun showControls() {
+        val binding = binding ?: return
+        if (FeedPlayer.status != FeedPlayer.Status.READY) return
+        binding.feedWatchControls.isVisible = true
+        scheduleHideControls()
+    }
+
+    private fun scheduleHideControls() {
+        handler.removeCallbacks(hideControlsRunnable)
+        if (FeedPlayer.isPlaying) {
+            handler.postDelayed(hideControlsRunnable, 3_000L)
+        }
+    }
+
+    private fun skipBy(deltaMs: Long, back: Boolean) {
+        val exo = FeedPlayer.exo ?: return
+        val binding = binding ?: return
+        val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
+        binding.feedWatchPlayer.hapticTick()
+        binding.feedWatchSkipBack.isVisible = back
+        binding.feedWatchSkipForward.isVisible = !back
+        handler.removeCallbacks(skipHideRunnable)
+        handler.postDelayed(skipHideRunnable, 600L)
+    }
+
+    private fun minimizeToFeed() {
+        FeedPlayer.minimized = true
+        FeedPlayer.savePosition()
+        binding?.feedWatchPlayer?.hapticTick()
+        findNavController().popBackStack()
+    }
+
+    // ---------- pickers ----------
 
     private fun showQuality() {
         val context = context ?: return
-        if (currentLinks.size < 2) return
-        val labels = currentLinks.map { link ->
+        val links = FeedPlayer.links
+        if (links.size < 2) return
+        val labels = links.map { link ->
             val quality = if (link.quality > 0) "${link.quality}p" else ""
             listOf(quality, link.name).filter { it.isNotBlank() }.joinToString(" • ")
                 .ifBlank { link.url }
         }.toTypedArray()
         AlertDialog.Builder(context)
             .setTitle(R.string.feed_quality)
-            .setItems(labels) { _, which ->
-                val exo = player ?: return@setItems
-                val pos = exo.currentPosition
-                playLink(currentLinks[which], currentSubs)
-                exo.seekTo(pos)
-            }
+            .setItems(labels) { _, which -> FeedPlayer.selectLink(which) }
             .show()
     }
 
@@ -402,7 +409,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     )
 
     private fun trackOptions(type: Int): List<TrackOption> {
-        val exo = player ?: return emptyList()
+        val exo = FeedPlayer.exo ?: return emptyList()
         val options = mutableListOf<TrackOption>()
         for (group in exo.currentTracks.groups.filter { it.type == type }) {
             for (i in 0 until group.length) {
@@ -419,10 +426,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         return options
     }
 
-    /** Subtitle picker: Off + every text track in the loaded media. */
     private fun showSubtitlePicker() {
         val context = context ?: return
-        val exo = player ?: return
+        val exo = FeedPlayer.exo ?: return
         val options = trackOptions(TRACK_TYPE_TEXT)
         if (options.isEmpty()) {
             Toast.makeText(context, R.string.feed_no_subtitles, Toast.LENGTH_SHORT).show()
@@ -453,10 +459,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             .show()
     }
 
-    /** Audio picker: every audio track in the loaded media. */
     private fun showAudioPicker() {
         val context = context ?: return
-        val exo = player ?: return
+        val exo = FeedPlayer.exo ?: return
         val options = trackOptions(TRACK_TYPE_AUDIO)
         if (options.size <= 1) {
             Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
@@ -478,23 +483,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             .show()
     }
 
-    private val skipHideRunnable = Runnable {
-        binding?.feedWatchSkipBack?.isVisible = false
-        binding?.feedWatchSkipForward?.isVisible = false
-    }
-
-    private fun skipBy(deltaMs: Long, back: Boolean) {
-        val exo = player ?: return
-        val binding = binding ?: return
-        val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
-        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
-        binding.feedWatchPlayer.hapticTick()
-        binding.feedWatchSkipBack.isVisible = back
-        binding.feedWatchSkipForward.isVisible = !back
-        handler.removeCallbacks(skipHideRunnable)
-        handler.postDelayed(skipHideRunnable, 600L)
-    }
-
     // ---------- handoff to the main player ----------
 
     private fun setupOrientationHandoff() {
@@ -503,7 +491,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         orientationListener = object : OrientationEventListener(context) {
             override fun onOrientationChanged(orientation: Int) {
                 val isLandscape = orientation in 70..110 || orientation in 250..290
-                if (isLandscape && player?.isPlaying == true) {
+                if (isLandscape && FeedPlayer.isPlaying) {
                     if (landscapeSince == 0L) landscapeSince = System.currentTimeMillis()
                     if (System.currentTimeMillis() - landscapeSince > 700) {
                         landscapeSince = 0L
@@ -518,152 +506,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     private fun openInMainPlayer() {
-        val gen = generator ?: return
+        val gen = FeedPlayer.generator ?: return
         if (handedOff) return
         handedOff = true
-        savePosition()
-        player?.pause()
+        FeedPlayer.pause()
         activity.navigate(
             R.id.global_to_navigation_player,
-            GeneratorPlayer.newInstance(gen, currentIndex)
+            GeneratorPlayer.newInstance(gen, FeedPlayer.episodeIndex)
         )
-    }
-
-    // ---------- helpers ----------
-
-    private fun buildResultEpisodes(response: LoadResponse): List<ResultEpisode> {
-        val mainId = response.getId()
-        return when (response) {
-            is MovieLoadResponse -> listOf(
-                buildResultEpisode(
-                    response.name, response.name, null, 0, null, null,
-                    response.dataUrl, response.apiName, mainId, 0,
-                    null, null, null, response.type, mainId, null
-                )
-            )
-
-            is LiveStreamLoadResponse -> listOf(
-                buildResultEpisode(
-                    response.name, response.name, null, 0, null, null,
-                    response.dataUrl, response.apiName, mainId, 0,
-                    null, null, null, response.type, mainId, null
-                )
-            )
-
-            is TvSeriesLoadResponse -> {
-                val sorted = response.episodes.sortedBy {
-                    (it.season?.times(10_000) ?: 0) + (it.episode ?: 0)
-                }
-                sorted.mapIndexed { index, ep ->
-                    val episodeIndex = ep.episode ?: (index + 1)
-                    val id = mainId + (ep.season?.times(100_000) ?: 0) + episodeIndex + 1
-                    buildResultEpisode(
-                        response.name, ep.name, ep.posterUrl, episodeIndex,
-                        ep.season, ep.season, ep.data, response.apiName, id, index,
-                        ep.score, ep.description, null, response.type, mainId, null,
-                        airDate = ep.date, runTime = ep.runTime
-                    )
-                }
-            }
-
-            is AnimeLoadResponse -> {
-                val dub = if (response.episodes.containsKey(DubStatus.Subbed)) {
-                    DubStatus.Subbed
-                } else {
-                    response.episodes.keys.firstOrNull()
-                } ?: return emptyList()
-                val list = response.episodes[dub].orEmpty()
-                list.mapIndexed { index, ep ->
-                    val episodeIndex = ep.episode ?: (index + 1)
-                    val id = mainId + episodeIndex + dub.id * 1_000_000 +
-                        (ep.season?.times(10_000) ?: 0)
-                    buildResultEpisode(
-                        response.name, ep.name, ep.posterUrl, episodeIndex,
-                        ep.season, ep.season, ep.data, response.apiName, id, index,
-                        ep.score, ep.description, null, response.type, mainId,
-                        null, airDate = ep.date, runTime = ep.runTime
-                    )
-                }
-            }
-
-            else -> emptyList()
-        }
-    }
-
-    private fun updateHeaderMeta(apiName: String, response: LoadResponse) {
-        val binding = binding ?: return
-        val ep = episodes.getOrNull(currentIndex)
-        val epText = if (ep != null && ep.episode > 0) {
-            " • S${ep.season ?: 1} E${ep.episode}"
-        } else {
-            ""
-        }
-        binding.feedWatchMeta.text =
-            "$apiName • ${FeedAdapter.typeLabel(response.type)}$epText"
-    }
-
-    private fun refreshUpNext(exceptUrl: String) {
-        upNextAdapter.submitList(
-            FeedPool.entries.filter { it.response.url != exceptUrl }
-        )
-    }
-
-    private fun showError() {
-        val binding = binding ?: return
-        binding.feedWatchLoading.isVisible = false
-        binding.feedWatchStatus.isVisible = false
-        binding.feedWatchControls.isVisible = false
-        binding.feedWatchErrorBox.isVisible = true
-        binding.feedWatchOpenDetails.setOnClickListener {
-            val url = currentUrl ?: return@setOnClickListener
-            FeedPool.entries.firstOrNull { it.response.url == url }?.let { entry ->
-                activity.loadSearchResult(entry.response)
-            }
-        }
-    }
-
-    private fun savePosition() {
-        val exo = player ?: return
-        val ep = episodes.getOrNull(currentIndex) ?: return
-        val duration = exo.duration.takeIf { it > 0 } ?: return
-        DataStoreHelper.setViewPos(ep.id, exo.currentPosition, duration)
-    }
-
-    private fun updateProgress() {
-        val exo = player ?: return
-        val binding = binding ?: return
-        val duration = exo.duration.takeIf { it > 0 } ?: 0L
-        if (!seeking && duration > 0) {
-            binding.feedWatchSeek.progress =
-                (exo.currentPosition * 1000 / duration).toInt()
-        }
-        binding.feedWatchTimeCurrent.text = formatTime(exo.currentPosition)
-        binding.feedWatchTimeTotal.text = formatTime(duration)
-        if (++tickCount % 10 == 0) savePosition()
-    }
-
-    private fun toggleControls() {
-        val binding = binding ?: return
-        if (binding.feedWatchControls.isVisible) {
-            binding.feedWatchControls.isVisible = false
-            handler.removeCallbacks(hideControlsRunnable)
-        } else {
-            showControls()
-        }
-    }
-
-    private fun showControls() {
-        val binding = binding ?: return
-        if (currentLinks.isEmpty()) return
-        binding.feedWatchControls.isVisible = true
-        scheduleHideControls()
-    }
-
-    private fun scheduleHideControls() {
-        handler.removeCallbacks(hideControlsRunnable)
-        if (player?.isPlaying == true) {
-            handler.postDelayed(hideControlsRunnable, 3_000L)
-        }
     }
 
     private fun formatTime(ms: Long): String {

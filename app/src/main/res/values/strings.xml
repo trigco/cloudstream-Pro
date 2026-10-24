@@ -350,6 +350,8 @@
     <string name="feed_retry">Retry</string>
     <string name="feed_loading_video">Loading video…</string>
     <string name="feed_sources">Sources</string>
+    <string name="feed_next_episode">Next episode</string>
+    <string name="feed_play_main">Play in main player</string>
     <string name="feed_search_hint">Search feed…</string>
     <string name="feed_quality">Quality</string>
     <string name="feed_subtitles">Subtitles</string>

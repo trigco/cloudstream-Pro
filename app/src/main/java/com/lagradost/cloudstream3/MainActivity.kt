@@ -106,6 +106,7 @@ import com.lagradost.cloudstream3.ui.SyncWatchType
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.download.DOWNLOAD_NAVIGATE_TO
+import com.lagradost.cloudstream3.ui.feed.FeedFragment
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.ui.library.LibraryViewModel
 import com.lagradost.cloudstream3.ui.player.BasicLink
@@ -1897,6 +1898,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 setupNavScrub(this)
             }
 
+            // Phase 8.20: re-tapping the Feed tab scrolls the feed to top.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedFragment } as? FeedFragment)
+                        ?.scrollToTop()
+                }
+            }
+
         }
 
         binding?.navRailView?.apply {
@@ -1926,6 +1938,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 // Phase 8.16: same haptic tick as the bottom bar.
                 if (handled) hapticTick()
                 handled
+            }
+
+            // Phase 8.20: same re-tap behaviour as the bottom bar.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedFragment } as? FeedFragment)
+                        ?.scrollToTop()
+                }
             }
 
 
