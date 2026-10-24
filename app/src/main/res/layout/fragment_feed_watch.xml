@@ -60,11 +60,97 @@
                 android:text="@string/feed_retry" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/feed_watch_skip_back"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="180dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="@null"
+                android:src="@drawable/netflix_skip_back" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="10s"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/feed_watch_skip_forward"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginStart="180dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="@null"
+                android:src="@drawable/netflix_skip_forward" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="10s"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <FrameLayout
             android:id="@+id/feed_watch_controls"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:orientation="horizontal"
+                android:padding="4dp">
+
+                <ImageButton
+                    android:id="@+id/feed_watch_quality"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/feed_center_button_bg"
+                    android:contentDescription="@string/feed_quality"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_baseline_playlist_play_24"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/feed_watch_audio"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/feed_center_button_bg"
+                    android:contentDescription="@string/feed_audio"
+                    android:padding="9dp"
+                    android:src="@drawable/feed_audio" />
+
+                <ImageButton
+                    android:id="@+id/feed_watch_subtitles"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/feed_center_button_bg"
+                    android:contentDescription="@string/feed_subtitles"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_baseline_subtitles_24" />
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/feed_watch_play_pause"
@@ -111,15 +197,6 @@
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
                     android:text="0:00" />
-
-                <ImageButton
-                    android:id="@+id/feed_watch_sources"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/feed_sources"
-                    android:src="@drawable/ic_baseline_playlist_play_24"
-                    android:visibility="gone" />
 
                 <ImageButton
                     android:id="@+id/feed_watch_fullscreen"

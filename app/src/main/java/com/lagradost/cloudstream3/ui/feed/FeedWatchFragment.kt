@@ -5,20 +5,27 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.OrientationEventListener
 import android.view.View
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C.TRACK_TYPE_AUDIO
+import androidx.media3.common.C.TRACK_TYPE_TEXT
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.DubStatus
@@ -75,6 +82,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var episodes: List<ResultEpisode> = emptyList()
     private var currentIndex = 0
     private var currentLinks: List<ExtractorLink> = emptyList()
+    private var currentSubs: List<SubtitleData> = emptyList()
     private var currentUrl: String? = null
     private var currentApiName: String? = null
     private var currentName: String? = null
@@ -109,7 +117,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     override fun onBindingCreated(binding: FragmentFeedWatchBinding) {
-        binding.feedWatchUpnext.layoutManager = LinearLayoutManager(context)
+        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
         binding.feedWatchUpnext.adapter = upNextAdapter
 
         player = ExoPlayer.Builder(requireContext()).build().also { exo ->
@@ -144,7 +152,31 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             })
         }
 
-        binding.feedWatchPlayer.setOnClickListener { toggleControls() }
+        // Single tap toggles the controls; double tap skips ∓10 seconds
+        // (left half back, right half forward), YouTube-style.
+        val gestureDetector = GestureDetector(
+            requireContext(),
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    toggleControls()
+                    return true
+                }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    val view = binding.feedWatchPlayer
+                    if (e.x < view.width / 2) {
+                        skipBy(-10_000L, back = true)
+                    } else {
+                        skipBy(10_000L, back = false)
+                    }
+                    return true
+                }
+            }
+        )
+        binding.feedWatchPlayer.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            true
+        }
         binding.feedWatchPlayPause.setOnClickListener {
             val exo = player ?: return@setOnClickListener
             if (exo.isPlaying) exo.pause() else exo.play()
@@ -153,7 +185,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             view.hapticTick()
             openInMainPlayer()
         }
-        binding.feedWatchSources.setOnClickListener { showSources() }
+        binding.feedWatchQuality.setOnClickListener { showQuality() }
+        binding.feedWatchSubtitles.setOnClickListener { showSubtitlePicker() }
+        binding.feedWatchAudio.setOnClickListener { showAudioPicker() }
         binding.feedWatchSeek.setOnSeekBarChangeListener(object :
             SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -290,8 +324,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 return@launch
             }
             currentLinks = playable
+            currentSubs = subs
             binding.feedWatchStatus.isVisible = false
-            binding.feedWatchSources.isVisible = playable.size > 1
+            binding.feedWatchQuality.isVisible = playable.size > 1
             updateHeaderMeta(apiName, response)
             refreshUpNext(url)
             setupOrientationHandoff()
@@ -340,23 +375,124 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         showControls()
     }
 
-    private fun showSources() {
+    private fun showQuality() {
         val context = context ?: return
         if (currentLinks.size < 2) return
         val labels = currentLinks.map { link ->
             val quality = if (link.quality > 0) "${link.quality}p" else ""
-            listOf(link.name, quality).filter { it.isNotBlank() }.joinToString(" • ")
+            listOf(quality, link.name).filter { it.isNotBlank() }.joinToString(" • ")
                 .ifBlank { link.url }
         }.toTypedArray()
         AlertDialog.Builder(context)
-            .setTitle(R.string.feed_sources)
+            .setTitle(R.string.feed_quality)
             .setItems(labels) { _, which ->
                 val exo = player ?: return@setItems
                 val pos = exo.currentPosition
-                playLink(currentLinks[which], emptyList())
+                playLink(currentLinks[which], currentSubs)
                 exo.seekTo(pos)
             }
             .show()
+    }
+
+    private data class TrackOption(
+        val label: String,
+        val group: Tracks.Group,
+        val index: Int,
+        val selected: Boolean
+    )
+
+    private fun trackOptions(type: Int): List<TrackOption> {
+        val exo = player ?: return emptyList()
+        val options = mutableListOf<TrackOption>()
+        for (group in exo.currentTracks.groups.filter { it.type == type }) {
+            for (i in 0 until group.length) {
+                val format = group.getFormat(i)
+                val base = format.label ?: format.language ?: "Track ${i + 1}"
+                val label = if (type == TRACK_TYPE_AUDIO && format.channelCount > 2) {
+                    "$base • ${format.channelCount}ch"
+                } else {
+                    base
+                }
+                options.add(TrackOption(label, group, i, group.isTrackSelected(i)))
+            }
+        }
+        return options
+    }
+
+    /** Subtitle picker: Off + every text track in the loaded media. */
+    private fun showSubtitlePicker() {
+        val context = context ?: return
+        val exo = player ?: return
+        val options = trackOptions(TRACK_TYPE_TEXT)
+        if (options.isEmpty()) {
+            Toast.makeText(context, R.string.feed_no_subtitles, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = arrayOf(
+            getString(R.string.feed_off),
+            *options.map { it.label }.toTypedArray()
+        )
+        val selectedIndex = options.indexOfFirst { it.selected }
+        AlertDialog.Builder(context)
+            .setTitle(R.string.feed_subtitles)
+            .setSingleChoiceItems(labels, if (selectedIndex >= 0) selectedIndex + 1 else 0) { dialog, which ->
+                val params = exo.trackSelectionParameters.buildUpon()
+                if (which == 0) {
+                    params.setTrackTypeDisabled(TRACK_TYPE_TEXT, true)
+                        .clearOverridesOfType(TRACK_TYPE_TEXT)
+                } else {
+                    val option = options[which - 1]
+                    params.setTrackTypeDisabled(TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(
+                            TrackSelectionOverride(option.group.mediaTrackGroup, option.index)
+                        )
+                }
+                exo.trackSelectionParameters = params.build()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /** Audio picker: every audio track in the loaded media. */
+    private fun showAudioPicker() {
+        val context = context ?: return
+        val exo = player ?: return
+        val options = trackOptions(TRACK_TYPE_AUDIO)
+        if (options.size <= 1) {
+            Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = options.map { it.label }.toTypedArray()
+        val selectedIndex = options.indexOfFirst { it.selected }.coerceAtLeast(0)
+        AlertDialog.Builder(context)
+            .setTitle(R.string.feed_audio)
+            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
+                val option = options[which]
+                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                    .setOverrideForType(
+                        TrackSelectionOverride(option.group.mediaTrackGroup, option.index)
+                    )
+                    .build()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private val skipHideRunnable = Runnable {
+        binding?.feedWatchSkipBack?.isVisible = false
+        binding?.feedWatchSkipForward?.isVisible = false
+    }
+
+    private fun skipBy(deltaMs: Long, back: Boolean) {
+        val exo = player ?: return
+        val binding = binding ?: return
+        val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
+        binding.feedWatchPlayer.hapticTick()
+        binding.feedWatchSkipBack.isVisible = back
+        binding.feedWatchSkipForward.isVisible = !back
+        handler.removeCallbacks(skipHideRunnable)
+        handler.postDelayed(skipHideRunnable, 600L)
     }
 
     // ---------- handoff to the main player ----------

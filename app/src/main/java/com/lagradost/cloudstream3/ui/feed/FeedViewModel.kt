@@ -21,23 +21,30 @@ object FeedPool {
 }
 
 /**
- * Phase 8.18 — builds the Feed: the homepages of every installed provider
- * with a main page, flattened, interleaved round-robin so no provider
- * dominates, deduplicated by URL. Liked types/providers (see FeedLikes)
- * are woven in more densely, which is how the feed learns taste. One page
- * per provider, capped per provider, so the first build stays quick; the
- * pool is kept in memory for the watch page.
+ * Phase 8.18/8.19 — builds the Feed: the homepages of every installed
+ * provider with a main page, flattened, interleaved round-robin so no
+ * provider dominates, deduplicated by URL. Liked types/providers (see
+ * FeedLikes) are woven in more densely, which is how the feed learns
+ * taste. Pull-to-refresh advances to the NEXT homepage page of every
+ * provider, so refreshing surfaces genuinely different content; when a
+ * page comes back empty the cycle wraps to page 1. The pool is kept in
+ * memory for the watch page.
  */
 class FeedViewModel(application: Application) : AndroidViewModel(application) {
     val feed = MutableLiveData<Resource<List<FeedEntry>>>()
     private var building = false
+    private var page = 1
 
     fun loadIfNeeded() {
         if (building || feed.value is Resource.Success) return
         build()
     }
 
-    fun refresh() = build()
+    /** Next batch: advance every provider to its next homepage page. */
+    fun refresh() {
+        page += 1
+        build()
+    }
 
     private fun build() {
         if (building) return
@@ -45,7 +52,12 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         feed.postValue(Resource.Loading())
         viewModelScope.launch {
             try {
-                val entries = buildFeed()
+                var entries = buildFeed(page)
+                if (entries.isEmpty() && page > 1) {
+                    // Providers ran out of pages — wrap around to page 1.
+                    page = 1
+                    entries = buildFeed(page)
+                }
                 FeedPool.entries = entries
                 feed.postValue(
                     if (entries.isEmpty()) {
@@ -62,16 +74,33 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun buildFeed(): List<FeedEntry> {
+    /** Phase 8.19: search every provider at once (used by the feed search). */
+    suspend fun searchAll(query: String): List<FeedEntry> {
+        val providers = apis.filter { it.hasMainPage && it.name != "None" }
+        val results: List<List<FeedEntry>> = providers.amap { api ->
+            try {
+                when (val res = APIRepository(api).search(query, 1)) {
+                    is Resource.Success -> res.value.items.map { FeedEntry(it, api.name) }
+                    else -> emptyList()
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        val seen = mutableSetOf<String>()
+        return results.flatten().filter { seen.add(it.response.url) }
+    }
+
+    private suspend fun buildFeed(page: Int): List<FeedEntry> {
         val providers = apis.filter { it.hasMainPage && it.name != "None" }
         val perProvider: List<List<FeedEntry>> = providers.amap { api ->
             try {
-                when (val res = APIRepository(api).getMainPage(1, null)) {
+                when (val res = APIRepository(api).getMainPage(page, null)) {
                     is Resource.Success -> res.value
                         .filterNotNull()
                         .flatMap { it.items }
                         .flatMap { it.list }
-                        .take(10)
+                        .take(30)
                         .map { FeedEntry(it, api.name) }
 
                     else -> emptyList()
