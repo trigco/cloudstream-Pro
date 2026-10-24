@@ -192,6 +192,51 @@
                     android:text="@string/rotate_video"
                     app:icon="@drawable/screen_rotation" />
             </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/player_portrait_tracks_btt"
+                    style="@style/NiceButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/portrait_tracks"
+                    app:icon="@drawable/ic_baseline_tune_24" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/player_portrait_download_btt"
+                    style="@style/NiceButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/portrait_download"
+                    app:icon="@drawable/baseline_downloading_24" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/player_portrait_recs_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/portrait_recs_title"
+                android:textColor="?attr/white"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/player_portrait_recs"
+                android:layout_width="match_parent"
+                android:layout_height="172dp"
+                android:layout_marginTop="10dp"
+                android:clipToPadding="false"
+                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 

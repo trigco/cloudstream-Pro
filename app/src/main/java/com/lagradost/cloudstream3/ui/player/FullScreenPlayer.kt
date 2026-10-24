@@ -1133,6 +1133,12 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             toggleEpisodesOverlay(show = true)
         }
         binding.playerPortraitRotateBtt?.setOnClickListener { toggleRotate() }
+        binding.playerPortraitTracksBtt?.setOnClickListener { showTracksDialogue() }
+        binding.playerPortraitDownloadBtt?.setOnClickListener {
+            // In-player downloads live in the episodes overlay (per-episode
+            // download buttons + header), so Download opens it.
+            toggleEpisodesOverlay(show = true)
+        }
 
         val view = binding.root
         // init variables

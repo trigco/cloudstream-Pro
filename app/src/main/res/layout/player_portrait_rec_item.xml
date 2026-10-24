@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.14c: one poster card in the portrait player's
+     "More like this" row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="104dp"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="10dp"
+    android:orientation="vertical">
+
+    <ImageView
+        android:id="@+id/rec_poster"
+        android:layout_width="104dp"
+        android:layout_height="146dp"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <TextView
+        android:id="@+id/rec_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="?attr/white"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/rec_provider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="?attr/grayTextColor"
+        android:textSize="10sp" />
+</LinearLayout>

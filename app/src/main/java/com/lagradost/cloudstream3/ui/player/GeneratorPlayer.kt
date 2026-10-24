@@ -47,6 +47,10 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
+import com.lagradost.cloudstream3.APIHolder.allProviders
+import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.utils.AppContextUtils.loadResult
+import kotlinx.coroutines.withTimeoutOrNull
 import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
 import com.lagradost.cloudstream3.CommonActivity.showToast
@@ -1940,6 +1944,65 @@ class GeneratorPlayer : FullScreenPlayer() {
         return ""
     }
 
+    // Phase 8.14c: key of the show the portrait recommendations were
+    // fetched for, so episode changes within one show don't refetch.
+    private var portraitRecsKey: String? = null
+
+    /**
+     * Phase 8.14c — fill the portrait panel's "More like this" row.
+     * Primary source: the playing title's own LoadResponse recommendations.
+     * When the current provider offers few or none, other installed
+     * providers are searched by title and merged in, so the feed is
+     * rarely empty. Portrait only: the views exist only in layout-port.
+     */
+    private fun loadPortraitRecommendations() {
+        val root = view ?: return
+        if (root.findViewById<RecyclerView>(R.id.player_portrait_recs) == null) return
+        val meta = currentMeta as? ResultEpisode ?: return
+        val key = "${meta.apiName}|${meta.headerName}"
+        if (key == portraitRecsKey) return
+        portraitRecsKey = key
+
+        ioSafe {
+            val combined = mutableListOf<SearchResponse>()
+            viewModel.state.generatorState?.response?.recommendations?.let {
+                combined += it
+            }
+            if (combined.size < 6) {
+                val others = allProviders
+                    .filter { it.name != meta.apiName }
+                    .take(4)
+                for (api in others) {
+                    try {
+                        withTimeoutOrNull(10_000) { api.search(meta.headerName) }
+                            ?.let { combined += it }
+                    } catch (_: Throwable) {
+                        // A broken provider must not break the feed.
+                    }
+                }
+            }
+            val final = combined
+                .distinctBy { it.url }
+                .filterNot { it.name.equals(meta.headerName, ignoreCase = true) }
+                .take(14)
+            if (final.isEmpty()) return@ioSafe
+            runOnMainThread {
+                val listView = view?.findViewById<RecyclerView>(
+                    R.id.player_portrait_recs
+                ) ?: return@runOnMainThread
+                view?.findViewById<TextView>(R.id.player_portrait_recs_label)
+                    ?.isVisible = true
+                listView.layoutManager = LinearLayoutManager(
+                    listView.context, LinearLayoutManager.HORIZONTAL, false
+                )
+                listView.adapter = PortraitRecsAdapter(final) { rec ->
+                    loadResult(rec.url, rec.apiName, rec.name)
+                }
+                listView.isVisible = true
+            }
+        }
+    }
+
     fun setTitle() {
         var playerVideoTitle = getPlayerVideoTitle()
 
@@ -1961,6 +2024,7 @@ class GeneratorPlayer : FullScreenPlayer() {
         // Phase 8.14c: mirror the title into the portrait panel (present
         // only in layout-port; findViewById returns null in landscape).
         view?.findViewById<TextView>(R.id.player_portrait_title)?.text = playerVideoTitle
+        loadPortraitRecommendations()
         playerBinding?.offlinePin?.isVisible = viewModel.generator is DownloadFileGenerator
     }
 
