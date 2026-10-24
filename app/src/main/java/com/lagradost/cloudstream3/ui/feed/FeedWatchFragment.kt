@@ -1,0 +1,585 @@
+package com.lagradost.cloudstream3.ui.feed
+
+import android.content.pm.ActivityInfo
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.OrientationEventListener
+import android.view.View
+import android.widget.SeekBar
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isVisible
+import androidx.media3.common.C.TRACK_TYPE_AUDIO
+import androidx.media3.common.C.TRACK_TYPE_TEXT
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
+import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.GridLayoutManager
+import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.databinding.FragmentFeedWatchBinding
+import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.player.GeneratorPlayer
+import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
+import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.TV
+import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
+import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
+import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.navigate
+import com.lagradost.cloudstream3.utils.hapticTick
+
+/**
+ * Phase 8.18–8.20 — the Feed watch page (YouTube-style, portrait).
+ * Playback itself lives in [FeedPlayer] (shared with the mini player);
+ * this fragment is the full-screen UI over it: custom controls,
+ * double-tap skip, quality/subtitle/audio pickers, next episode,
+ * drag-down to minimise into the Feed, and the landscape/fullscreen
+ * handoff to the main player.
+ */
+@UnstableApi
+class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
+    BindingCreator.Inflate(FragmentFeedWatchBinding::inflate)
+) {
+    private var handedOff = false
+    private var seeking = false
+    private var tickCount = 0
+    private var lastShownUrl: String? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            updateProgress()
+            handler.postDelayed(this, 500L)
+        }
+    }
+    private val hideControlsRunnable = Runnable { binding?.feedWatchControls?.isVisible = false }
+    private val skipHideRunnable = Runnable {
+        binding?.feedWatchSkipBack?.isVisible = false
+        binding?.feedWatchSkipForward?.isVisible = false
+    }
+
+    private var orientationListener: OrientationEventListener? = null
+    private var landscapeSince = 0L
+
+    private val upNextAdapter = FeedAdapter(
+        onPlay = { entry ->
+            context?.let {
+                FeedPlayer.play(
+                    it, entry.response.url, entry.apiName,
+                    entry.response.name, entry.response.posterUrl
+                )
+            }
+            binding?.feedWatchUpnext?.scrollToPosition(0)
+        },
+        onHide = { entry -> confirmHide(entry) }
+    )
+
+    /** Phase 8.22: long-press a card → offer to hide it for good. */
+    private fun confirmHide(entry: FeedEntry) {
+        val context = context ?: return
+        AlertDialog.Builder(context)
+            .setTitle(FeedAdapter.displayTitle(entry.response.name, entry.response.url))
+            .setMessage(R.string.feed_hide_message)
+            .setPositiveButton(R.string.feed_hide) { _, _ ->
+                FeedHidden.hide(context, entry.response.url)
+                FeedPool.hide(entry.response.url)
+                FeedPlayer.currentUrl?.let { refreshUpNext(it) }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private val stateListener: () -> Unit = { updatePlaybackUi() }
+
+    private val iconListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            val binding = binding ?: return
+            binding.feedWatchPlayer.keepScreenOn = isPlaying
+            binding.feedWatchPlayPause.setImageResource(
+                if (isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
+            )
+            if (isPlaying) scheduleHideControls() else showControls()
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            updateBuffering()
+        }
+    }
+
+    override fun fixLayout(view: View) {
+        fixSystemBarsPadding(
+            view,
+            padBottom = isLandscape(),
+            padLeft = isLayout(TV or EMULATOR)
+        )
+    }
+
+    override fun onBindingCreated(binding: FragmentFeedWatchBinding) {
+        FeedPlayer.warmUp(requireContext())
+        binding.feedWatchPlayer.player = FeedPlayer.exo
+        FeedPlayer.exo?.addListener(iconListener)
+        FeedPlayer.addListener(stateListener)
+
+        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
+        binding.feedWatchUpnext.adapter = upNextAdapter
+
+        val url = arguments?.getString("url") ?: return
+        val apiName = arguments?.getString("apiName") ?: return
+        val name = arguments?.getString("name") ?: url
+        val poster = arguments?.getString("posterUrl")
+        refreshUpNext(url)
+        FeedPlayer.play(requireContext(), url, apiName, name, poster)
+
+        // Single tap toggles controls; double tap skips ∓10 s; a long
+        // downward drag minimises into the Feed's mini player.
+        val gestureDetector = GestureDetector(
+            requireContext(),
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    toggleControls()
+                    return true
+                }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    val view = binding.feedWatchPlayer
+                    if (e.x < view.width / 2) {
+                        skipBy(-10_000L, back = true)
+                    } else {
+                        skipBy(10_000L, back = false)
+                    }
+                    return true
+                }
+            }
+        )
+        var downY = 0f
+        var dragHandled = false
+        binding.feedWatchPlayer.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downY = event.y
+                    dragHandled = false
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragHandled && event.y - downY > 160f && FeedPlayer.isPlaying) {
+                        dragHandled = true
+                        minimizeToFeed()
+                    }
+                }
+            }
+            gestureDetector.onTouchEvent(event)
+            true
+        }
+
+        binding.feedWatchPlayPause.setOnClickListener { FeedPlayer.togglePlay() }
+        binding.feedWatchFullscreen.setOnClickListener { view ->
+            view.hapticTick()
+            openInMainPlayer()
+        }
+        binding.feedWatchNext.setOnClickListener { view ->
+            view.hapticTick()
+            FeedPlayer.nextEpisode()
+        }
+        binding.feedWatchQuality.setOnClickListener { showQuality() }
+        binding.feedWatchSubtitles.setOnClickListener { showSubtitlePicker() }
+        binding.feedWatchAudio.setOnClickListener { showAudioPicker() }
+        binding.feedWatchSeek.setOnSeekBarChangeListener(object :
+            SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val exo = FeedPlayer.exo ?: return
+                    val duration = exo.duration.takeIf { it > 0 } ?: return
+                    binding.feedWatchTimeCurrent.text = formatTime(duration * progress / 1000)
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                seeking = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                seeking = false
+                val exo = FeedPlayer.exo ?: return
+                val duration = exo.duration.takeIf { it > 0 } ?: return
+                exo.seekTo(duration * (seekBar?.progress ?: 0) / 1000)
+            }
+        })
+        binding.feedWatchRetry.setOnClickListener {
+            context?.let { FeedPlayer.replayCurrent(it) }
+        }
+        binding.feedWatchPlayMain.setOnClickListener { openInMainPlayer() }
+        binding.feedWatchOpenDetails.setOnClickListener {
+            val current = FeedPlayer.currentUrl ?: return@setOnClickListener
+            FeedPool.entries.firstOrNull { it.response.url == current }?.let { entry ->
+                activity.loadSearchResult(entry.response)
+            }
+        }
+        setupOrientationHandoff()
+        updatePlaybackUi()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        handler.post(progressRunnable)
+        orientationListener?.enable()
+        if (handedOff) {
+            handedOff = false
+            context?.let { FeedPlayer.replayCurrent(it) }
+        }
+    }
+
+    override fun onPause() {
+        FeedPlayer.savePosition()
+        handler.removeCallbacks(progressRunnable)
+        orientationListener?.disable()
+        super.onPause()
+    }
+
+    override fun onDestroyView() {
+        FeedPlayer.removeListener(stateListener)
+        FeedPlayer.exo?.removeListener(iconListener)
+        handler.removeCallbacksAndMessages(null)
+        orientationListener?.disable()
+        orientationListener = null
+        binding?.feedWatchPlayer?.player = null
+        // Leaving for good (not minimised, not handed off) stops playback.
+        if (!handedOff && !FeedPlayer.minimized) {
+            FeedPlayer.stop()
+        }
+        // After a handoff the main player owns the orientation; only
+        // restore it when this page is really being left behind.
+        if (!handedOff) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
+        }
+        super.onDestroyView()
+    }
+
+    // ---------- UI state ----------
+
+    private fun updatePlaybackUi() {
+        val binding = binding ?: return
+        val exo = FeedPlayer.exo
+        when (FeedPlayer.status) {
+            FeedPlayer.Status.LOADING -> {
+                binding.feedWatchErrorBox.isVisible = false
+                binding.feedWatchControls.isVisible = false
+                // The poster carries the loading state; the (empty) video
+                // surface stays hidden until the first frame is ready.
+                binding.feedWatchPlayer.isVisible = false
+                binding.feedWatchPoster.isVisible = FeedPlayer.currentPoster != null
+                FeedPlayer.currentPoster?.let {
+                    binding.feedWatchPoster.loadImage(it)
+                }
+                binding.feedWatchLoadingBox.isVisible = true
+            }
+
+            FeedPlayer.Status.READY -> {
+                binding.feedWatchLoadingBox.isVisible = false
+                binding.feedWatchPoster.isVisible = false
+                binding.feedWatchPlayer.isVisible = true
+                binding.feedWatchErrorBox.isVisible = false
+                showControls()
+            }
+
+            FeedPlayer.Status.ERROR -> {
+                binding.feedWatchLoadingBox.isVisible = false
+                binding.feedWatchPoster.isVisible = false
+                binding.feedWatchPlayer.isVisible = false
+                binding.feedWatchControls.isVisible = false
+                binding.feedWatchErrorBox.isVisible = true
+                binding.feedWatchPlayMain.isVisible = FeedPlayer.generator != null
+            }
+
+            FeedPlayer.Status.IDLE -> Unit
+        }
+        if (exo != null) {
+            binding.feedWatchPlayPause.setImageResource(
+                if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
+            )
+        }
+        binding.feedWatchQuality.isVisible = FeedPlayer.qualities.size > 1
+        binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
+        updateHeader()
+        val current = FeedPlayer.currentUrl
+        if (current != null && current != lastShownUrl) {
+            lastShownUrl = current
+            refreshUpNext(current)
+        }
+    }
+
+    private fun updateBuffering() {
+        val binding = binding ?: return
+        val exo = FeedPlayer.exo ?: return
+        if (FeedPlayer.status == FeedPlayer.Status.READY &&
+            exo.playbackState == Player.STATE_BUFFERING
+        ) {
+            binding.feedWatchLoadingBox.isVisible = true
+        } else if (FeedPlayer.status == FeedPlayer.Status.READY) {
+            binding.feedWatchLoadingBox.isVisible = false
+        }
+    }
+
+    private fun updateHeader() {
+        val binding = binding ?: return
+        val name = FeedPlayer.currentName ?: return
+        binding.feedWatchTitle.text = FeedAdapter.displayTitle(
+            name, FeedPlayer.currentUrl ?: ""
+        )
+        val ep = FeedPlayer.currentEpisode
+        val apiName = FeedPlayer.currentApiName ?: ""
+        val typeText = ep?.let { FeedAdapter.typeLabel(it.tvType) } ?: ""
+        val epText = if (ep != null && ep.episode > 0) {
+            " • S${ep.season ?: 1} E${ep.episode}"
+        } else {
+            ""
+        }
+        binding.feedWatchMeta.text =
+            listOf(apiName, typeText).filter { it.isNotBlank() }.joinToString(" • ") + epText
+    }
+
+    private fun refreshUpNext(exceptUrl: String) {
+        upNextAdapter.submitList(
+            FeedPool.entries.filter { it.response.url != exceptUrl }
+        )
+    }
+
+    // ---------- controls ----------
+
+    private fun updateProgress() {
+        val exo = FeedPlayer.exo ?: return
+        val binding = binding ?: return
+        val duration = exo.duration.takeIf { it > 0 } ?: 0L
+        if (!seeking && duration > 0) {
+            binding.feedWatchSeek.progress =
+                (exo.currentPosition * 1000 / duration).toInt()
+        }
+        binding.feedWatchTimeCurrent.text = formatTime(exo.currentPosition)
+        binding.feedWatchTimeTotal.text = formatTime(duration)
+        if (++tickCount % 10 == 0) FeedPlayer.savePosition()
+    }
+
+    private fun toggleControls() {
+        val binding = binding ?: return
+        if (FeedPlayer.status != FeedPlayer.Status.READY) return
+        if (binding.feedWatchControls.isVisible) {
+            binding.feedWatchControls.isVisible = false
+            handler.removeCallbacks(hideControlsRunnable)
+        } else {
+            showControls()
+        }
+    }
+
+    private fun showControls() {
+        val binding = binding ?: return
+        if (FeedPlayer.status != FeedPlayer.Status.READY) return
+        binding.feedWatchControls.isVisible = true
+        scheduleHideControls()
+    }
+
+    private fun scheduleHideControls() {
+        handler.removeCallbacks(hideControlsRunnable)
+        if (FeedPlayer.isPlaying) {
+            handler.postDelayed(hideControlsRunnable, 3_000L)
+        }
+    }
+
+    private fun skipBy(deltaMs: Long, back: Boolean) {
+        val exo = FeedPlayer.exo ?: return
+        val binding = binding ?: return
+        val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
+        binding.feedWatchPlayer.hapticTick()
+        binding.feedWatchSkipBack.isVisible = back
+        binding.feedWatchSkipForward.isVisible = !back
+        handler.removeCallbacks(skipHideRunnable)
+        handler.postDelayed(skipHideRunnable, 600L)
+    }
+
+    private fun minimizeToFeed() {
+        FeedPlayer.minimized = true
+        FeedPlayer.savePosition()
+        binding?.feedWatchPlayer?.hapticTick()
+        findNavController().popBackStack()
+    }
+
+    // ---------- pickers ----------
+
+    private fun showQuality() {
+        val context = context ?: return
+        val qualities = FeedPlayer.qualities
+        if (qualities.size < 2) return
+        // Resolution tags only — links that share a resolution stay
+        // under the one tag, and the fallback walks them automatically.
+        val labels = qualities.map { quality ->
+            if (quality > 0) "${quality}p" else "Auto"
+        }.toTypedArray()
+        AlertDialog.Builder(context)
+            .setTitle(R.string.feed_quality)
+            .setItems(labels) { _, which -> FeedPlayer.selectQuality(qualities[which]) }
+            .show()
+    }
+
+    private data class TrackOption(
+        val label: String,
+        val group: Tracks.Group,
+        val index: Int,
+        val selected: Boolean
+    )
+
+    private fun trackOptions(type: Int): List<TrackOption> {
+        val exo = FeedPlayer.exo ?: return emptyList()
+        val options = mutableListOf<TrackOption>()
+        for (group in exo.currentTracks.groups.filter { it.type == type }) {
+            for (i in 0 until group.length) {
+                val format = group.mediaTrackGroup.getFormat(i)
+                val base = format.label ?: format.language ?: "Track ${i + 1}"
+                val label = if (type == TRACK_TYPE_AUDIO && format.channelCount > 2) {
+                    "$base • ${format.channelCount}ch"
+                } else {
+                    base
+                }
+                options.add(TrackOption(label, group, i, group.isTrackSelected(i)))
+            }
+        }
+        return options
+    }
+
+    private fun showSubtitlePicker() {
+        val context = context ?: return
+        val exo = FeedPlayer.exo ?: return
+        val options = trackOptions(TRACK_TYPE_TEXT)
+        if (options.isEmpty()) {
+            Toast.makeText(context, R.string.feed_no_subtitles, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = arrayOf(
+            getString(R.string.feed_off),
+            *options.map { it.label }.toTypedArray()
+        )
+        val selectedIndex = options.indexOfFirst { it.selected }
+        AlertDialog.Builder(context)
+            .setTitle(R.string.feed_subtitles)
+            .setSingleChoiceItems(labels, if (selectedIndex >= 0) selectedIndex + 1 else 0) { dialog, which ->
+                val params = exo.trackSelectionParameters.buildUpon()
+                if (which == 0) {
+                    params.setTrackTypeDisabled(TRACK_TYPE_TEXT, true)
+                        .clearOverridesOfType(TRACK_TYPE_TEXT)
+                } else {
+                    val option = options[which - 1]
+                    params.setTrackTypeDisabled(TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(
+                            TrackSelectionOverride(option.group.mediaTrackGroup, option.index)
+                        )
+                }
+                exo.trackSelectionParameters = params.build()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun showAudioPicker() {
+        val context = context ?: return
+        val exo = FeedPlayer.exo ?: return
+        val options = trackOptions(TRACK_TYPE_AUDIO)
+        if (options.size <= 1) {
+            Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = options.map { it.label }.toTypedArray()
+        val selectedIndex = options.indexOfFirst { it.selected }.coerceAtLeast(0)
+        AlertDialog.Builder(context)
+            .setTitle(R.string.feed_audio)
+            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
+                val option = options[which]
+                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                    .setOverrideForType(
+                        TrackSelectionOverride(option.group.mediaTrackGroup, option.index)
+                    )
+                    .build()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    // ---------- handoff to the main player ----------
+
+    private fun setupOrientationHandoff() {
+        val context = context ?: return
+        if (orientationListener != null) return
+        orientationListener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                val isLandscape = orientation in 70..110 || orientation in 250..290
+                if (isLandscape && FeedPlayer.isPlaying) {
+                    if (landscapeSince == 0L) landscapeSince = System.currentTimeMillis()
+                    if (System.currentTimeMillis() - landscapeSince > 700) {
+                        landscapeSince = 0L
+                        openInMainPlayer()
+                    }
+                } else {
+                    landscapeSince = 0L
+                }
+            }
+        }
+        orientationListener?.enable()
+    }
+
+    private fun openInMainPlayer() {
+        val gen = FeedPlayer.generator ?: return
+        if (handedOff) return
+        handedOff = true
+        FeedPlayer.pause()
+        // Hand over a generator whose episodes carry the LIVE saved
+        // positions, exactly as GeneratorPlayer refreshes them itself —
+        // the feed's copies were stamped when playback started.
+        val page = FeedPlayer.currentPage
+        val liveGen = if (page != null) {
+            val refreshed = FeedPlayer.episodes.map { ep ->
+                DataStoreHelper.getViewPos(ep.id)
+                    ?.let { pd -> ep.copy(position = pd.position, duration = pd.duration) }
+                    ?: ep
+            }
+            RepoLinkGenerator(refreshed, page = page)
+        } else {
+            gen
+        }
+        // Unlock into landscape BEFORE navigating, so the main player
+        // never flashes its portrait layout on the way over.
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        activity.navigate(
+            R.id.global_to_navigation_player,
+            GeneratorPlayer.newInstance(liveGen, FeedPlayer.episodeIndex)
+        )
+    }
+
+    private fun formatTime(ms: Long): String {
+        if (ms <= 0) return "0:00"
+        val totalSeconds = ms / 1000
+        val hours = totalSeconds / 3600
+        val minutes = totalSeconds % 3600 / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%d:%02d".format(minutes, seconds)
+        }
+    }
+
+    companion object {
+        fun newInstance(url: String, apiName: String, name: String): Bundle =
+            Bundle().apply {
+                putString("url", url)
+                putString("apiName", apiName)
+                putString("name", name)
+            }
+    }
+}

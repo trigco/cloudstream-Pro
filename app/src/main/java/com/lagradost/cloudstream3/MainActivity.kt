@@ -106,6 +106,7 @@ import com.lagradost.cloudstream3.ui.SyncWatchType
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.download.DOWNLOAD_NAVIGATE_TO
+import com.lagradost.cloudstream3.ui.feed.FeedScrollTop
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.ui.library.LibraryViewModel
 import com.lagradost.cloudstream3.ui.player.BasicLink
@@ -154,6 +155,7 @@ import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.DataStore.getKey
 import com.lagradost.cloudstream3.utils.DataStore.setKey
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.hapticTick
 import com.lagradost.cloudstream3.utils.DataStoreHelper.accounts
 import com.lagradost.cloudstream3.utils.DataStoreHelper.migrateResumeWatching
 import com.lagradost.cloudstream3.utils.Event
@@ -502,6 +504,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         val isNavVisible = listOf(
             R.id.navigation_home,
+            R.id.navigation_feed,
             R.id.navigation_search,
             R.id.navigation_library,
             R.id.navigation_downloads,
@@ -1883,12 +1886,27 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 )
                 // Phase 5A: pop the selected icon, but only when navigation
                 // actually happened (not on reselection / debounce rejection)
-                if (handled) animateNavIconPop(this, item.itemId)
+                if (handled) {
+                    animateNavIconPop(this, item.itemId)
+                    // Phase 8.16: …and answer the switch with a light tick.
+                    hapticTick()
+                }
                 handled
             }
             // Phase 7: drag across the bar to scrub between tabs (phone only)
             if (isLayout(PHONE)) {
                 setupNavScrub(this)
+            }
+
+            // Phase 8.20: re-tapping the Feed tab scrolls the feed to top.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
+                        ?.scrollToTop()
+                }
             }
 
         }
@@ -1913,10 +1931,24 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             }*/
 
             setOnItemSelectedListener { item ->
-                onNavDestinationSelected(
+                val handled = onNavDestinationSelected(
                     item,
                     navController
                 )
+                // Phase 8.16: same haptic tick as the bottom bar.
+                if (handled) hapticTick()
+                handled
+            }
+
+            // Phase 8.20: same re-tap behaviour as the bottom bar.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
+                        ?.scrollToTop()
+                }
             }
 
 

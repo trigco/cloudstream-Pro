@@ -335,6 +335,44 @@
     </fragment>
 
     <fragment
+        android:id="@+id/navigation_feed"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed">
+        <action
+            android:id="@+id/action_navigation_feed_to_navigation_feed_watch"
+            app:destination="@id/navigation_feed_watch"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_feed_watch"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedWatchFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed_watch">
+        <argument
+            android:name="url"
+            app:argType="string" />
+        <argument
+            android:name="apiName"
+            app:argType="string" />
+        <argument
+            android:name="name"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
         android:id="@+id/navigation_search"
         android:name="com.lagradost.cloudstream3.ui.search.SearchFragment"
         android:label="@string/title_search"

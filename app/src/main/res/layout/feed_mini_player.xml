@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.20: the Feed mini player — floats over the feed while a
+     video plays on (YouTube-style). Tap or drag up expands back to the
+     watch page; the close button (or a drag down) stops playback. -->
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/feed_mini_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom"
+    android:layout_marginStart="12dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="100dp"
+    android:visibility="gone"
+    app:cardBackgroundColor="#FF212121"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/feed_mini_player_view"
+            android:layout_width="120dp"
+            android:layout_height="68dp"
+            app:show_buffering="never"
+            app:use_controller="false" />
+
+        <TextView
+            android:id="@+id/feed_mini_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/feed_mini_play_pause"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/feed_play_pause"
+            android:padding="8dp"
+            android:src="@drawable/netflix_pause" />
+
+        <ImageButton
+            android:id="@+id/feed_mini_close"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/feed_retry"
+            android:padding="10dp"
+            android:src="@drawable/ic_baseline_close_24" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

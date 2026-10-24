@@ -59,6 +59,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.subtitles.SaveCaptionStyle
 import com.lagradost.cloudstream3.ui.subtitles.SubtitlesFragment
 import com.lagradost.cloudstream3.utils.AppContextUtils
+import com.lagradost.cloudstream3.utils.hapticTick
 import com.lagradost.cloudstream3.utils.AppContextUtils.requestLocalAudioFocus
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.UIHelper.hideKeyboard
@@ -375,6 +376,7 @@ class PlayerView @JvmOverloads constructor(
             exoFfwdText?.text = context.getString(R.string.ffw_text_regular_format).format(seekSecs)
 
             playerPausePlay?.setOnClickListener {
+                it.hapticTick()
                 scheduleAutoHide()
                 if (currentPlayerStatus == CSPlayerLoading.IsEnded && isLayout(PHONE)) {
                     player.handleEvent(CSPlayerEvent.Restart, PlayerEventSource.UI)
@@ -383,10 +385,12 @@ class PlayerView @JvmOverloads constructor(
                 }
             }
             playerRew?.setOnClickListener  {
+                it.hapticTick()
                 scheduleAutoHide()
                 gestureHelper.rewind()
             }
             playerFfwd?.setOnClickListener {
+                it.hapticTick()
                 scheduleAutoHide()
                 gestureHelper.fastForward()
             }
