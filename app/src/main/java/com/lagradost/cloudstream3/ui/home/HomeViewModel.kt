@@ -346,12 +346,23 @@ class HomeViewModel : ViewModel() {
                         home?.items?.forEach { list ->
                             val filteredList =
                                 context?.filterHomePageListByFilmQuality(list) ?: list
+                            // Phase 8.17: rotate each category by a random
+                            // offset on every fresh load, so a refresh leads
+                            // with different posters instead of always the
+                            // same ones. Expansions append to this same list
+                            // afterwards, so the order stays stable while
+                            // browsing deeper.
+                            val rotated = if (filteredList.list.size >= 4) {
+                                val offset = (1 until filteredList.list.size).random()
+                                filteredList.list.drop(offset) +
+                                    filteredList.list.take(offset)
+                            } else {
+                                filteredList.list
+                            }
                             expandable[list.name] =
                                 ExpandableHomepageList(
                                     filteredList.copy(
-                                        list = CopyOnWriteArrayList(
-                                            filteredList.list
-                                        )
+                                        list = CopyOnWriteArrayList(rotated)
                                     ), 1, home.hasNext
                                 )
                         }
