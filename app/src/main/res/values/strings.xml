@@ -342,6 +342,16 @@
     <string name="auto_clear_cache_settings_summary">Clears video and image cache every time the app starts</string>
     <string name="haptics_settings">Haptic feedback</string>
     <string name="haptics_settings_summary">A light vibration on navigation, player taps and refresh</string>
+    <string name="title_feed">Feed</string>
+    <string name="feed_empty">No content found. Check your providers, then pull to refresh.</string>
+    <string name="feed_like">Like</string>
+    <string name="feed_up_next">Up next</string>
+    <string name="feed_open_details">Open details</string>
+    <string name="feed_retry">Retry</string>
+    <string name="feed_loading_video">Loading video…</string>
+    <string name="feed_sources">Sources</string>
+    <string name="feed_fullscreen">Open in full player</string>
+    <string name="feed_play_pause">Play or pause</string>
     <string name="android_tv_interface_on_seek_settings">Player Shown - Seek Amount</string>
     <string name="android_tv_interface_on_seek_settings_summary">The seek amount used when the player is visible</string>
     <string name="android_tv_interface_off_seek_settings">Player Hidden - Seek Amount</string>
