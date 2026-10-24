@@ -406,7 +406,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val options = mutableListOf<TrackOption>()
         for (group in exo.currentTracks.groups.filter { it.type == type }) {
             for (i in 0 until group.length) {
-                val format = group.getFormat(i)
+                val format = group.mediaTrackGroup.getFormat(i)
                 val base = format.label ?: format.language ?: "Track ${i + 1}"
                 val label = if (type == TRACK_TYPE_AUDIO && format.channelCount > 2) {
                     "$base • ${format.channelCount}ch"
