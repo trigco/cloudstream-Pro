@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -64,6 +65,7 @@ import kotlinx.coroutines.launch
  * off to the main player (fullscreen button, or turning the phone to
  * landscape) resumes exactly where the feed player stopped.
  */
+@OptIn(UnstableApi::class)
 class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     BindingCreator.Inflate(FragmentFeedWatchBinding::inflate)
 ) {
