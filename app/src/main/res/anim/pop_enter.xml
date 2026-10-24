@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<set xmlns:android="http://schemas.android.com/apk/res/android">
-    <scale
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromXScale="0.9"
-            android:toXScale="1.0"
-            android:fromYScale="0.9"
-            android:toYScale="1.0"
-            android:pivotX="50%"
-            android:pivotY="50%"
-    >
-    </scale>
+<!-- Phase 8.13: back-navigation enter — the page underneath fades back
+     in and settles to full scale on the M3 emphasized curve (no rise, so
+     returning feels calmer than arriving). -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
     <alpha
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromAlpha="0.0"
-            android:toAlpha="1.0"/>
+        android:duration="200"
+        android:fromAlpha="0.0"
+        android:interpolator="@anim/m3_emphasized"
+        android:toAlpha="1.0" />
+    <scale
+        android:duration="280"
+        android:fromXScale="0.99"
+        android:fromYScale="0.99"
+        android:interpolator="@anim/m3_emphasized"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:toXScale="1.0"
+        android:toYScale="1.0" />
 </set>

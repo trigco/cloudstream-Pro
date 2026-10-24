@@ -593,7 +593,8 @@ class GeneratorPlayer : FullScreenPlayer() {
         val providers = subsProviders.toList()
         val isSingleProvider = subsProviders.size == 1
 
-        val dialog = Dialog(context, R.style.DialogFullscreenPlayer)
+        val dialog = Dialog(context, R.style.DialogOverlayPlayer)
+        dialog.applyPlayerOverlaySize()
         val binding =
             DialogOnlineSubtitlesBinding.inflate(LayoutInflater.from(context), null, false)
         dialog.setContentView(binding.root)
@@ -1011,6 +1012,22 @@ class GeneratorPlayer : FullScreenPlayer() {
         }
 
 
+    /**
+     * Phase 8.14b — size an in-player option dialog as a floating overlay
+     * card over the video (paired with R.style.DialogOverlayPlayer)
+     * instead of a fullscreen page: 88% of the screen width (capped at
+     * 920dp) by 86% of the screen height.
+     */
+    private fun Dialog.applyPlayerOverlaySize() {
+        val metrics = context.resources.displayMetrics
+        val width = minOf(
+            (metrics.widthPixels * 0.88f).toInt(),
+            (920 * metrics.density).toInt()
+        )
+        val height = (metrics.heightPixels * 0.86f).toInt()
+        window?.setLayout(width, height)
+    }
+
     override fun showMirrorsDialogue() {
         try {
             currentSelectedSubtitles = player.getCurrentPreferredSubtitle()
@@ -1020,7 +1037,8 @@ class GeneratorPlayer : FullScreenPlayer() {
                 player.handleEvent(CSPlayerEvent.Pause, PlayerEventSource.UI)
                 val currentSubtitles = sortSubs(viewModel.state.subtitles)
 
-                val sourceDialog = Dialog(ctx, R.style.DialogFullscreenPlayer)
+                val sourceDialog = Dialog(ctx, R.style.DialogOverlayPlayer)
+                sourceDialog.applyPlayerOverlaySize()
                 val binding =
                     PlayerSelectSourceAndSubsBinding.inflate(LayoutInflater.from(ctx), null, false)
                 sourceDialog.setContentView(binding.root)
@@ -1312,7 +1330,7 @@ class GeneratorPlayer : FullScreenPlayer() {
                     val activity = activity ?: return@setOnClickListener
                     val dialog = QualityProfileDialog(
                         activity,
-                        R.style.DialogFullscreenPlayer,
+                        R.style.DialogOverlayPlayer,
                         viewModel.state.links.mapNotNull {
                             it.first?.let { extractorLink ->
                                 LinkSource(
@@ -1331,6 +1349,7 @@ class GeneratorPlayer : FullScreenPlayer() {
                         refreshLinks(currentQualityProfile)
                     }
 
+                    dialog.applyPlayerOverlaySize()
                     dialog.show()
                 }
 
@@ -1421,7 +1440,8 @@ class GeneratorPlayer : FullScreenPlayer() {
                 val currentAudioTracks = tracks.allAudioTracks
                 val binding: PlayerSelectTracksBinding =
                     PlayerSelectTracksBinding.inflate(LayoutInflater.from(ctx), null, false)
-                val trackDialog = Dialog(ctx, R.style.DialogFullscreenPlayer)
+                val trackDialog = Dialog(ctx, R.style.DialogOverlayPlayer)
+                trackDialog.applyPlayerOverlaySize()
                 this.selectTrackDialog = trackDialog
                 trackDialog.setContentView(binding.root)
                 trackDialog.show()

@@ -1,19 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<set xmlns:android="http://schemas.android.com/apk/res/android">
-    <scale
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromXScale="0.9"
-            android:toXScale="1.0"
-            android:fromYScale="0.9"
-            android:toYScale="1.0"
-            android:pivotX="50%"
-            android:pivotY="50%"
-    >
-    </scale>
+<!-- Phase 8.13: modern page enter — fade in + gentle rise + near-full
+     scale settle on the M3 emphasized curve, replacing the old linear
+     0.9-scale zoom that read as static. Shared by the nav graph actions,
+     MainActivity's bottom-nav NavOptions and SettingsProviders, so this
+     one file modernises transitions across the whole app. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
     <alpha
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromAlpha="0.0"
-            android:toAlpha="1.0"/>
+        android:duration="200"
+        android:fromAlpha="0.0"
+        android:interpolator="@anim/m3_emphasized"
+        android:toAlpha="1.0" />
+    <translate
+        android:duration="300"
+        android:fromYDelta="3%p"
+        android:interpolator="@anim/m3_emphasized"
+        android:toYDelta="0" />
+    <scale
+        android:duration="300"
+        android:fromXScale="0.99"
+        android:fromYScale="0.99"
+        android:interpolator="@anim/m3_emphasized"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:toXScale="1.0"
+        android:toYScale="1.0" />
 </set>

@@ -100,6 +100,40 @@ object SingleSelectionHelper {
         //}
     }
 
+    /**
+     * Phase 8.13 — responsive popup sizing, applied from the shared dialog
+     * funnels below so every selection/input popup in the app inherits it.
+     * Bottom sheets sized to their content through a match_parent root, so
+     * a long list (e.g. 22 accent colours) filled nearly the whole screen;
+     * sheets are now capped at 80% of the screen height (shrunk only, never
+     * stretched — shorter sheets keep their natural height, the inner list
+     * scrolls). Centred dialogs get a consistent width of 92% of the
+     * screen, capped at 440dp, instead of AppCompat's min-width defaults
+     * that read as wall-to-wall on small phones. Phone layout only; TV
+     * dialogs keep their stock sizing.
+     */
+    private fun applyResponsiveDialogSize(dialog: Dialog) {
+        if (!isLayout(PHONE or EMULATOR)) return
+        val metrics = dialog.context.resources.displayMetrics
+        if (dialog is BottomSheetDialog) {
+            val sheet = dialog.findViewById<View>(
+                com.google.android.material.R.id.design_bottom_sheet
+            ) ?: return
+            val maxHeight = (metrics.heightPixels * 0.80f).toInt()
+            sheet.post {
+                if (sheet.height > maxHeight) {
+                    sheet.layoutParams = sheet.layoutParams.apply {
+                        height = maxHeight
+                    }
+                }
+            }
+        } else {
+            val maxWidth = (440 * metrics.density).toInt()
+            val width = minOf((metrics.widthPixels * 0.92f).toInt(), maxWidth)
+            dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+    }
+
     fun Activity?.showDialog(
         binding: BottomSelectionDialogBinding,
         dialog: Dialog,
@@ -128,6 +162,7 @@ object SingleSelectionHelper {
         }
 
         applyHolder.isVisible = realShowApply
+        applyResponsiveDialogSize(dialog)
         if (!realShowApply) {
             val params = listView.layoutParams as LinearLayout.LayoutParams
             params.setMargins(listView.marginLeft, listView.marginTop, listView.marginRight, 0)
@@ -210,6 +245,8 @@ object SingleSelectionHelper {
 
         applyHolder.isVisible = true
         textView.text = name
+
+        applyResponsiveDialogSize(dialog)
 
         if (textInputType != null) {
             inputView.inputType = textInputType // 16 for website url input type
@@ -408,6 +445,7 @@ object SingleSelectionHelper {
         }
 
         dialog.show()
+        applyResponsiveDialogSize(dialog)
     }
 }
 

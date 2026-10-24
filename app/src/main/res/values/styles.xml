@@ -632,6 +632,17 @@
         <item name="android:windowLightStatusBar" tools:targetApi="m">?attr/isLightTheme</item>
     </style>
 
+    <!-- Phase 8.14b: in-player option dialogs (source/subtitles, tracks,
+         online subtitles, quality profile, subtitle offset) as floating
+         overlay cards over the video instead of fullscreen pages: rounded
+         dialog surface (same drawable as the app dialogs), dimmed video
+         behind, M3 window animations inherited from DialogFullscreen.
+         Window size is set in code (applyPlayerOverlaySize). -->
+    <style name="DialogOverlayPlayer" parent="DialogFullscreenPlayer">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+    </style>
+
     <style name="DialogHalfFullscreen" parent="AlertDialogCustom">
         <item name="android:windowEnterAnimation">@anim/enter_anim</item>
         <item name="android:windowExitAnimation">@anim/exit_anim</item>

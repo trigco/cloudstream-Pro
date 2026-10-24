@@ -1,19 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<set xmlns:android="http://schemas.android.com/apk/res/android">
-    <scale
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromXScale="1.0"
-            android:toXScale="0.9"
-            android:fromYScale="1.0"
-            android:toYScale="0.9"
-            android:pivotX="50%"
-            android:pivotY="50%"
-    >
-    </scale>
+<!-- Phase 8.13: modern page exit — quick fade out with a slight settle
+     down/back, pairing enter_anim. Shared across the nav graph and the
+     bottom-nav NavOptions. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
     <alpha
-            android:interpolator="@android:anim/linear_interpolator"
-            android:duration="@integer/config_navAnimTime"
-            android:fromAlpha="1.0"
-            android:toAlpha="0.0"/>
+        android:duration="160"
+        android:fromAlpha="1.0"
+        android:interpolator="@anim/m3_emphasized"
+        android:toAlpha="0.0" />
+    <translate
+        android:duration="240"
+        android:fromYDelta="0"
+        android:interpolator="@anim/m3_emphasized"
+        android:toYDelta="1.5%p" />
+    <scale
+        android:duration="240"
+        android:fromXScale="1.0"
+        android:fromYScale="1.0"
+        android:interpolator="@anim/m3_emphasized"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:toXScale="0.99"
+        android:toYScale="0.99" />
 </set>
