@@ -106,7 +106,7 @@ import com.lagradost.cloudstream3.ui.SyncWatchType
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.download.DOWNLOAD_NAVIGATE_TO
-import com.lagradost.cloudstream3.ui.feed.FeedFragment
+import com.lagradost.cloudstream3.ui.feed.FeedScrollTop
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.ui.library.LibraryViewModel
 import com.lagradost.cloudstream3.ui.player.BasicLink
@@ -1904,7 +1904,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                     val host = supportFragmentManager
                         .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
                     (host?.childFragmentManager?.fragments
-                        ?.firstOrNull { it is FeedFragment } as? FeedFragment)
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
                         ?.scrollToTop()
                 }
             }
@@ -1946,7 +1946,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                     val host = supportFragmentManager
                         .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
                     (host?.childFragmentManager?.fragments
-                        ?.firstOrNull { it is FeedFragment } as? FeedFragment)
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
                         ?.scrollToTop()
                 }
             }

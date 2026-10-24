@@ -33,6 +33,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
+ * Implemented by the Feed tab so MainActivity can ask it to scroll
+ * back to the top without referencing the fragment class itself
+ * (the class is @UnstableApi-marked because of the player engine).
+ */
+interface FeedScrollTop {
+    fun scrollToTop()
+}
+
+/**
  * Phase 8.18–8.20 — the Feed tab: every provider's content in one
  * category-free 2-column grid under a collapsible header (search +
  * genre chips that hide on scroll). Cards play directly in the shared
@@ -42,7 +51,7 @@ import kotlinx.coroutines.launch
 @UnstableApi
 class FeedFragment : BaseFragment<FragmentFeedBinding>(
     BindingCreator.Inflate(FragmentFeedBinding::inflate)
-) {
+), FeedScrollTop {
     private val viewModel: FeedViewModel by viewModels()
     private val adapter = FeedAdapter(onPlay = { entry -> openWatch(entry) })
 
@@ -144,7 +153,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     /** Called by MainActivity when the Feed nav item is re-tapped. */
-    fun scrollToTop() {
+    override fun scrollToTop() {
         val binding = binding ?: return
         binding.feedRecycler.smoothScrollToPosition(0)
         animateHeader(binding, show = true)
