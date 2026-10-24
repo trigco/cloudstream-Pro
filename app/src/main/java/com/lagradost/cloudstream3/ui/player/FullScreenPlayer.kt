@@ -496,6 +496,22 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         player.seekTime(85000) // skip 85s
     }
 
+    /**
+     * Phase 8.14b — size an in-player option dialog as a floating overlay
+     * card over the video (paired with R.style.DialogOverlayPlayer)
+     * instead of a fullscreen page: 88% of the screen width (capped at
+     * 920dp) by 86% of the screen height.
+     */
+    private fun Dialog.applyPlayerOverlaySize() {
+        val metrics = context.resources.displayMetrics
+        val width = minOf(
+            (metrics.widthPixels * 0.88f).toInt(),
+            (920 * metrics.density).toInt()
+        )
+        val height = (metrics.heightPixels * 0.86f).toInt()
+        window?.setLayout(width, height)
+    }
+
     private fun showSubtitleOffsetDialog() {
         val ctx = context ?: return
         // Pause player because the subtitles cannot be continuously updated to follow playback.
@@ -507,10 +523,11 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         val binding = SubtitleOffsetBinding.inflate(LayoutInflater.from(ctx), null, false)
 
         // Use dialog as opposed to alertdialog to get fullscreen
-        val dialog = Dialog(ctx, R.style.DialogFullscreenPlayer).apply {
+        val dialog = Dialog(ctx, R.style.DialogOverlayPlayer).apply {
             setContentView(binding.root)
         }
         this.selectSubtitlesDialog = dialog
+        dialog.applyPlayerOverlaySize()
         dialog.show()
 
         val isPortrait =
