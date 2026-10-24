@@ -78,6 +78,7 @@
     <string name="enable_skip_op_from_database">enable_skip_op_from_database</string>
     <string name="rotate_video_key">rotate_video_key</string>
     <string name="auto_rotate_video_key">auto_rotate_video_key</string>
+    <string name="portrait_player_key">portrait_player_key</string>
     <string name="biometric_key">biometric_key</string>
     <string name="battery_optimisation_key">battery_optimisation</string>
     <string name="show_hd_key">show_hd_key</string>

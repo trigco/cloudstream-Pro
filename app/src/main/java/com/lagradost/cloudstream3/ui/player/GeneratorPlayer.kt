@@ -1958,6 +1958,9 @@ class GeneratorPlayer : FullScreenPlayer() {
 
         playerBinding?.playerEpisodeFillerHolder?.isVisible = isFiller ?: false
         playerBinding?.playerVideoTitle?.text = playerVideoTitle
+        // Phase 8.14c: mirror the title into the portrait panel (present
+        // only in layout-port; findViewById returns null in landscape).
+        view?.findViewById<TextView>(R.id.player_portrait_title)?.text = playerVideoTitle
         playerBinding?.offlinePin?.isVisible = viewModel.generator is DownloadFileGenerator
     }
 

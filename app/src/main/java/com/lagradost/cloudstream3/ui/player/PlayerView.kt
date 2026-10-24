@@ -218,6 +218,11 @@ class PlayerView @JvmOverloads constructor(
     /** When true, [dynamicOrientation] returns portrait for portrait videos. Read from settings in [initialize]. */
     var autoPlayerRotateEnabled: Boolean = false
 
+    /** When true, the player opens portrait-first (YouTube style: video band
+     * on top, title/actions panel below). Read from settings in [initialize].
+     * Phase 8.14c. */
+    var portraitPlayerEnabled: Boolean = true
+
     var durationMode: Boolean by UserPreferenceDelegate("duration_mode", false)
 
     // Kept so SubtitlesFragment can unsubscribe the exact same reference.
@@ -366,6 +371,9 @@ class PlayerView @JvmOverloads constructor(
                     .toLong() * 1000L
                 autoPlayerRotateEnabled = sm.getBoolean(
                     context.getString(R.string.auto_rotate_video_key), true
+                )
+                portraitPlayerEnabled = sm.getBoolean(
+                    context.getString(R.string.portrait_player_key), true
                 )
             } catch (_: Exception) {
             }
@@ -722,6 +730,11 @@ class PlayerView @JvmOverloads constructor(
      */
     fun dynamicOrientation(): Int {
         if (isLayout(TV or EMULATOR)) return ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Phase 8.14c: portrait-first player when enabled. The downloaded
+        // player activity keeps its landscape behaviour.
+        if (portraitPlayerEnabled &&
+            context.javaClass.simpleName != "DownloadedPlayerActivity"
+        ) return ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         return if (autoPlayerRotateEnabled && isVerticalOrientation)
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE

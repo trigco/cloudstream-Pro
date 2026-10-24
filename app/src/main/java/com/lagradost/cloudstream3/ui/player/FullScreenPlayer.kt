@@ -1125,6 +1125,15 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         playerHostView?.videoOutline = playerBinding?.videoOutline
         playerHostView?.requestUpdateBrightnessOverlayOnNextLayout()
 
+        // Phase 8.14c: wire the portrait below-video panel actions. The
+        // panel exists only in layout-port/fragment_player.xml, so these
+        // binding fields are null in landscape and this is a no-op there.
+        binding.playerPortraitSourceBtt?.setOnClickListener { showMirrorsDialogue() }
+        binding.playerPortraitEpisodesBtt?.setOnClickListener {
+            toggleEpisodesOverlay(show = true)
+        }
+        binding.playerPortraitRotateBtt?.setOnClickListener { toggleRotate() }
+
         val view = binding.root
         // init variables
         setPlayBackSpeed(DataStoreHelper.playBackSpeed)
