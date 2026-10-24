@@ -25,6 +25,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.UIHelper.isBottomLayout
 import com.lagradost.cloudstream3.utils.UIHelper.toPx
+import com.lagradost.cloudstream3.utils.addPressShrink
 
 class HomeScrollViewHolderState(view: ViewBinding) : ViewHolderState<Boolean>(view) {
     // very shitty that we cant store the state when the view clears,
@@ -155,6 +156,8 @@ open class HomeChildItemAdapter(
             parent,
             false
         ) else HomeResultGridBinding.inflate(inflater, parent, false)
+        // Phase 8.16: every poster answers a touch with a small shrink.
+        binding.root.addPressShrink()
         return HomeScrollViewHolderState(binding)
     }
 
@@ -209,6 +212,10 @@ open class HomeChildItemAdapter(
         position: Int
     ) {
         applyBinding(holder, position == 0)
+
+        // Phase 8.16: a recycled holder must never inherit a press shrink.
+        holder.itemView.scaleX = 1f
+        holder.itemView.scaleY = 1f
 
         SearchResultBuilder.bind(
             clickCallback = { click ->

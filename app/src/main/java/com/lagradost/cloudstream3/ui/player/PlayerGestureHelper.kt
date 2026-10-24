@@ -415,6 +415,9 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
 
         if (!leftHolder.isVisible || leftHolder.alpha < 1f) {
             leftHolder.animate().cancel(); leftHolder.alpha = 1f; leftHolder.isVisible = true
+            // Phase 8.16: the rail pops in instead of hard-cutting.
+            leftHolder.scaleX = 0.92f; leftHolder.scaleY = 0.92f
+            leftHolder.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
         }
         progressBarLeftHideRunnable?.let { leftHolder.removeCallbacks(it) }
         progressBarLeftHideRunnable = Runnable {
@@ -527,6 +530,9 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
 
         if (!rightHolder.isVisible || rightHolder.alpha < 1f) {
             rightHolder.animate().cancel(); rightHolder.alpha = 1f; rightHolder.isVisible = true
+            // Phase 8.16: the rail pops in instead of hard-cutting.
+            rightHolder.scaleX = 0.92f; rightHolder.scaleY = 0.92f
+            rightHolder.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
         }
         progressBarRightHideRunnable?.let { rightHolder.removeCallbacks(it) }
         progressBarRightHideRunnable = Runnable {

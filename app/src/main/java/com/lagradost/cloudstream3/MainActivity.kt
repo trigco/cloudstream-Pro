@@ -154,6 +154,7 @@ import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.DataStore.getKey
 import com.lagradost.cloudstream3.utils.DataStore.setKey
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.hapticTick
 import com.lagradost.cloudstream3.utils.DataStoreHelper.accounts
 import com.lagradost.cloudstream3.utils.DataStoreHelper.migrateResumeWatching
 import com.lagradost.cloudstream3.utils.Event
@@ -1883,7 +1884,11 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 )
                 // Phase 5A: pop the selected icon, but only when navigation
                 // actually happened (not on reselection / debounce rejection)
-                if (handled) animateNavIconPop(this, item.itemId)
+                if (handled) {
+                    animateNavIconPop(this, item.itemId)
+                    // Phase 8.16: …and answer the switch with a light tick.
+                    hapticTick()
+                }
                 handled
             }
             // Phase 7: drag across the bar to scrub between tabs (phone only)
@@ -1913,10 +1918,13 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             }*/
 
             setOnItemSelectedListener { item ->
-                onNavDestinationSelected(
+                val handled = onNavDestinationSelected(
                     item,
                     navController
                 )
+                // Phase 8.16: same haptic tick as the bottom bar.
+                if (handled) hapticTick()
+                handled
             }
 
 

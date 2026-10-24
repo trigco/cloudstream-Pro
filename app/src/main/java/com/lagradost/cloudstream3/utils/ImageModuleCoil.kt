@@ -105,6 +105,10 @@ object ImageLoader {
         }
         // headers can be overridden by extensions.
         this.load(imageData, SingletonImageLoader.get(context)) {
+            // Phase 8.16: posters fade in instead of popping, app-wide.
+            // Only runs when the image actually had to load — a memory-cache
+            // hit still draws instantly.
+            crossfade(150)
             this.httpHeaders(NetworkHeaders.Builder().also { headerBuilder ->
                 headerBuilder["User-Agent"] = USER_AGENT
                 headers?.forEach { (key, value) ->
