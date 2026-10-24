@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
  * off to the main player (fullscreen button, or turning the phone to
  * landscape) resumes exactly where the feed player stopped.
  */
-@OptIn(UnstableApi::class)
+@UnstableApi
 class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     BindingCreator.Inflate(FragmentFeedWatchBinding::inflate)
 ) {
