@@ -429,10 +429,10 @@ object FeedPlayer {
     fun selectQuality(quality: Int) {
         if (links.none { it.quality == quality }) return
         preferredQuality = quality
-        val idx = links.indexOfFirst { it.quality == quality && it !in triedLinks }
-            .takeIf { it >= 0 }
-            ?: links.indexOfFirst { it.quality == quality }
-        if (idx == linkIndex) return
+        val idx = links.indices.firstOrNull {
+            links[it].quality == quality && it !in triedLinks
+        } ?: links.indexOfFirst { it.quality == quality }
+        if (idx < 0 || idx == linkIndex) return
         linkIndex = idx
         playCurrentLink(keepPosition = true)
         notifyListeners()
