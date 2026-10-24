@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.13: Material 3 emphasized easing (cubic-bezier(0.2, 0, 0, 1))
+     as a path interpolator — fast start, long gentle settle. Used by the
+     shared navigation anims (enter/exit/pop) so every page transition in
+     the app eases the modern way instead of the old linear scale-fade. -->
+<pathInterpolator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:pathData="M0,0 C0.2,0 0,1 1,1" />
