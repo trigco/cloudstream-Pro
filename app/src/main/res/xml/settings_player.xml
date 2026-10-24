@@ -193,6 +193,13 @@
             android:icon="@drawable/ic_baseline_delete_outline_24"
             android:key="@string/video_buffer_clear_key"
             android:title="@string/video_buffer_clear_settings" />
+
+        <SwitchPreference
+            android:icon="@drawable/ic_baseline_delete_outline_24"
+            android:summary="@string/auto_clear_cache_settings_summary"
+            android:title="@string/auto_clear_cache_settings"
+            app:defaultValue="false"
+            app:key="@string/auto_clear_cache_key" />
     </PreferenceCategory>
     <PreferenceCategory
         android:key="@string/pref_category_android_tv_key"

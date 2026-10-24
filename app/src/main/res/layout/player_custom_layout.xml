@@ -471,7 +471,7 @@
                         android:nextFocusLeft="@id/player_rew"
                         android:nextFocusUp="@id/player_go_back"
                         android:nextFocusDown="@id/player_lock"
-                        android:padding="10dp"
+                        android:padding="6dp"
                         android:scaleType="fitCenter"
                         android:scaleX="-1"
                         android:src="@drawable/netflix_skip_forward"
@@ -539,7 +539,7 @@
                         android:nextFocusRight="@id/player_rew"
                         android:nextFocusUp="@id/player_go_back"
                         android:nextFocusDown="@id/player_lock"
-                        android:padding="10dp"
+                        android:padding="6dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/netflix_skip_forward"
                         android:tintMode="src_in"
@@ -774,15 +774,15 @@
                         android:layout_width="0dp"
                         android:layout_height="30dp"
                         android:layout_weight="1"
-                        app:bar_height="2dp"
+                        app:bar_height="4dp"
                         app:layout_constraintBottom_toBottomOf="@id/exo_position"
                         app:layout_constraintEnd_toStartOf="@id/exo_duration"
                         app:layout_constraintStart_toEndOf="@+id/exo_position"
-                        app:played_color="?attr/colorPrimary"
-
-                        app:scrubber_color="?attr/colorPrimary"
-                        app:scrubber_dragged_size="26dp"
-                        app:scrubber_enabled_size="24dp"
+                        app:buffered_color="@color/videoBuffered"
+                        app:played_color="@color/colorPrimaryRed"
+                        app:scrubber_color="@color/colorPrimaryRed"
+                        app:scrubber_dragged_size="21dp"
+                        app:scrubber_enabled_size="15dp"
                         app:unplayed_color="@color/videoProgress" />
 
                     <TextView
@@ -929,7 +929,7 @@
                                 android:nextFocusLeft="@id/player_sources_btt"
                                 android:nextFocusRight="@id/player_skip_op"
                                 android:text="@string/tracks"
-                                app:icon="@drawable/ic_baseline_equalizer_24" />
+                                app:icon="@drawable/ic_baseline_subtitles_24" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/player_skip_op"
