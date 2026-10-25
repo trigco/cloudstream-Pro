@@ -503,7 +503,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 -> "HLS"
             else -> "MP4"
         }
-        return if (audio != null) "$res • $audio" else "$res • $kind"
+        return if (audio != null) "$res • $audio • $kind" else "$res • $kind"
     }
 
     private data class TrackOption(

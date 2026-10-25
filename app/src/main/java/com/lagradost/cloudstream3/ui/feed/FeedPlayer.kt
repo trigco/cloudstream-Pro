@@ -52,10 +52,14 @@ import kotlinx.coroutines.launch
  *
  * It mirrors the app's real player where it matters: the same
  * FixedNextRenderersFactory (nextlib extension decoders), the same
- * episode-id scheme for resume positions, playback that starts on the
- * first extracted link instead of waiting for every extractor, and a
- * fallback walk down the link list when a source fails — preferring
- * other links of the chosen resolution first.
+ * episode-id scheme for resume positions, and a fallback walk down
+ * the link list when a source fails — preferring other links of the
+ * chosen resolution first. Playback starts from the COMPLETED link
+ * set, exactly like the main player: starting from the first link
+ * that happened to arrive (the 8.21 fast start) kept failing on
+ * multi-source providers, whose early links are not the playable
+ * ones — the main player only ever plays early when the user
+ * presses Skip Loading himself.
  *
  * Every load carries a generation stamp: starting another video bumps
  * it, and any stale load that finishes late drops its results instead
@@ -240,7 +244,7 @@ object FeedPlayer {
         currentPoster = posterUrl
         status = Status.LOADING
         resumeSeekDone = false
-        extracting = false
+        extracting = true
         pendingRetry = false
         links = emptyList()
         subs = emptyList()
@@ -349,25 +353,13 @@ object FeedPlayer {
             )
         }
 
-        // Start on the first playable link instead of waiting for every
-        // extractor to finish — the main player behaves the same way.
-        while (deferred.isActive) {
-            val snapshot = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
-            if (snapshot.isNotEmpty()) break
-            delay(50)
-        }
-        var startedLink: ExtractorLink? = null
-        val first = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
-        if (first.isNotEmpty() && gen == generation) {
-            links = first
-            subs = synchronized(newSubs) { ArrayList(newSubs) }
-            linkIndex = 0
-            preferredQuality = first.first().quality
-            startedLink = first.first()
-            playCurrentLink(keepPosition = false)
-            notifyListeners()
-        }
-
+        // Wait for extraction to complete, like the main player
+        // does behind its loading screen — the feed just shows the
+        // poster and spinner meanwhile, no skip button to press.
+        // Playing from a partial list kept failing on multi-source
+        // providers: the first links to arrive are not necessarily
+        // playable, and picking from the finished, sorted set is
+        // what makes the main player reliable on the same title.
         val ok = try {
             deferred.await()
         } catch (e: Exception) {
@@ -376,34 +368,20 @@ object FeedPlayer {
         extracting = false
         if (gen != generation) return@coroutineScope
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
-        if (full.isEmpty() || !ok && startedLink == null) {
-            if (startedLink == null) {
-                status = Status.ERROR
-                notifyListeners()
-            }
-            return@coroutineScope
-        }
-        // Extraction finished: swap in the complete list (picker +
-        // fallback), keeping the link that is playing selected.
         links = full
         subs = synchronized(newSubs) { ArrayList(newSubs) }
-        val started = startedLink
-        if (started != null) {
-            val idx = full.indexOfFirst {
-                it.url == started.url && it.name == started.name
-            }
-            if (idx >= 0) {
-                linkIndex = idx
-                triedLinks.add(idx)
-            }
+        pendingRetry = false
+        if (full.isEmpty()) {
+            status = Status.ERROR
+            notifyListeners()
+            return@coroutineScope
         }
-        // The first link may have failed (or hung) while the rest
-        // were still being fetched — the fail-over waited instead of
-        // failing in that case; continue with the links that arrived.
-        if (pendingRetry) {
-            pendingRetry = false
-            failOver()
-        }
+        // Even when extraction reports failure, whatever links were
+        // collected are worth trying (the main player's Skip Loading
+        // plays with a partial set the same way).
+        linkIndex = 0
+        preferredQuality = full.first().quality
+        playCurrentLink(keepPosition = false)
         notifyListeners()
     }
 
@@ -510,11 +488,6 @@ object FeedPlayer {
         armWatchdog(generation, linkIndex)
     }
 
-    /**
-     * Switches resolution (the quality picker). Several links can share
-     * one resolution; picking it starts at its first link and the error
-     * fallback stays inside the same resolution before moving on.
-     */
     /** Plays one specific link (the source picker's rows). */
     fun selectLink(index: Int) {
         if (index !in links.indices || index == linkIndex) return
@@ -524,6 +497,11 @@ object FeedPlayer {
         notifyListeners()
     }
 
+    /**
+     * Switches resolution. Several links can share one resolution;
+     * picking it starts at its first link and the error fallback
+     * stays inside the same resolution before moving on.
+     */
     fun selectQuality(quality: Int) {
         if (links.none { it.quality == quality }) return
         preferredQuality = quality
