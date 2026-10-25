@@ -16,6 +16,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.setAppBarNoScrollFlagsOnTV
 import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
 import com.lagradost.cloudstream3.utils.txt
 
 
@@ -23,8 +24,24 @@ class DownloadQueueFragment :
     BaseFragment<FragmentDownloadQueueBinding>(BindingCreator.Inflate(FragmentDownloadQueueBinding::inflate)) {
     private val queueViewModel: DownloadQueueViewModel by activityViewModels()
 
+    // Phase 8.41: live progress for the queue rows' details line.
+    private var progressHandler: ((Triple<Int, Long, Long>) -> Unit)? = null
+
+    override fun onDestroyView() {
+        progressHandler?.let {
+            VideoDownloadManager.downloadProgressEvent -= it
+        }
+        progressHandler = null
+        super.onDestroyView()
+    }
+
     override fun onBindingCreated(binding: FragmentDownloadQueueBinding) {
         val adapter = DownloadQueueAdapter(this@DownloadQueueFragment)
+        val handler: (Triple<Int, Long, Long>) -> Unit = { data ->
+            adapter.updateProgress(data)
+        }
+        progressHandler = handler
+        VideoDownloadManager.downloadProgressEvent += handler
         val clearQueueItem = binding.downloadQueueToolbar.menu?.findItem(R.id.cancel_all)
 
         observe(queueViewModel.childCards) { cards ->

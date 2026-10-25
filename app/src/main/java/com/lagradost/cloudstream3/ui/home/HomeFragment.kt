@@ -656,8 +656,20 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      *  Phase 8.34: DEBOUNCED — titles resolve in bursts while
      *  scrolling, and a full rebind per title made home scroll
      *  shake (কাপাকাপি). One rebind after a quiet gap is enough. */
-    private val titleNotifyRunnable = Runnable {
-        homeMasterAdapter?.notifyDataSetChanged()
+    private val titleNotifyRunnable = object : Runnable {
+        override fun run() {
+            // Phase 8.41: a full rebind mid-scroll still shudders
+            // (posters reload + crossfade) -- wait for the list to
+            // come to rest, then refresh once.
+            val recycler = binding?.homeMasterRecycler
+            if (recycler != null &&
+                recycler.scrollState != RecyclerView.SCROLL_STATE_IDLE
+            ) {
+                homeAutoRotateHandler.postDelayed(this, 600L)
+                return
+            }
+            homeMasterAdapter?.notifyDataSetChanged()
+        }
     }
 
     private val titleResolveListener: (String, String) -> Unit = { _, _ ->

@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
+import androidx.media3.common.C.TRACK_TYPE_VIDEO
 import androidx.media3.common.C.TRACK_TYPE_TEXT
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -125,11 +126,15 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
         binding.feedWatchUpnext.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                // Phase 8.41: firmer thresholds + never restart the
+                // height animation mid-fling -- repeated re-layout
+                // during scroll read as shaking on the watch page.
+                if (titleAnimator?.isRunning == true) return
                 titleScrollAccum += dy
-                if (titleScrollAccum > 48 && titleShown) {
+                if (titleScrollAccum > 110 && titleShown) {
                     animateTitleBox(binding, show = false)
                     titleScrollAccum = 0
-                } else if (titleScrollAccum < -24 && !titleShown) {
+                } else if (titleScrollAccum < -60 && !titleShown) {
                     animateTitleBox(binding, show = true)
                     titleScrollAccum = 0
                 }
@@ -611,13 +616,51 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
      */
     private fun showQuality() {
         val context = context ?: return
+        val exo = FeedPlayer.exo ?: return
         val links = FeedPlayer.links
-        if (links.size < 2) return
-        val labels = links.map { linkLabel(it) }.toTypedArray()
+        val current = links.getOrNull(FeedPlayer.linkIndex) ?: return
+        // Phase 8.41: an adaptive link (DASH/HLS) carries several
+        // renditions inside one stream -- the main player exposes
+        // them as tracks, the source list only showed the file.
+        // Offer both: sources switch files, renditions switch the
+        // in-stream quality of the current file.
+        val adaptive = current.type ==
+            com.lagradost.cloudstream3.utils.ExtractorLinkType.DASH ||
+            current.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+        val renditions = if (adaptive) {
+            trackOptions(TRACK_TYPE_VIDEO).filter {
+                !it.label.startsWith("Track")
+            }
+        } else {
+            emptyList()
+        }
+        if (links.size < 2 && renditions.size < 2) return
+        val linkLabels = links.map { linkLabel(it) }
+        val renditionLabels = renditions.map { "${it.label} \u2022 Stream" }
+        val labels = (linkLabels + renditionLabels).toTypedArray()
+        val selectedRendition = renditions.indexOfFirst { it.selected }
+        val checked = if (selectedRendition >= 0) {
+            links.size + selectedRendition
+        } else {
+            FeedPlayer.linkIndex
+        }
         AlertDialog.Builder(context)
             .setTitle(R.string.feed_sources)
-            .setSingleChoiceItems(labels, FeedPlayer.linkIndex) { dialog, which ->
-                FeedPlayer.selectLink(which)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                if (which < links.size) {
+                    FeedPlayer.selectLink(which)
+                } else {
+                    val option = renditions[which - links.size]
+                    exo.trackSelectionParameters =
+                        exo.trackSelectionParameters.buildUpon()
+                            .setOverrideForType(
+                                TrackSelectionOverride(
+                                    option.group.mediaTrackGroup,
+                                    option.index
+                                )
+                            )
+                            .build()
+                }
                 dialog.dismiss()
             }
             .show()
@@ -647,7 +690,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         for (group in exo.currentTracks.groups.filter { it.type == type }) {
             for (i in 0 until group.length) {
                 val format = group.mediaTrackGroup.getFormat(i)
-                val base = format.label ?: format.language ?: "Track ${i + 1}"
+                val base = when {
+                    type == TRACK_TYPE_VIDEO && format.height > 0 -> "${format.height}p"
+                    else -> format.label ?: format.language ?: "Track ${i + 1}"
+                }
                 val label = if (type == TRACK_TYPE_AUDIO && format.channelCount > 2) {
                     "$base • ${format.channelCount}ch"
                 } else {

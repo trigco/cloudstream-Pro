@@ -104,7 +104,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.Clock
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.transformer.DefaultDecoderFactory
+import androidx.media3.transformer.ExoPlayerAssetLoader
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
@@ -474,7 +479,8 @@ object VideoDownloadManager {
             notificationCallback(ep.id, notification)
             with(NotificationManagerCompat.from(context)) {
                 // notificationId is a unique int for each notification that you must define
-                if (ActivityCompat.checkSelfPermission(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ActivityCompat.checkSelfPermission(
                         context,
                         Manifest.permission.POST_NOTIFICATIONS
                     ) != PackageManager.PERMISSION_GRANTED
@@ -1617,7 +1623,23 @@ object VideoDownloadManager {
                         .setMimeType(MimeTypes.APPLICATION_MPD)
                         .build()
                     val edited = EditedMediaItem.Builder(mediaItem).build()
+                    // Phase 8.41: route the export through the app's
+                    // own HTTP stack with the link's headers — the
+                    // platform default data source gets 403s from
+                    // several provider CDNs, which killed downloads
+                    // of titles that play perfectly.
+                    val dataSourceFactory = OkHttpDataSource.Factory(app.baseClient)
+                        .setUserAgent(USER_AGENT)
+                        .setDefaultRequestProperties(link.getAllHeaders())
                     val transformer = Transformer.Builder(context)
+                        .setAssetLoaderFactory(
+                            ExoPlayerAssetLoader.Factory(
+                                context,
+                                DefaultDecoderFactory(context),
+                                Clock.DEFAULT,
+                                DefaultMediaSourceFactory(dataSourceFactory)
+                            )
+                        )
                         .addListener(object : Transformer.Listener {
                             override fun onCompleted(
                                 composition: Composition,
@@ -1952,7 +1974,8 @@ object VideoDownloadManager {
         companion object {
             private fun displayNotification(context: Context, id: Int, notification: Notification) {
                 safe {
-                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED
                     ) return@safe
 

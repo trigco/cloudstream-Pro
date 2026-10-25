@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
@@ -881,6 +882,10 @@ object FeedPlayer {
                     .build()
             })
             .build()
+        // Phase 8.41: a fresh link starts on automatic quality;
+        // an in-player rendition pick applies to this link only.
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO).build()
         player.setMediaSource(
             DefaultMediaSourceFactory(
                 dataSourceFactory,
