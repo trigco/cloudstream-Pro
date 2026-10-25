@@ -50,6 +50,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 /**
@@ -306,7 +307,9 @@ object FeedPlayer {
                 }
                 return@launch
             }
-            val response = when (val res = APIRepository(api).load(url)) {
+            val response = when (
+                val res = withContext(Dispatchers.IO) { APIRepository(api).load(url) }
+            ) {
                 is Resource.Success -> res.value
                 else -> {
                     if (gen == generation) {
@@ -384,7 +387,7 @@ object FeedPlayer {
         val newLinks = mutableListOf<ExtractorLink>()
         val newSubs = mutableListOf<SubtitleData>()
         val extractStart = System.currentTimeMillis()
-        val deferred = async {
+        val deferred = async(Dispatchers.IO) {
             gen2.generateLinks(
                 clearCache = false,
                 sourceTypes = LOADTYPE_ALL,
@@ -420,7 +423,8 @@ object FeedPlayer {
             delay(700)
             val retryStart = System.currentTimeMillis()
             val ok2 = try {
-                gen2.generateLinks(
+                withContext(Dispatchers.IO) {
+                    gen2.generateLinks(
                     clearCache = false,
                     sourceTypes = LOADTYPE_ALL,
                     callback = { pair ->
@@ -429,7 +433,8 @@ object FeedPlayer {
                     subtitleCallback = { synchronized(newSubs) { newSubs.add(it) } },
                     offset = index,
                     isCasting = false
-                )
+                    )
+                }
             } catch (e: Exception) {
                 false
             }
