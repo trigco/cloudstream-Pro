@@ -218,6 +218,32 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         refreshUpNext(url)
         FeedPlayer.play(requireContext(), url, apiName, name, poster)
 
+        // Phase 8.39: pull-to-refresh on Up next rotates in
+        // not-yet-shown suggestions; a floating button appears
+        // after scrolling a screenful, back to the top (video).
+        binding.feedWatchUpnextRefresh.setOnRefreshListener {
+            refreshUpNext(
+                FeedPlayer.currentUrl ?: url,
+                rotate = true
+            )
+            binding.feedWatchUpnextRefresh.isRefreshing = false
+        }
+        binding.feedWatchUpnext.addOnScrollListener(object :
+            RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                val first = (recyclerView.layoutManager as? GridLayoutManager)
+                    ?.findFirstVisibleItemPosition() ?: 0
+                binding.feedWatchToTop.isVisible = first >= 8
+            }
+        })
+        binding.feedWatchToTop.setOnClickListener { view ->
+            view.hapticTick()
+            val first = (binding.feedWatchUpnext.layoutManager as? GridLayoutManager)
+                ?.findFirstVisibleItemPosition() ?: 0
+            if (first > 30) binding.feedWatchUpnext.scrollToPosition(30)
+            binding.feedWatchUpnext.smoothScrollToPosition(0)
+        }
+
         // Single tap toggles controls; double tap skips ∓10 s; a long
         // downward drag minimises into the Feed's mini player.
         val gestureDetector = GestureDetector(
@@ -473,10 +499,24 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 .filter { it.isNotBlank() }.joinToString(" • ") + epText
     }
 
-    private fun refreshUpNext(exceptUrl: String) {
-        upNextAdapter.submitList(
-            FeedPool.entries.filter { it.response.url != exceptUrl }
-        )
+    // Phase 8.39: urls already presented at the top of Up next;
+    // a pull-to-refresh brings pool entries that were NOT in
+    // that window first, so the visible content actually changes.
+    private var upNextShownUrls: Set<String> = emptySet()
+
+    private fun refreshUpNext(exceptUrl: String, rotate: Boolean = false) {
+        val all = FeedPool.entries.filter { it.response.url != exceptUrl }
+        if (!rotate) {
+            upNextShownUrls = all.take(30).map { it.response.url }.toSet()
+            upNextAdapter.submitList(all)
+            return
+        }
+        val fresh = all.filter { it.response.url !in upNextShownUrls }.shuffled()
+        val rest = all.filter { it.response.url in upNextShownUrls }.shuffled()
+        val merged = fresh + rest
+        upNextShownUrls = merged.take(30).map { it.response.url }.toSet()
+        upNextAdapter.submitList(merged)
+        binding?.feedWatchUpnext?.scrollToPosition(0)
     }
 
     // ---------- controls ----------
