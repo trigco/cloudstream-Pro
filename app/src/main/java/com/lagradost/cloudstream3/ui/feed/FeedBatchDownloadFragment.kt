@@ -232,7 +232,7 @@ class FeedBatchDownloadFragment : BaseFragment<FragmentFeedDownloadBinding>(
                     pair.first?.let { synchronized(links) { links.add(it) } }
                 },
                 subtitleCallback = { sub ->
-                    synchronized(subs) { subs.add(it) }
+                    synchronized(subs) { subs.add(sub) }
                 },
                 offset = 0,
                 isCasting = false
