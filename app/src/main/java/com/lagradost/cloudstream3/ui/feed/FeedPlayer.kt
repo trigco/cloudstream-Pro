@@ -404,10 +404,41 @@ object FeedPlayer {
         // providers: the first links to arrive are not necessarily
         // playable, and picking from the finished, sorted set is
         // what makes the main player reliable on the same title.
-        val ok = try {
+        var ok = try {
             deferred.await()
         } catch (e: Exception) {
             false
+        }
+        // Phase 8.30: a cold first pass can come back ok=true with
+        // ZERO links in ~2 s (the provider's loadLinks returns
+        // before its real work — the main player only ever meets
+        // this state warmed, because reaching it goes through the
+        // details page first). One immediate second pass on the
+        // same generator is what pressing Retry / Play in main
+        // player effectively does; do it automatically instead.
+        if (synchronized(newLinks) { newLinks.isEmpty() } && gen == generation) {
+            delay(700)
+            val retryStart = System.currentTimeMillis()
+            val ok2 = try {
+                gen2.generateLinks(
+                    clearCache = false,
+                    sourceTypes = LOADTYPE_ALL,
+                    callback = { pair ->
+                        pair.first?.let { synchronized(newLinks) { newLinks.add(it) } }
+                    },
+                    subtitleCallback = { synchronized(newSubs) { newSubs.add(it) } },
+                    offset = index,
+                    isCasting = false
+                )
+            } catch (e: Exception) {
+                false
+            }
+            ok = ok || ok2
+            dbg(
+                "pass2 ok=" + ok2 + " links=" +
+                    synchronized(newLinks) { newLinks.size } +
+                    " dur=" + (System.currentTimeMillis() - retryStart) + "ms"
+            )
         }
         extracting = false
         dbg(
