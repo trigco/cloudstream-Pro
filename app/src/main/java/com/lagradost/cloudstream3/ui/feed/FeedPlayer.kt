@@ -279,6 +279,7 @@ object FeedPlayer {
         val gen = ++generation
         debugLog.clear()
         dbg("PLAY " + name.take(40))
+        dbg("url=" + hostOf(url) + pathOf(url))
         minimized = false
         currentUrl = url
         currentApiName = apiName
@@ -414,6 +415,7 @@ object FeedPlayer {
                 " dur=" + (System.currentTimeMillis() - extractStart) + "ms"
         )
         episodes.getOrNull(index)?.let { ep ->
+            dbg("data=" + hostOf(ep.data) + pathOf(ep.data))
             val entry = synchronized(RepoLinkGenerator.cache) {
                 RepoLinkGenerator.cache[ep.apiName to ep.id]
             }
@@ -512,6 +514,14 @@ object FeedPlayer {
     private fun hostOf(url: String): String {
         return try {
             java.net.URI(url).host ?: "?"
+        } catch (e: Exception) {
+            "?"
+        }
+    }
+
+    private fun pathOf(url: String): String {
+        return try {
+            (java.net.URI(url).path ?: "").take(52)
         } catch (e: Exception) {
             "?"
         }
