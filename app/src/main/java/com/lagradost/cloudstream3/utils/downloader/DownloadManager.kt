@@ -104,7 +104,6 @@ import kotlinx.coroutines.isActive
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
@@ -1595,9 +1594,12 @@ object VideoDownloadManager {
     /**
      * Runs one Transformer export of a DASH link into [tempFile]
      * on the main thread (Transformer requires a Looper thread)
-     * and reports completion through the coroutine. The link's
-     * headers/referer ride along as default request properties,
-     * mirroring how the player fetches the same stream.
+     * and reports completion through the coroutine. Transformer
+     * in media3 1.9.3 has no data-source hook on its Builder,
+     * so the manifest and segments are fetched with media3's
+     * default HTTP stack — fine for the signed CDN URLs these
+     * providers hand out; a provider that refuses still falls
+     * through to the next link in the download loop.
      */
     @OptIn(UnstableApi::class)
     private suspend fun exportDashToFile(
@@ -1610,17 +1612,12 @@ object VideoDownloadManager {
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 try {
-                    val dataSourceFactory =
-                        OkHttpDataSource.Factory(app.baseClient)
-                            .setUserAgent(USER_AGENT)
-                            .setDefaultRequestProperties(link.getAllHeaders())
                     val mediaItem = MediaItem.Builder()
                         .setUri(link.url)
                         .setMimeType(MimeTypes.APPLICATION_MPD)
                         .build()
                     val edited = EditedMediaItem.Builder(mediaItem).build()
                     val transformer = Transformer.Builder(context)
-                        .setDataSourceFactory(dataSourceFactory)
                         .addListener(object : Transformer.Listener {
                             override fun onCompleted(
                                 composition: Composition,
