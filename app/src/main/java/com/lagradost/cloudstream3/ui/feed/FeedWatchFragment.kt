@@ -73,6 +73,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding?.feedWatchSkipForward?.isVisible = false
     }
 
+    // Phase 8.38: navigating to the batch download page must not
+    // kill the video being watched; onDestroyView checks this.
+    private var goingToBatch = false
+
     private var titleFullHeight = 0
     private var titleShown = true
     private var titleAnimator: ValueAnimator? = null
@@ -197,6 +201,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     override fun onBindingCreated(binding: FragmentFeedWatchBinding) {
+        goingToBatch = false
         FeedPlayer.warmUp(requireContext())
         binding.feedWatchPlayer.player = FeedPlayer.exo
         FeedPlayer.exo?.addListener(iconListener)
@@ -269,6 +274,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             if (FeedPlayer.episodes.size > 1) {
                 // Series: the batch page (resolution + audio
                 // chips, per-episode multi-select).
+                goingToBatch = true
                 findNavController().navigate(R.id.navigation_feed_download)
             } else if (FeedPlayer.downloadCurrentEpisode()) {
                 Toast.makeText(requireContext(), R.string.download_started, Toast.LENGTH_SHORT)
@@ -355,7 +361,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         orientationListener = null
         binding?.feedWatchPlayer?.player = null
         // Leaving for good (not minimised, not handed off) stops playback.
-        if (!handedOff && !FeedPlayer.minimized) {
+        // Phase 8.38: the batch download page is a child of this
+        // screen — keep the video (paused) so Back returns to the
+        // same video at the same position.
+        if (goingToBatch) {
+            FeedPlayer.exo?.pause()
+        } else if (!handedOff && !FeedPlayer.minimized) {
             FeedPlayer.stop()
         }
         // After a handoff the main player owns the orientation; only

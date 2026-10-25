@@ -402,7 +402,16 @@ object FeedPlayer {
         // actually selected (source + quality + its audio) and
         // the extracted subtitles, instead of letting it pick
         // its own — the service downloads given links as-is.
+        // Phase 8.38: queue ALL links with the selected one
+        // first — the service tries them in order and skips
+        // types it cannot download (DASH), so a playable
+        // sibling format still gets the episode downloaded.
         val chosen = links.getOrNull(linkIndex)
+        val orderedLinks = links.toMutableList()
+        if (chosen != null) {
+            orderedLinks.remove(chosen)
+            orderedLinks.add(0, chosen)
+        }
         DownloadQueueManager.addToQueue(
             DownloadObjects.DownloadQueueItem(
                 episode,
@@ -413,7 +422,7 @@ object FeedPlayer {
                 page.apiName,
                 page.getId(),
                 page.url,
-                links = chosen?.let { listOf(it) },
+                links = orderedLinks.ifEmpty { null },
                 subs = subs.ifEmpty { null }
             ).toWrapper()
         )

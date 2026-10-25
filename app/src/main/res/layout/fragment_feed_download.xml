@@ -124,9 +124,12 @@
         <Button
             android:id="@+id/feed_download_start"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
             android:layout_marginTop="12dp"
-            android:textColor="@android:color/white" />
+            android:background="@drawable/feed_download_start_bg"
+            android:textColor="@android:color/black"
+            android:textSize="15sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <LinearLayout

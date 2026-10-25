@@ -261,7 +261,12 @@ class FeedBatchDownloadFragment : BaseFragment<FragmentFeedDownloadBinding>(
                 page.apiName,
                 page.getId(),
                 page.url,
-                links = chosen?.let { listOf(it) },
+                links = playable.toMutableList().apply {
+                    if (chosen != null) {
+                        remove(chosen)
+                        add(0, chosen)
+                    }
+                }.ifEmpty { null },
                 subs = synchronized(subs) { ArrayList(subs) }.ifEmpty { null }
             ).toWrapper()
         )
