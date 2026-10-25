@@ -53,6 +53,18 @@
             android:orientation="vertical"
             android:visibility="gone">
 
+            <TextView
+                android:id="@+id/feed_watch_error_detail"
+                android:layout_width="300dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="#AA000000"
+                android:fontFamily="monospace"
+                android:padding="8dp"
+                android:textColor="#FFCCCCCC"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
             <Button
                 android:id="@+id/feed_watch_open_details"
                 android:layout_width="wrap_content"

@@ -78,6 +78,22 @@ object FeedPlayer {
 
     var status: Status = Status.IDLE
         private set
+
+    // Phase 8.27 diagnostic: an on-screen playback log. After five
+    // rounds of inferred fixes for "feed will not cold-play DASH",
+    // this records exactly what happens — which links extraction
+    // returned, which transport each attempt used, and the precise
+    // player error — and the watch screen shows it in the error
+    // state so it can be screenshotted instead of guessed at.
+    private val debugLog = mutableListOf<String>()
+
+    fun debugSnapshot(): String = debugLog.takeLast(14).joinToString("\n")
+
+    private fun dbg(line: String) {
+        debugLog.add(line)
+        if (debugLog.size > 80) debugLog.removeAt(0)
+        Log.d("FeedPlayer", line)
+    }
     var exo: ExoPlayer? = null
         private set
 
@@ -222,6 +238,16 @@ object FeedPlayer {
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                var chain = error.errorCodeName
+                var cause: Throwable? = error.cause
+                var depth = 0
+                while (cause != null && depth < 3) {
+                    chain += " <- " + cause.javaClass.simpleName + ": " +
+                        (cause.message ?: "").take(110)
+                    cause = cause.cause
+                    depth++
+                }
+                dbg("ERR L$linkIndex $chain")
                 failOver()
             }
         })
@@ -250,6 +276,8 @@ object FeedPlayer {
         savePosition()
         loadJob?.cancel()
         val gen = ++generation
+        debugLog.clear()
+        dbg("PLAY " + name.take(40))
         minimized = false
         currentUrl = url
         currentApiName = apiName
@@ -379,6 +407,13 @@ object FeedPlayer {
             false
         }
         extracting = false
+        dbg("extract ok=" + ok + " links=" + newLinks.size)
+        newLinks.forEachIndexed { i, l ->
+            dbg(
+                "L$i " + l.name.take(44) + " q=" + l.quality +
+                    " " + l.type + " @" + hostOf(l.url)
+            )
+        }
         if (gen != generation) return@coroutineScope
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
         links = full
@@ -405,6 +440,7 @@ object FeedPlayer {
      * pickup in extractAndPlay continues when the rest arrive.
      */
     private fun failOver() {
+        dbg("failover from L$linkIndex")
         val nextSame = links.indices.firstOrNull {
             it != linkIndex && it !in triedLinks &&
                 links[it].quality == preferredQuality
@@ -441,10 +477,24 @@ object FeedPlayer {
                 (player.playbackState == Player.STATE_READY &&
                     player.playWhenReady && !player.isPlaying &&
                     player.bufferedPosition <= player.currentPosition + 1_000L)
-            if (stuck) failOver()
+            if (stuck) {
+                dbg(
+                    "watchdog state=" + player.playbackState +
+                        " buffered=" + player.bufferedPosition
+                )
+                failOver()
+            }
         }
         watchdog = runnable
         handler.postDelayed(runnable, 12_000L)
+    }
+
+    private fun hostOf(url: String): String {
+        return try {
+            java.net.URI(url).host ?: "?"
+        } catch (e: Exception) {
+            "?"
+        }
     }
 
     /**
@@ -460,12 +510,15 @@ object FeedPlayer {
      * main player's — some providers' CDNs stall or refuse it
      * while serving the main player fine.
      */
+    private var lastTransport: String = "?"
+
     private fun createVideoDataSource(context: Context, link: ExtractorLink): DataSource.Factory {
         val userAgent = link.headers.entries.find {
             it.key.equals("User-Agent", ignoreCase = true)
         }?.value ?: USER_AGENT
         val interceptor = getApiFromNameNull(link.source)?.getVideoInterceptor(link)
         val source: HttpDataSource.Factory = if (interceptor != null) {
+            lastTransport = "okhttp+interceptor"
             val client = app.baseClient.newBuilder()
                 .addInterceptor(interceptor)
                 .build()
@@ -473,6 +526,7 @@ object FeedPlayer {
         } else {
             val engine = CS3IPlayer.tryCreateEngine(context, 0L)
             if (engine != null) {
+                lastTransport = "cronet"
                 CronetDataSource.Factory(engine, Executors.newSingleThreadExecutor())
                     .setUserAgent(userAgent)
                     .setConnectionTimeoutMs(15_000)
@@ -480,6 +534,7 @@ object FeedPlayer {
                     .setResetTimeoutOnRedirects(true)
                     .setHandleSetCookieRequests(true)
             } else {
+                lastTransport = "okhttp(no cronet)"
                 OkHttpDataSource.Factory(app.baseClient).setUserAgent(userAgent)
             }
         }
@@ -500,6 +555,7 @@ object FeedPlayer {
         triedLinks.add(linkIndex)
         val keepPos = if (keepPosition) player.currentPosition else 0L
         val dataSourceFactory = createVideoDataSource(context, link)
+        dbg("try L$linkIndex via $lastTransport")
         val item = MediaItem.Builder()
             .setUri(link.url)
             .setMimeType(
