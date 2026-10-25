@@ -136,7 +136,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         observe(viewModel.feed) { resource ->
             when (resource) {
                 is Resource.Success -> {
-                    binding.feedSwipeRefresh.isRefreshing = false
+                    // Phase 8.35: the spinner belongs to the build
+                    // chain, not to whichever build finishes first —
+                    // a queued pull-refresh keeps it spinning until
+                    // ITS build lands.
+                    binding.feedSwipeRefresh.isRefreshing = viewModel.isBuilding
                     binding.feedLoading.isVisible = false
                     hideSkeleton(binding)
                     // Hidden items stay hidden even in a replayed value.
@@ -145,7 +149,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
                         binding.feedEmpty.isVisible = pool.isEmpty()
-                        if (scrollTopOnNextFeed) {
+                        if (scrollTopOnNextFeed && viewModel.lastBuildWasPrepend) {
                             scrollTopOnNextFeed = false
                             listState = null
                             binding.feedRecycler.scrollToPosition(0)

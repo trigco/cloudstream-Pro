@@ -49,6 +49,13 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
     private var prependNext = false
     private var pendingPrepend = false
 
+    /** True while any feed build is running (spinner truthfulness). */
+    val isBuilding: Boolean get() = building
+
+    /** Whether the most recently finished build was a pull-refresh. */
+    var lastBuildWasPrepend: Boolean = false
+        private set
+
     /**
      * Pull-to-refresh: fetch the providers' next homepage page and
      * put it FIRST, so a refresh visibly changes the top of the
@@ -110,6 +117,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                     entries = entries.filterNot { it.response.url in hidden }
                 }
                 FeedPool.entries = entries
+                lastBuildWasPrepend = prepend
                 feed.postValue(
                     if (entries.isEmpty()) {
                         Resource.Failure(false, "No feed content")

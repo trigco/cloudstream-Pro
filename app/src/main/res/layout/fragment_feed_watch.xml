@@ -145,16 +145,6 @@
                 android:padding="4dp">
 
                 <ImageButton
-                    android:id="@+id/feed_watch_quality"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/feed_center_button_bg"
-                    android:contentDescription="@string/feed_quality"
-                    android:padding="9dp"
-                    android:src="@drawable/ic_baseline_playlist_play_24"
-                    android:visibility="gone" />
-
-                <ImageButton
                     android:id="@+id/feed_watch_audio"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
@@ -272,54 +262,97 @@
             android:textSize="12sp" />
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
-            <ImageButton
+            <LinearLayout
                 android:id="@+id/feed_watch_source_btn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/feed_center_button_bg"
-                android:contentDescription="@string/feed_sources"
-                android:padding="9dp"
-                android:src="@drawable/ic_baseline_playlist_play_24" />
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:padding="6dp">
 
-            <ImageButton
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/feed_sources"
+                    android:src="@drawable/ic_baseline_playlist_play_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/feed_sources"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/feed_watch_episodes_btn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="10dp"
-                android:background="@drawable/feed_center_button_bg"
-                android:contentDescription="@string/episodes"
-                android:padding="9dp"
-                android:src="@drawable/baseline_list_alt_24" />
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:padding="6dp">
 
-            <ImageButton
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/episodes"
+                    android:src="@drawable/baseline_list_alt_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/episodes"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/feed_watch_download_btn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="10dp"
-                android:background="@drawable/feed_center_button_bg"
-                android:contentDescription="@string/download"
-                android:padding="9dp"
-                android:src="@drawable/baseline_downloading_24" />
-        </LinearLayout>
-    </LinearLayout>
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:padding="6dp">
 
-    <TextView
-        android:id="@+id/feed_watch_upnext_label"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="18dp"
-        android:text="@string/feed_up_next"
-        android:textColor="@android:color/white"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/feed_watch_title_box" />
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/download"
+                    android:src="@drawable/baseline_downloading_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/download"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/feed_watch_upnext_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/feed_up_next"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/feed_watch_upnext"
@@ -333,5 +366,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/feed_watch_upnext_label" />
+        app:layout_constraintTop_toBottomOf="@id/feed_watch_title_box" />
 </androidx.constraintlayout.widget.ConstraintLayout>

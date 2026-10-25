@@ -159,6 +159,8 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
+    private var lastPlayerStatus: FeedPlayer.Status = FeedPlayer.Status.IDLE
+
     private val iconListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val binding = binding ?: return
@@ -277,7 +279,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             view.hapticTick()
             FeedPlayer.nextEpisode()
         }
-        binding.feedWatchQuality.setOnClickListener { showQuality() }
         binding.feedWatchSubtitles.setOnClickListener { showSubtitlePicker() }
         binding.feedWatchAudio.setOnClickListener { showAudioPicker() }
         binding.feedWatchSeek.setOnSeekBarChangeListener(object :
@@ -369,8 +370,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                     binding.feedWatchPoster.loadImage(it)
                 }
                 binding.feedWatchLoadingBox.isVisible = true
-                binding.feedWatchSourceCount.text =
-                    getString(R.string.feed_finding_sources, FeedPlayer.extractedCount)
+                // Phase 8.35: the "Finding sources" counter is
+                // hidden by request — just the spinner.
+                binding.feedWatchSourceCount.isVisible = false
             }
 
             FeedPlayer.Status.READY -> {
@@ -378,7 +380,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchPoster.isVisible = false
                 binding.feedWatchPlayer.isVisible = true
                 binding.feedWatchErrorBox.isVisible = false
-                showControls()
+                // Phase 8.35: show the controls only when playback
+                // (re)starts — this state callback also fires on
+                // every seek/buffer churn, and re-showing the
+                // controls there is what kept popping every icon
+                // over the video on double-tap seeks.
+                if (lastPlayerStatus != FeedPlayer.Status.READY) {
+                    showControls()
+                }
             }
 
             FeedPlayer.Status.ERROR -> {
@@ -392,12 +401,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
             FeedPlayer.Status.IDLE -> Unit
         }
+        lastPlayerStatus = FeedPlayer.status
         if (exo != null) {
             binding.feedWatchPlayPause.setImageResource(
                 if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
             )
         }
-        binding.feedWatchQuality.isVisible = FeedPlayer.links.size > 1
         binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
         binding.feedWatchEpisodesBtn.isVisible = FeedPlayer.episodes.size > 1
         updateHeader()

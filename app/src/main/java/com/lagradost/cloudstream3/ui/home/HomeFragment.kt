@@ -713,6 +713,77 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     private var homeCategoryItems: MutableList<HomeViewModel.ExpandableHomepageList> =
         mutableListOf()
     private val homeCategoryOrderKey = "home_category_order"
+
+    // Phase 8.35: categories the viewer hid (e.g. adult shelves).
+    // Hidden names persist; lastHomeCopies keeps the unfiltered
+    // list so hide/unhide re-applies instantly, with no reload.
+    private val homeHiddenCategoriesKey = "home_hidden_categories"
+    private var lastHomeCopies: List<HomeViewModel.ExpandableHomepageList> = emptyList()
+    private var categoryDragSwapped = false
+
+    private fun hiddenCategoryNames(): Set<String> {
+        val ctx = context ?: return emptySet()
+        val raw = PreferenceManager.getDefaultSharedPreferences(ctx)
+            .getString(homeHiddenCategoriesKey, null) ?: return emptySet()
+        return raw.split('\u001F').filter { it.isNotEmpty() }.toSet()
+    }
+
+    private fun saveHiddenCategoryNames(names: Set<String>) {
+        val ctx = context ?: return
+        PreferenceManager.getDefaultSharedPreferences(ctx).edit()
+            .putString(homeHiddenCategoriesKey, names.joinToString("\u001F"))
+            .apply()
+    }
+
+    private fun applyHomeCategories() {
+        val hidden = hiddenCategoryNames()
+        val visible = lastHomeCopies.filterNot { it.list.name in hidden }
+        homeCategoryItems = visible.toMutableList()
+        (binding?.homeMasterRecycler?.adapter as? ParentItemAdapter)
+            ?.submitList(visible)
+    }
+
+    private fun showCategoryMenu(item: HomeViewModel.ExpandableHomepageList) {
+        val act = activity ?: return
+        val name = item.list.name
+        val options = mutableListOf(getString(R.string.home_hide_category))
+        if (hiddenCategoryNames().isNotEmpty()) {
+            options.add(getString(R.string.home_unhide_categories))
+        }
+        AlertDialog.Builder(act)
+            .setTitle(name)
+            .setItems(options.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    saveHiddenCategoryNames(hiddenCategoryNames() + name)
+                    applyHomeCategories()
+                    showToast(R.string.home_category_hidden, Toast.LENGTH_SHORT)
+                } else {
+                    showUnhideCategoriesDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun showUnhideCategoriesDialog() {
+        val act = activity ?: return
+        val hidden = hiddenCategoryNames().sorted()
+        if (hidden.isEmpty()) return
+        val checked = BooleanArray(hidden.size)
+        AlertDialog.Builder(act)
+            .setTitle(R.string.home_unhide_categories)
+            .setMultiChoiceItems(hidden.toTypedArray(), checked) { _, index, isChecked ->
+                checked[index] = isChecked
+            }
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val restore = hidden.filterIndexed { index, _ -> checked[index] }
+                if (restore.isNotEmpty()) {
+                    saveHiddenCategoryNames(hiddenCategoryNames() - restore.toSet())
+                    applyHomeCategories()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
     private val homeAutoRotateHandler = Handler(Looper.getMainLooper())
     private val homeAutoRotateRunnable = object : Runnable {
         override fun run() {
@@ -968,6 +1039,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         Collections.swap(homeCategoryItems, fromIndex, toIndex)
                         (recyclerView.adapter as? ParentItemAdapter)
                             ?.notifyItemMoved(from, to)
+                        categoryDragSwapped = true
                         return true
                     }
 
@@ -982,6 +1054,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     ) {
                         super.onSelectedChanged(viewHolder, actionState)
                         if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                            categoryDragSwapped = false
                             viewHolder?.itemView?.hapticTick()
                         }
                     }
@@ -992,6 +1065,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     ) {
                         super.clearView(recyclerView, viewHolder)
                         saveCategoryOrder()
+                        // Phase 8.35: a hold that never became a drag
+                        // (press, no move, release) opens the category
+                        // menu instead — the reorder gesture itself
+                        // is exactly as before.
+                        if (!categoryDragSwapped) {
+                            val pos = viewHolder.bindingAdapterPosition
+                            if (pos > 0) {
+                                homeCategoryItems.getOrNull(pos - 1)?.let {
+                                    showCategoryMenu(it)
+                                }
+                            }
+                        }
                     }
                 }).attachToRecyclerView(homeMasterRecycler)
 
@@ -1190,9 +1275,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                                 list = it.list.copy(list = it.list.list.toMutableList())
                             )
                         }.sortedBy { savedCategoryOrderIndex(it.list.name) }
-                        homeCategoryItems = orderedCopies.toMutableList()
-                        (homeMasterRecycler.adapter as? ParentItemAdapter)
-                            ?.submitList(orderedCopies)
+                        lastHomeCopies = orderedCopies
+                        applyHomeCategories()
 
                         saveHomepageToTV(d)
 
