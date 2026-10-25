@@ -454,8 +454,8 @@ object FeedPlayer {
         dbg("cross-provider search: " + title.take(40))
         val candidates = others.amap { api ->
             try {
-                when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title) }) {
-                    is Resource.Success -> r.value.firstOrNull {
+                when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title, 1) }) {
+                    is Resource.Success -> r.value.list.firstOrNull {
                         titlesMatch(it.name, title)
                     }?.let { hit -> hit to api }
                     else -> null
