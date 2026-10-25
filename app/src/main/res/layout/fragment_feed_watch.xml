@@ -30,13 +30,6 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
-        <View
-            android:id="@+id/feed_watch_blend"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_gravity="bottom"
-            android:background="@drawable/feed_blend_gradient" />
-
         <LinearLayout
             android:id="@+id/feed_watch_loading_box"
             android:layout_width="wrap_content"
@@ -240,34 +233,36 @@
         </FrameLayout>
     </FrameLayout>
 
-    <TextView
-        android:id="@+id/feed_watch_title"
+    <LinearLayout
+        android:id="@+id/feed_watch_title_box"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
         android:layout_marginEnd="16dp"
-        android:ellipsize="end"
-        android:maxLines="2"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:orientation="vertical"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/feed_watch_player_box" />
+        app:layout_constraintTop_toBottomOf="@id/feed_watch_player_box">
 
-    <TextView
-        android:id="@+id/feed_watch_meta"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="2dp"
-        android:layout_marginEnd="16dp"
-        android:textColor="@color/grayTextColor"
-        android:textSize="12sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/feed_watch_title" />
+        <TextView
+            android:id="@+id/feed_watch_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/feed_watch_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/grayTextColor"
+            android:textSize="12sp" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/feed_watch_upnext_label"
@@ -280,7 +275,7 @@
         android:textSize="14sp"
         android:textStyle="bold"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/feed_watch_meta" />
+        app:layout_constraintTop_toBottomOf="@id/feed_watch_title_box" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/feed_watch_upnext"

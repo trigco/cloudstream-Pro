@@ -112,6 +112,8 @@ object FeedPlayer {
     private var loadJob: Job? = null
     private var generation = 0
     private var resumeSeekDone = false
+    private var extracting = false
+    private var pendingRetry = false
     private var preferredQuality = 0
     private val triedLinks = mutableSetOf<Int>()
     private var appContext: Context? = null
@@ -215,6 +217,14 @@ object FeedPlayer {
                 if (next != null) {
                     linkIndex = next
                     playCurrentLink(keepPosition = true)
+                } else if (extracting) {
+                    // More links are still being fetched in the
+                    // background — failing now is what made slow /
+                    // DASH sources "not play the first time". Wait:
+                    // extractAndPlay picks the next link up as soon
+                    // as extraction completes.
+                    pendingRetry = true
+                    status = Status.LOADING
                 } else {
                     status = Status.ERROR
                 }
@@ -253,6 +263,8 @@ object FeedPlayer {
         currentPoster = posterUrl
         status = Status.LOADING
         resumeSeekDone = false
+        extracting = false
+        pendingRetry = false
         links = emptyList()
         subs = emptyList()
         linkIndex = 0
@@ -324,6 +336,8 @@ object FeedPlayer {
     private suspend fun extractAndPlay(index: Int, gen: Int) = coroutineScope {
         episodeIndex = index
         resumeSeekDone = false
+        extracting = true
+        pendingRetry = false
         triedLinks.clear()
         val gen2 = generator ?: run {
             status = Status.ERROR
@@ -369,6 +383,7 @@ object FeedPlayer {
         } catch (e: Exception) {
             false
         }
+        extracting = false
         if (gen != generation) return@coroutineScope
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
         if (full.isEmpty() || !ok && startedLink == null) {
@@ -390,6 +405,21 @@ object FeedPlayer {
             if (idx >= 0) {
                 linkIndex = idx
                 triedLinks.add(idx)
+            }
+        }
+        // The first link may have failed while the rest were still
+        // being fetched (the error handler waits instead of failing
+        // in that case) — continue with the next link that arrived.
+        if (pendingRetry) {
+            pendingRetry = false
+            val nextIdx = links.indices.firstOrNull {
+                it !in triedLinks && links[it].quality == preferredQuality
+            } ?: links.indices.firstOrNull { it !in triedLinks }
+            if (nextIdx != null) {
+                linkIndex = nextIdx
+                playCurrentLink(keepPosition = true)
+            } else if (status == Status.LOADING) {
+                status = Status.ERROR
             }
         }
         notifyListeners()
@@ -478,6 +508,8 @@ object FeedPlayer {
     fun stop() {
         savePosition()
         generation++
+        extracting = false
+        pendingRetry = false
         loadJob?.cancel()
         handler.removeCallbacks(saveRunnable)
         exo?.stop()

@@ -84,6 +84,10 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     override fun onBindingCreated(binding: FragmentFeedBinding) {
         binding.feedRecycler.layoutManager = GridLayoutManager(context, 2)
         binding.feedRecycler.adapter = adapter
+        // Fixed size + no change animations: the grid must never
+        // relayout or flash mid-scroll (Phase 8.23 jitter fix).
+        binding.feedRecycler.setHasFixedSize(true)
+        binding.feedRecycler.itemAnimator = null
         buildChips(binding)
         setupHeaderCollapse(binding)
         setupMiniBar(binding)
@@ -250,6 +254,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun setupHeaderCollapse(binding: FragmentFeedBinding) {
         binding.feedHeader.post {
             headerFullHeight = binding.feedHeader.height
+            // The header floats over the grid now: push the content
+            // down by its height so the first row starts below it.
+            val extra = (6 * resources.displayMetrics.density).toInt()
+            binding.feedRecycler.setPadding(
+                binding.feedRecycler.paddingLeft, headerFullHeight + extra,
+                binding.feedRecycler.paddingRight, binding.feedRecycler.paddingBottom
+            )
+            binding.feedSkeleton.setPadding(
+                binding.feedSkeleton.paddingLeft, headerFullHeight + extra,
+                binding.feedSkeleton.paddingRight, binding.feedSkeleton.paddingBottom
+            )
         }
         binding.feedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -266,15 +281,16 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         if (show == headerShown || headerFullHeight == 0) return
         headerShown = show
         val header = binding.feedHeader
-        val from = header.height
-        val to = if (show) headerFullHeight else 0
+        // Slide, don't resize: animating the header's height forced a
+        // full relayout of the grid on every frame — the scroll
+        // jitter (কাপাকাপি) reported in Phase 8.23.
+        val from = header.translationY
+        val to = if (show) 0f else -headerFullHeight.toFloat()
         headerAnimator?.cancel()
-        headerAnimator = ValueAnimator.ofInt(from, to).apply {
+        headerAnimator = ValueAnimator.ofFloat(from, to).apply {
             duration = 180L
             addUpdateListener { animator ->
-                val params = header.layoutParams
-                params.height = animator.animatedValue as Int
-                header.layoutParams = params
+                header.translationY = animator.animatedValue as Float
             }
             start()
         }

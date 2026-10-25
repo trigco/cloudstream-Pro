@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui.feed
 
+import android.animation.ValueAnimator
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.os.Handler
@@ -20,6 +21,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.FragmentFeedWatchBinding
 import com.lagradost.cloudstream3.ui.BaseFragment
@@ -67,6 +69,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding?.feedWatchSkipForward?.isVisible = false
     }
 
+    private var titleFullHeight = 0
+    private var titleShown = true
+    private var titleAnimator: ValueAnimator? = null
+    private var titleScrollAccum = 0
+
     private var orientationListener: OrientationEventListener? = null
     private var landscapeSince = 0L
 
@@ -100,6 +107,58 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     private val stateListener: () -> Unit = { updatePlaybackUi() }
 
+    /**
+     * Phase 8.23 — the title bar gets out of the way while the viewer
+     * scrolls Up next (YouTube-style) and comes back on scroll up.
+     */
+    private fun setupTitleAutoHide(binding: FragmentFeedWatchBinding) {
+        binding.feedWatchTitleBox.post {
+            titleFullHeight = binding.feedWatchTitleBox.height
+        }
+        binding.feedWatchUpnext.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                titleScrollAccum += dy
+                if (titleScrollAccum > 48 && titleShown) {
+                    animateTitleBox(binding, show = false)
+                    titleScrollAccum = 0
+                } else if (titleScrollAccum < -24 && !titleShown) {
+                    animateTitleBox(binding, show = true)
+                    titleScrollAccum = 0
+                }
+            }
+
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (!recyclerView.canScrollVertically(-1) && !titleShown) {
+                    animateTitleBox(binding, show = true)
+                    titleScrollAccum = 0
+                }
+            }
+        })
+    }
+
+    private fun animateTitleBox(binding: FragmentFeedWatchBinding, show: Boolean) {
+        if (show == titleShown || titleFullHeight == 0) return
+        titleShown = show
+        val box = binding.feedWatchTitleBox
+        val from = box.height
+        val to = if (show) titleFullHeight else 0
+        titleAnimator?.cancel()
+        titleAnimator = ValueAnimator.ofInt(from, to).apply {
+            duration = 200L
+            addUpdateListener { animator ->
+                val params = box.layoutParams
+                params.height = animator.animatedValue as Int
+                box.layoutParams = params
+                box.alpha = if (to == 0) {
+                    1f - animator.animatedFraction
+                } else {
+                    animator.animatedFraction
+                }
+            }
+            start()
+        }
+    }
+
     private val iconListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val binding = binding ?: return
@@ -131,6 +190,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
         binding.feedWatchUpnext.adapter = upNextAdapter
+        setupTitleAutoHide(binding)
 
         val url = arguments?.getString("url") ?: return
         val apiName = arguments?.getString("apiName") ?: return
