@@ -166,7 +166,15 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             binding.feedWatchPlayPause.setImageResource(
                 if (isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
             )
-            if (isPlaying) scheduleHideControls() else showControls()
+            if (isPlaying) {
+                scheduleHideControls()
+            } else if (FeedPlayer.exo?.playWhenReady == false) {
+                // A real pause keeps the controls up. A transient
+                // not-playing moment (seeking, buffering) must NOT
+                // flash them — Phase 8.34: double-tap seeks used to
+                // pop every icon on screen.
+                showControls()
+            }
         }
 
         override fun onPlaybackStateChanged(state: Int) {
@@ -238,6 +246,26 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             }
             gestureDetector.onTouchEvent(event)
             true
+        }
+
+        // Phase 8.34: quick actions beside the title — source/dub,
+        // episodes, download — the Premium Details pill row idea.
+        binding.feedWatchSourceBtn.setOnClickListener { view ->
+            view.hapticTick()
+            showQuality()
+        }
+        binding.feedWatchEpisodesBtn.setOnClickListener { view ->
+            view.hapticTick()
+            showEpisodePicker()
+        }
+        binding.feedWatchDownloadBtn.setOnClickListener { view ->
+            view.hapticTick()
+            if (FeedPlayer.downloadCurrentEpisode()) {
+                android.widget.Toast.makeText(
+                    requireContext(), R.string.download_started,
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
 
         binding.feedWatchPlayPause.setOnClickListener { FeedPlayer.togglePlay() }
@@ -371,6 +399,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
         binding.feedWatchQuality.isVisible = FeedPlayer.links.size > 1
         binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
+        binding.feedWatchEpisodesBtn.isVisible = FeedPlayer.episodes.size > 1
         updateHeader()
         val current = FeedPlayer.currentUrl
         if (current != null && current != lastShownUrl) {
@@ -531,6 +560,28 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             }
         }
         return options
+    }
+
+    /** Phase 8.34: episode list for the title-row Episodes button. */
+    private fun showEpisodePicker() {
+        val context = context ?: return
+        val episodes = FeedPlayer.episodes
+        if (episodes.size < 2) return
+        val labels = episodes.map { ep ->
+            val num = if (ep.episode > 0) {
+                "S${ep.season ?: 1} E${ep.episode}"
+            } else {
+                "Episode"
+            }
+            if (ep.name.isNullOrBlank()) num else "$num • ${ep.name}"
+        }.toTypedArray()
+        AlertDialog.Builder(context)
+            .setTitle(R.string.episodes)
+            .setSingleChoiceItems(labels, FeedPlayer.episodeIndex) { dialog, which ->
+                FeedPlayer.playEpisode(which)
+                dialog.dismiss()
+            }
+            .show()
     }
 
     private fun showSubtitlePicker() {

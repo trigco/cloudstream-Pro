@@ -652,9 +652,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun pickLayout(): Int? =
         if (isLayout(PHONE)) R.layout.fragment_home else R.layout.fragment_home_tv
 
-    /** Phase 8.33: a background-resolved title refreshes the rows. */
-    private val titleResolveListener: (String, String) -> Unit = { _, _ ->
+    /** Phase 8.33: a background-resolved title refreshes the rows.
+     *  Phase 8.34: DEBOUNCED — titles resolve in bursts while
+     *  scrolling, and a full rebind per title made home scroll
+     *  shake (কাপাকাপি). One rebind after a quiet gap is enough. */
+    private val titleNotifyRunnable = Runnable {
         homeMasterAdapter?.notifyDataSetChanged()
+    }
+
+    private val titleResolveListener: (String, String) -> Unit = { _, _ ->
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        homeAutoRotateHandler.postDelayed(titleNotifyRunnable, 1_200L)
     }
 
     override fun onCreateView(
@@ -669,6 +677,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
     override fun onDestroyView() {
         TitleResolver.removeListener(titleResolveListener)
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
         // Phase 8.17: the auto-rotation timer must not outlive the view.

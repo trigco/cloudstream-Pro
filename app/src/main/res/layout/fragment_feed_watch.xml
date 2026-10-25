@@ -270,6 +270,42 @@
             android:layout_marginTop="2dp"
             android:textColor="@color/grayTextColor"
             android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/feed_watch_source_btn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/feed_center_button_bg"
+                android:contentDescription="@string/feed_sources"
+                android:padding="9dp"
+                android:src="@drawable/ic_baseline_playlist_play_24" />
+
+            <ImageButton
+                android:id="@+id/feed_watch_episodes_btn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/feed_center_button_bg"
+                android:contentDescription="@string/episodes"
+                android:padding="9dp"
+                android:src="@drawable/baseline_list_alt_24" />
+
+            <ImageButton
+                android:id="@+id/feed_watch_download_btn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/feed_center_button_bg"
+                android:contentDescription="@string/download"
+                android:padding="9dp"
+                android:src="@drawable/baseline_downloading_24" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView

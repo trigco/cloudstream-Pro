@@ -37,7 +37,10 @@ import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.player.SubtitleData
 import com.lagradost.cloudstream3.ui.result.ResultEpisode
 import com.lagradost.cloudstream3.ui.result.buildResultEpisode
+import com.lagradost.cloudstream3.LoadResponse.Companion.isMovie
 import com.lagradost.cloudstream3.ui.result.getId
+import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
+import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
 import com.lagradost.cloudstream3.ui.result.getRealPosition
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -369,6 +372,28 @@ object FeedPlayer {
         if (hasNextEpisode) playEpisode(episodeIndex + 1)
     }
 
+    /**
+     * Phase 8.34: queue the current episode in the app's download
+     * manager — the same DownloadQueueItem the details page builds.
+     */
+    fun downloadCurrentEpisode(): Boolean {
+        val page = currentPage ?: return false
+        val episode = currentEpisode ?: return false
+        DownloadQueueManager.addToQueue(
+            DownloadObjects.DownloadQueueItem(
+                episode,
+                page.isMovie(),
+                page.name,
+                page.type,
+                page.posterUrl,
+                page.apiName,
+                page.getId(),
+                page.url
+            ).toWrapper()
+        )
+        return true
+    }
+
     private fun playableOf(all: List<ExtractorLink>): List<ExtractorLink> =
         all.filter {
             it.type == ExtractorLinkType.VIDEO ||
@@ -564,6 +589,14 @@ object FeedPlayer {
      * pickup in extractAndPlay continues when the rest arrive.
      */
     private fun failOver() {
+        // Phase 8.34: never declare an error over live playback —
+        // the owner saw the error buttons (with "Play in main
+        // player") while the video was still playing behind them.
+        if (exo?.isPlaying == true) {
+            dbg("failover skipped: still playing")
+            notifyListeners()
+            return
+        }
         dbg("failover from L$linkIndex")
         val nextSame = links.indices.firstOrNull {
             it != linkIndex && it !in triedLinks &&
@@ -580,6 +613,13 @@ object FeedPlayer {
             pendingRetry = true
             status = Status.LOADING
         } else {
+            // Truly giving up: silence the player so sound never
+            // plays behind the error screen.
+            try {
+                exo?.stop()
+            } catch (e: Exception) {
+                // player already gone
+            }
             status = Status.ERROR
         }
         notifyListeners()
@@ -592,21 +632,35 @@ object FeedPlayer {
      * nothing buffered ahead and is not playing, treat the link as a
      * dud and walk on, exactly like an error.
      */
+    private var watchdogStartPos = 0L
+
     private fun armWatchdog(gen: Int, idx: Int) {
         watchdog?.let { handler.removeCallbacks(it) }
+        watchdogStartPos = exo?.currentPosition ?: 0L
         val runnable = Runnable {
             if (gen != generation || idx != linkIndex) return@Runnable
             val player = exo ?: return@Runnable
-            val stuck = player.playbackState == Player.STATE_BUFFERING ||
+            if (player.isPlaying) return@Runnable
+            // Phase 8.34: judge by PROGRESS, not by state alone.
+            // On a slow connection a healthy link can sit in
+            // BUFFERING well past 12 s — failing over then (and
+            // eventually erroring) while the video later played
+            // anyway is what put the error screen over live video.
+            val advanced = player.currentPosition - watchdogStartPos
+            val ahead = player.bufferedPosition - player.currentPosition
+            val stateStuck = player.playbackState == Player.STATE_BUFFERING ||
                 (player.playbackState == Player.STATE_READY &&
                     player.playWhenReady && !player.isPlaying &&
-                    player.bufferedPosition <= player.currentPosition + 1_000L)
-            if (stuck) {
+                    ahead <= 1_000L)
+            if (stateStuck && advanced < 2_000L && ahead <= 1_000L) {
                 dbg(
                     "watchdog state=" + player.playbackState +
                         " buffered=" + player.bufferedPosition
                 )
                 failOver()
+            } else if (player.playbackState == Player.STATE_BUFFERING && ahead > 1_000L) {
+                // Slow, but the buffer is growing — look again later.
+                armWatchdog(gen, idx)
             }
         }
         watchdog = runnable
