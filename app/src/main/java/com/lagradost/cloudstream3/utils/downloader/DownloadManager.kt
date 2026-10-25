@@ -121,6 +121,7 @@ const val DOWNLOAD_CHANNEL_ID = "cloudstream3.general"
 const val DOWNLOAD_CHANNEL_NAME = "Downloads"
 const val DOWNLOAD_CHANNEL_DESCRIPT = "The download notification channel"
 
+@OptIn(UnstableApi::class)
 object VideoDownloadManager {
     fun maxConcurrentDownloads(context: Context): Int =
         PreferenceManager.getDefaultSharedPreferences(context)
@@ -1493,7 +1494,6 @@ object VideoDownloadManager {
      * and everywhere else this path is used.
      * Pause/resume are not supported for exports: Stop cancels.
      */
-    @OptIn(UnstableApi::class)
     private suspend fun downloadDash(
         context: Context,
         link: ExtractorLink,
@@ -1601,7 +1601,6 @@ object VideoDownloadManager {
      * providers hand out; a provider that refuses still falls
      * through to the next link in the download loop.
      */
-    @OptIn(UnstableApi::class)
     private suspend fun exportDashToFile(
         context: Context,
         link: ExtractorLink,
