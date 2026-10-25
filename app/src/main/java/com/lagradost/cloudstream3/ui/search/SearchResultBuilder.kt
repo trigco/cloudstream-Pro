@@ -383,7 +383,7 @@ object SearchResultBuilder {
         // ("[Hindi Dub]", "(Hindi)") — surface it as the badge
         // instead of letting the title cleaner strip it silently.
         if (card !is AnimeSearchResponse && textIsDub?.text.isNullOrBlank()) {
-            val langLabel = Regex("[\[\(]([^\]\)]{3,24})[\)\]]")
+            val langLabel = Regex("""[\[\(]([^\]\)]{3,24})[\)\]]""")
                 .findAll(card.name)
                 .map { it.groupValues[1].trim() }
                 .firstOrNull { g ->
