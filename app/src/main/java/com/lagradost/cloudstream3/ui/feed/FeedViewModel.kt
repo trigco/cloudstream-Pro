@@ -46,8 +46,27 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         build()
     }
 
-    /** Next batch: advance every provider to its next homepage page. */
+    private var prependNext = false
+    private var pendingPrepend = false
+
+    /**
+     * Pull-to-refresh: fetch the providers' next homepage page and
+     * put it FIRST, so a refresh visibly changes the top of the
+     * feed. (Phase 8.32's append-only refresh looked like nothing
+     * happened.) A pull during a build is queued, not dropped.
+     */
     fun refresh() {
+        if (building) {
+            pendingPrepend = true
+            return
+        }
+        prependNext = true
+        page += 1
+        build()
+    }
+
+    /** Endless scroll: fetch the next page and append it. */
+    fun loadMore() {
         if (building) return
         page += 1
         build()
@@ -70,10 +89,17 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     buildFeed(page)
                 }
-                val merged = LinkedHashMap<String, FeedEntry>()
-                FeedPool.entries.forEach { merged[it.response.url] = it }
-                fresh.forEach { merged.putIfAbsent(it.response.url, it) }
-                var entries = merged.values.toList()
+                val prepend = prependNext
+                prependNext = false
+                var entries = if (prepend) {
+                    val seen = mutableSetOf<String>()
+                    (fresh + FeedPool.entries).filter { seen.add(it.response.url) }
+                } else {
+                    val merged = LinkedHashMap<String, FeedEntry>()
+                    FeedPool.entries.forEach { merged[it.response.url] = it }
+                    fresh.forEach { merged.putIfAbsent(it.response.url, it) }
+                    merged.values.toList()
+                }
                 if (firstBuild) {
                     entries = withLikedBoost(entries)
                     firstBuild = false
@@ -95,6 +121,11 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 feed.postValue(Resource.Failure(false, e.message ?: "Feed failed"))
             } finally {
                 building = false
+                // A pull that arrived mid-build runs now.
+                if (pendingPrepend) {
+                    pendingPrepend = false
+                    refresh()
+                }
             }
         }
     }

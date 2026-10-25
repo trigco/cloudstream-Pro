@@ -23,6 +23,7 @@ import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
@@ -55,8 +56,21 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private val viewModel: FeedViewModel by viewModels()
     private val adapter = FeedAdapter(
         onPlay = { entry -> openWatch(entry) },
-        onHide = { entry -> confirmHide(entry) }
+        onHide = { entry -> confirmHide(entry) },
+        onTitleNeeded = { entry ->
+            context?.let { ctx ->
+                TitleResolver.resolve(ctx, entry.apiName, entry.response.url, entry.response.name)
+            }
+        }
     )
+
+    /** A resolved real title lands here and swaps into its card. */
+    private val titleListener: (String, String) -> Unit = { url, title ->
+        adapter.setTitleOverride(url, title)
+    }
+
+    /** Set by a pull-to-refresh: the next feed value starts at the top. */
+    private var scrollTopOnNextFeed = false
 
     /** RecyclerView position, kept across watch-page trips. */
     private var listState: android.os.Parcelable? = null
@@ -92,12 +106,16 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         setupHeaderCollapse(binding)
         setupMiniBar(binding)
 
+        TitleResolver.addListener(titleListener)
+
         binding.feedSwipeRefresh.setOnRefreshListener {
             // A refresh means "show me something else": drop any active
-            // search and load the providers' next homepage page.
+            // search and load the providers' next homepage page — it
+            // lands at the TOP of the feed (FeedViewModel.refresh).
             if (binding.feedSearchInput.text.isNotEmpty()) {
                 binding.feedSearchInput.text.clear()
             }
+            scrollTopOnNextFeed = true
             viewModel.refresh()
         }
 
@@ -127,6 +145,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
                         binding.feedEmpty.isVisible = pool.isEmpty()
+                        if (scrollTopOnNextFeed) {
+                            scrollTopOnNextFeed = false
+                            listState = null
+                            binding.feedRecycler.scrollToPosition(0)
+                        }
                         adapter.submitList(pool) {
                             listState?.let { state ->
                                 binding.feedRecycler.layoutManager
@@ -170,6 +193,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         searchJob?.cancel()
         headerAnimator?.cancel()
         FeedPlayer.removeListener(miniListener)
+        TitleResolver.removeListener(titleListener)
         super.onDestroyView()
     }
 
@@ -281,7 +305,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     if (lm != null && total > 0 &&
                         lm.findLastVisibleItemPosition() >= total - 8
                     ) {
-                        viewModel.refresh()
+                        viewModel.loadMore()
                     }
                 }
             }

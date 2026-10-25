@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FeedCardBinding
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.addPressShrink
 import com.lagradost.cloudstream3.utils.getImageFromDrawable
@@ -23,8 +24,18 @@ import com.lagradost.cloudstream3.utils.hapticTick
 class FeedAdapter(
     private val onPlay: (FeedEntry) -> Unit,
     private val onLikeChanged: (FeedEntry, Boolean) -> Unit = { _, _ -> },
-    private val onHide: (FeedEntry) -> Unit = {}
+    private val onHide: (FeedEntry) -> Unit = {},
+    private val onTitleNeeded: (FeedEntry) -> Unit = {}
 ) : ListAdapter<FeedEntry, FeedAdapter.ViewHolder>(Diff) {
+
+    /** Real titles resolved in the background (TitleResolver). */
+    private val titleOverrides = mutableMapOf<String, String>()
+
+    fun setTitleOverride(url: String, title: String) {
+        titleOverrides[url] = title
+        val idx = currentList.indexOfFirst { it.response.url == url }
+        if (idx >= 0) notifyItemChanged(idx)
+    }
 
     object Diff : DiffUtil.ItemCallback<FeedEntry>() {
         override fun areItemsTheSame(oldItem: FeedEntry, newItem: FeedEntry): Boolean =
@@ -44,7 +55,17 @@ class FeedAdapter(
             binding.feedCardPoster.loadImage(response.posterUrl, response.posterHeaders) {
                 error { getImageFromDrawable(context, R.drawable.poster_placeholder) }
             }
-            binding.feedCardTitle.text = displayTitle(response.name, response.url)
+            // Phase 8.33: prefer a resolved real title; when the
+            // raw name is only a placeholder ("Id <number>"), ask
+            // for a background resolution — the card swaps its
+            // title in when it lands.
+            val override = titleOverrides[response.url]
+                ?: TitleResolver.cached(context, response.url)
+            binding.feedCardTitle.text =
+                override ?: displayTitle(response.name, response.url)
+            if (override == null && TitleResolver.isIdLike(response.name)) {
+                onTitleNeeded(entry)
+            }
             binding.feedCardMeta.text = "${entry.apiName} • ${typeLabel(response.type)}"
             bindLike(entry)
 

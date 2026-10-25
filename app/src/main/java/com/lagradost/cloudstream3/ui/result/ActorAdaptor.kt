@@ -61,7 +61,6 @@ class ActorAdaptor(
         when (val binding = holder.view) {
             is CastItemBinding -> {
                 clearImage(binding.actorImage)
-                binding.actorInitials.text = null
             }
         }
     }
@@ -96,16 +95,8 @@ class ActorAdaptor(
                     Pair(item.voiceActor?.image, item.actor.image)
                 }
 
-                // Phase 8.10: the initials belong to whoever's photo sits in
-                // the main slot (mirrors the mainImg choice above). They sit
-                // beneath the photo — a loaded photo covers them, a missing
-                // or failed one leaves them visible instead of a blank disc.
-                val mainName = if (!isInverted || item.voiceActor?.image.isNullOrBlank()) {
-                    item.actor.name
-                } else {
-                    item.voiceActor?.name ?: item.actor.name
-                }
-                binding.actorInitials.text = initialsForActor(mainName)
+                // Phase 8.33: no-photo cast show the silhouette
+                // avatar from the layout; nothing to set here.
 
                 // Fix tv focus escaping the recyclerview
                 if (position == 0) {

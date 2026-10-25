@@ -60,6 +60,7 @@ import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
 import com.lagradost.cloudstream3.ui.search.SEARCH_ACTION_LOAD
@@ -651,16 +652,23 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun pickLayout(): Int? =
         if (isLayout(PHONE)) R.layout.fragment_home else R.layout.fragment_home_tv
 
+    /** Phase 8.33: a background-resolved title refreshes the rows. */
+    private val titleResolveListener: (String, String) -> Unit = { _, _ ->
+        homeMasterAdapter?.notifyDataSetChanged()
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         bottomSheetDialog?.ownShow()
+        TitleResolver.addListener(titleResolveListener)
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
     override fun onDestroyView() {
+        TitleResolver.removeListener(titleResolveListener)
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
         // Phase 8.17: the auto-rotation timer must not outlive the view.
