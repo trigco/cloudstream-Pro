@@ -423,7 +423,7 @@ object FeedPlayer {
     private fun normalizedTitle(raw: String): String =
         raw.lowercase()
             .replace(Regex("[^a-z0-9]+"), " ")
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
     private fun titlesMatch(candidate: String, wanted: String): Boolean {
@@ -455,7 +455,7 @@ object FeedPlayer {
         val candidates = others.amap { api ->
             try {
                 when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title, 1) }) {
-                    is Resource.Success -> r.value.list.firstOrNull {
+                    is Resource.Success -> r.value.items.firstOrNull {
                         titlesMatch(it.name, title)
                     }?.let { hit -> hit to api }
                     else -> null
