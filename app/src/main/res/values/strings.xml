@@ -351,6 +351,7 @@
     <string name="feed_loading_video">Loading video…</string>
     <string name="feed_sources">Sources</string>
     <string name="feed_finding_sources">Finding sources… %1$d found</string>
+    <string name="feed_show_all">Show all</string>
     <string name="home_hide_category">Hide category</string>
     <string name="home_unhide_categories">Unhide categories</string>
     <string name="home_category_hidden">Category hidden</string>

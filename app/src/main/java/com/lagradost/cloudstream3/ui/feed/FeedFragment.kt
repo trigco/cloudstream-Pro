@@ -103,6 +103,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         binding.feedRecycler.setHasFixedSize(true)
         binding.feedRecycler.itemAnimator = null
         buildChips(binding)
+        binding.feedEmptyReset.setOnClickListener {
+            // Back to the unfiltered feed: clear the search text
+            // (its watcher re-runs the pool filter) and reselect
+            // the All chip.
+            if (binding.feedSearchInput.text.toString().isNotEmpty()) {
+                binding.feedSearchInput.setText("")
+            }
+            (binding.feedChips.getChildAt(0) as? TextView)?.let { first ->
+                selectChip(binding, first, "All")
+            }
+        }
         setupHeaderCollapse(binding)
         setupMiniBar(binding)
 
@@ -148,7 +159,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     pool = resource.value.filterNot { it.response.url in hidden }
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
-                        binding.feedEmpty.isVisible = pool.isEmpty()
+                        binding.setFeedEmpty( pool.isEmpty() )
                         if (scrollTopOnNextFeed && viewModel.lastBuildWasPrepend) {
                             scrollTopOnNextFeed = false
                             listState = null
@@ -170,7 +181,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     binding.feedSwipeRefresh.isRefreshing = false
                     binding.feedLoading.isVisible = false
                     hideSkeleton(binding)
-                    binding.feedEmpty.isVisible = true
+                    binding.setFeedEmpty( true )
                 }
 
                 is Resource.Loading -> {
@@ -213,7 +224,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 pool = pool.filterNot { it.response.url == entry.response.url }
                 val query = binding?.feedSearchInput?.text?.toString()?.trim().orEmpty()
                 if (query.isEmpty()) {
-                    binding?.feedEmpty?.isVisible = pool.isEmpty()
+                    binding?.setFeedEmpty( pool.isEmpty() )
                     adapter.submitList(pool)
                 } else {
                     applySearch(query)
@@ -232,6 +243,30 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     // ---------- header: chips + collapse on scroll ----------
 
+    /** Phase 8.36: the empty state is a designed box (art +
+     *  message + a Show-all exit), not a lone grey line. */
+    private fun FragmentFeedBinding.setFeedEmpty(visible: Boolean) {
+        feedEmptyBox.isVisible = visible
+    }
+
+    /** Phase 8.36: genre chips with zero matches in the current
+     *  pool render dimmed, so an empty tag is visible before it
+     *  is tapped (provider search can still find more). */
+    private fun refreshChipAlphas(binding: FragmentFeedBinding) {
+        for (i in 0 until binding.feedChips.childCount) {
+            val chip = binding.feedChips.getChildAt(i) as? TextView ?: continue
+            val tag = chip.tag as? String ?: continue
+            if (tag == "All") {
+                chip.alpha = 1f
+                continue
+            }
+            val any = pool.any {
+                it.response.name.contains(tag, ignoreCase = true)
+            }
+            chip.alpha = if (any) 1f else 0.45f
+        }
+    }
+
     private fun buildChips(binding: FragmentFeedBinding) {
         val tags = listOf(
             "All", "Horror", "Comedy", "Romance", "Thriller",
@@ -249,6 +284,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 ).apply { marginEnd = 20 }
                 setOnClickListener { selectChip(binding, this, tag) }
             }
+            chip.tag = tag
             styleChip(chip, selected = index == 0)
             if (index == 0) selectedChip = chip
             binding.feedChips.addView(chip)
@@ -418,6 +454,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      */
     private fun applySearch(query: String) {
         val binding = binding ?: return
+        refreshChipAlphas(binding)
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
         searchJob?.cancel()
         if (query.isEmpty()) {
@@ -426,14 +463,14 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             val first = binding.feedChips.getChildAt(0) as? TextView
             selectedChip = first
             first?.let { styleChip(it, selected = true) }
-            binding.feedEmpty.isVisible = pool.isEmpty()
+            binding.setFeedEmpty( pool.isEmpty() )
             adapter.submitList(pool)
             return
         }
         val local = pool.filter {
             it.response.name.contains(query, ignoreCase = true)
         }
-        binding.feedEmpty.isVisible = local.isEmpty()
+        binding.setFeedEmpty( local.isEmpty() )
         adapter.submitList(local)
         if (query.length < 3) return
 
@@ -449,7 +486,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 val merged = local + remote.filter {
                     it.response.url !in hidden && seen.add(it.response.url)
                 }
-                binding.feedEmpty.isVisible = merged.isEmpty()
+                binding.setFeedEmpty( merged.isEmpty() )
                 adapter.submitList(merged)
             }
         }
