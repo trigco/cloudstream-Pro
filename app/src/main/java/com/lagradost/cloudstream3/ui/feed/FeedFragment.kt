@@ -273,6 +273,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 } else if (dy < -12) {
                     animateHeader(binding, show = true)
                 }
+                // Phase 8.32: endless scroll — near the end, pull
+                // the providers' next homepage page into the pool.
+                if (dy > 0) {
+                    val lm = recyclerView.layoutManager as? GridLayoutManager
+                    val total = recyclerView.adapter?.itemCount ?: 0
+                    if (lm != null && total > 0 &&
+                        lm.findLastVisibleItemPosition() >= total - 8
+                    ) {
+                        viewModel.refresh()
+                    }
+                }
             }
         })
     }

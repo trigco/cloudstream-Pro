@@ -39,6 +39,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
     val feed = MutableLiveData<Resource<List<FeedEntry>>>()
     private var building = false
     private var page = 1
+    private var firstBuild = true
 
     fun loadIfNeeded() {
         if (building || feed.value is Resource.Success) return
@@ -47,6 +48,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Next batch: advance every provider to its next homepage page. */
     fun refresh() {
+        if (building) return
         page += 1
         build()
     }
@@ -57,13 +59,25 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         feed.postValue(Resource.Loading())
         viewModelScope.launch {
             try {
-                var entries = buildFeed(page)
-                if (entries.isEmpty() && page > 1) {
-                    // Providers ran out of pages — wrap around to page 1.
-                    page = 1
-                    entries = buildFeed(page)
+                // Phase 8.32: the pool ACCUMULATES. A single
+                // homepage page per provider made the feed look
+                // sparse next to home, so the first build pulls two
+                // pages per provider, and later builds APPEND the
+                // next page instead of replacing the grid.
+                val fresh = if (firstBuild) {
+                    page = 2
+                    buildFeed(1) + buildFeed(2)
+                } else {
+                    buildFeed(page)
                 }
-                entries = withLikedBoost(entries)
+                val merged = LinkedHashMap<String, FeedEntry>()
+                FeedPool.entries.forEach { merged[it.response.url] = it }
+                fresh.forEach { merged.putIfAbsent(it.response.url, it) }
+                var entries = merged.values.toList()
+                if (firstBuild) {
+                    entries = withLikedBoost(entries)
+                    firstBuild = false
+                }
                 // Phase 8.22: hidden items never surface.
                 val hidden = FeedHidden.getAll(getApplication())
                 if (hidden.isNotEmpty()) {
@@ -145,7 +159,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                         .filterNotNull()
                         .flatMap { it.items }
                         .flatMap { it.list }
-                        .take(30)
+                        .take(40)
                         .map { FeedEntry(it, api.name) }
 
                     else -> emptyList()

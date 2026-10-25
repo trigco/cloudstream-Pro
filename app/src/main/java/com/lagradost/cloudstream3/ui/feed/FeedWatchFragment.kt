@@ -341,6 +341,8 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                     binding.feedWatchPoster.loadImage(it)
                 }
                 binding.feedWatchLoadingBox.isVisible = true
+                binding.feedWatchSourceCount.text =
+                    getString(R.string.feed_finding_sources, FeedPlayer.extractedCount)
             }
 
             FeedPlayer.Status.READY -> {
@@ -358,8 +360,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchControls.isVisible = false
                 binding.feedWatchErrorBox.isVisible = true
                 binding.feedWatchPlayMain.isVisible = FeedPlayer.generator != null
-                binding.feedWatchErrorDetail.text = FeedPlayer.debugSnapshot()
-                binding.feedWatchErrorDetail.isVisible = true
             }
 
             FeedPlayer.Status.IDLE -> Unit

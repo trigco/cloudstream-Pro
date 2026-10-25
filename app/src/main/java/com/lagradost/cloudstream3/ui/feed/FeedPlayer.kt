@@ -91,6 +91,13 @@ object FeedPlayer {
 
     fun debugSnapshot(): String = debugLog.takeLast(14).joinToString("\n")
 
+    /** Links collected so far by the running extraction (loading UI). */
+    var extractedCount: Int = 0
+        private set
+
+    @Volatile
+    private var earlyStarted = false
+
     private fun dbg(line: String) {
         debugLog.add(line)
         if (debugLog.size > 80) debugLog.removeAt(0)
@@ -327,6 +334,15 @@ object FeedPlayer {
                 return@launch
             }
             currentPage = response
+            // Some providers hand the feed items whose "name" is
+            // just a numeric id — the loaded page knows the real
+            // title; prefer it for the watch header.
+            val passedName = currentName
+            if ((passedName.isNullOrBlank() || passedName.all { it.isDigit() }) &&
+                response.name.isNotBlank() && !response.name.all { it.isDigit() }
+            ) {
+                currentName = response.name
+            }
             generator = RepoLinkGenerator(episodes, page = response)
             extractAndPlay(0, gen)
         }
@@ -378,6 +394,8 @@ object FeedPlayer {
         resumeSeekDone = false
         extracting = true
         pendingRetry = false
+        earlyStarted = false
+        extractedCount = 0
         triedLinks.clear()
         val gen2 = generator ?: run {
             status = Status.ERROR
@@ -392,7 +410,14 @@ object FeedPlayer {
                 clearCache = false,
                 sourceTypes = LOADTYPE_ALL,
                 callback = { pair ->
-                    pair.first?.let { synchronized(newLinks) { newLinks.add(it) } }
+                    pair.first?.let {
+                        synchronized(newLinks) { newLinks.add(it) }
+                        scope.launch {
+                            extractedCount = synchronized(newLinks) { newLinks.size }
+                            notifyListeners()
+                            tryEarlyStart(gen, newLinks)
+                        }
+                    }
                 },
                 subtitleCallback = { synchronized(newSubs) { newSubs.add(it) } },
                 offset = index,
@@ -474,19 +499,60 @@ object FeedPlayer {
         }
         if (gen != generation) return@coroutineScope
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
-        links = full
         subs = synchronized(newSubs) { ArrayList(newSubs) }
-        pendingRetry = false
         if (full.isEmpty()) {
+            pendingRetry = false
             status = Status.ERROR
             notifyListeners()
             return@coroutineScope
         }
+        if (earlyStarted) {
+            // Already playing from the early set: fold the full
+            // sorted list in (source picker, failover) without
+            // disturbing playback — unless the early link died
+            // while extraction was still running.
+            val current = links.getOrNull(linkIndex)
+            links = full
+            val newIdx = full.indexOfFirst { it.url == current?.url }
+            if (pendingRetry) {
+                pendingRetry = false
+                linkIndex = 0
+                preferredQuality = full.first().quality
+                playCurrentLink(keepPosition = true)
+            } else if (newIdx >= 0) {
+                linkIndex = newIdx
+            }
+            notifyListeners()
+            return@coroutineScope
+        }
+        pendingRetry = false
         // Even when extraction reports failure, whatever links were
         // collected are worth trying (the main player's Skip Loading
         // plays with a partial set the same way).
         linkIndex = 0
         preferredQuality = full.first().quality
+        playCurrentLink(keepPosition = false)
+        notifyListeners()
+    }
+
+    /**
+     * Phase 8.32: start playing as soon as the first playable link
+     * arrives instead of waiting out the full extraction — on
+     * multi-source providers that wait can be ~18 s, which is what
+     * made the loading screen feel endless. Extraction keeps
+     * running in the background; when it completes, extractAndPlay
+     * folds the full sorted set in. This is the main player's
+     * Skip Loading, automated.
+     */
+    private fun tryEarlyStart(gen: Int, collected: MutableList<ExtractorLink>) {
+        if (gen != generation || earlyStarted || !extracting) return
+        val playable = synchronized(collected) { playableOf(ArrayList(collected)) }
+        if (playable.isEmpty()) return
+        earlyStarted = true
+        links = playable
+        linkIndex = 0
+        preferredQuality = playable.first().quality
+        dbg("early start with " + playable.size + " links")
         playCurrentLink(keepPosition = false)
         notifyListeners()
     }
