@@ -119,6 +119,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
         TitleResolver.addListener(titleListener)
 
+        // Phase 8.37: the refresh ring used to hide behind the
+        // floating header — rest it below the search bar + chips.
+        binding.feedSwipeRefresh.setProgressViewOffset(
+            false, 0, (132 * resources.displayMetrics.density).toInt()
+        )
         binding.feedSwipeRefresh.setOnRefreshListener {
             // A refresh means "show me something else": drop any active
             // search and load the providers' next homepage page — it

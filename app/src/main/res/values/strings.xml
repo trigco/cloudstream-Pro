@@ -352,6 +352,11 @@
     <string name="feed_sources">Sources</string>
     <string name="feed_finding_sources">Finding sources… %1$d found</string>
     <string name="feed_show_all">Show all</string>
+    <string name="feed_select_all">Select all</string>
+    <string name="feed_download_n">Download %1$d episodes</string>
+    <string name="feed_preparing_downloads">Preparing %1$d/%2$d…</string>
+    <string name="feed_batch_queued">Queued %1$d downloads</string>
+    <string name="feed_subs_note">Subtitles follow your subtitle download settings.</string>
     <string name="home_hide_category">Hide category</string>
     <string name="home_unhide_categories">Unhide categories</string>
     <string name="home_category_hidden">Category hidden</string>

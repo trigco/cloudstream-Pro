@@ -34,6 +34,10 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import kotlinx.coroutines.launch
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
+import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
+import androidx.lifecycle.lifecycleScope
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
@@ -262,12 +266,21 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
         binding.feedWatchDownloadBtn.setOnClickListener { view ->
             view.hapticTick()
-            if (FeedPlayer.downloadCurrentEpisode()) {
-                android.widget.Toast.makeText(
-                    requireContext(), R.string.download_started,
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+            if (FeedPlayer.episodes.size > 1) {
+                // Series: the batch page (resolution + audio
+                // chips, per-episode multi-select).
+                findNavController().navigate(R.id.navigation_feed_download)
+            } else if (FeedPlayer.downloadCurrentEpisode()) {
+                Toast.makeText(requireContext(), R.string.download_started, Toast.LENGTH_SHORT)
+                    .show()
+                updateDownloadPill()
             }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            DownloadQueueManager.queue.collect { updateDownloadPill() }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            VideoDownloadManager.currentDownloads.collect { updateDownloadPill() }
         }
 
         binding.feedWatchPlayPause.setOnClickListener { FeedPlayer.togglePlay() }
@@ -402,6 +415,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             FeedPlayer.Status.IDLE -> Unit
         }
         lastPlayerStatus = FeedPlayer.status
+        updateDownloadPill()
         if (exo != null) {
             binding.feedWatchPlayPause.setImageResource(
                 if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
@@ -444,7 +458,8 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             ""
         }
         binding.feedWatchMeta.text =
-            listOf(apiName, typeText).filter { it.isNotBlank() }.joinToString(" • ") + epText
+            listOf(FeedPlayer.currentApiName ?: apiName, typeText)
+                .filter { it.isNotBlank() }.joinToString(" • ") + epText
     }
 
     private fun refreshUpNext(exceptUrl: String) {
@@ -572,6 +587,31 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     /** Phase 8.34: episode list for the title-row Episodes button. */
+    /**
+     * Phase 8.37: YouTube-style download affordance on the pill —
+     * a spinning ring while the current episode is queued or
+     * downloading, a check once it is downloaded.
+     */
+    private fun updateDownloadPill() {
+        val binding = binding ?: return
+        val epId = FeedPlayer.currentEpisode?.id
+        val done = epId != null &&
+            VideoDownloadManager.downloadStatus[epId] ==
+            VideoDownloadManager.DownloadType.IsDone
+        val active = epId != null && (
+            VideoDownloadManager.currentDownloads.value.contains(epId) ||
+                DownloadQueueManager.queue.value.any {
+                    it.downloadItem?.episode?.id == epId
+                }
+            )
+        binding.feedWatchDownloadProgress.isVisible = active && !done
+        binding.feedWatchDownloadIcon.isVisible = !active || done
+        binding.feedWatchDownloadIcon.setImageResource(
+            if (done) R.drawable.ic_baseline_check_24
+            else R.drawable.baseline_downloading_24
+        )
+    }
+
     private fun showEpisodePicker() {
         val context = context ?: return
         val episodes = FeedPlayer.episodes
@@ -626,19 +666,44 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             .show()
     }
 
+    private fun linkLanguage(
+        link: com.lagradost.cloudstream3.utils.ExtractorLink
+    ): String? =
+        Regex("""\(([^)]+)\)""").find(link.name)?.groupValues?.get(1)
+
     private fun showAudioPicker() {
         val context = context ?: return
         val exo = FeedPlayer.exo ?: return
         val options = trackOptions(TRACK_TYPE_AUDIO)
         if (options.size <= 1) {
-            // Multi-language sources carry one link per language, not
-            // extra audio tracks — the language choice lives in the
-            // source list for those.
-            if (FeedPlayer.links.size > 1) {
-                showQuality()
-            } else {
+            // Phase 8.37: the audio button is for LANGUAGE only —
+            // it no longer opens the (quality) source list. On
+            // multi-language sources the language is the link, so
+            // offer the languages and switch to the best link of
+            // the chosen one; quality stays under Sources.
+            val languages = FeedPlayer.links
+                .mapNotNull { linkLanguage(it) }
+                .distinct()
+            if (languages.size <= 1) {
                 Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
+                return
             }
+            val current = FeedPlayer.links
+                .getOrNull(FeedPlayer.linkIndex)
+                ?.let { linkLanguage(it) }
+            AlertDialog.Builder(context)
+                .setTitle(R.string.feed_audio)
+                .setSingleChoiceItems(
+                    languages.toTypedArray(),
+                    languages.indexOf(current).coerceAtLeast(0)
+                ) { dialog, which ->
+                    val target = FeedPlayer.links.indexOfFirst {
+                        linkLanguage(it) == languages[which]
+                    }
+                    if (target >= 0) FeedPlayer.selectLink(target)
+                    dialog.dismiss()
+                }
+                .show()
             return
         }
         val labels = options.map { it.label }.toTypedArray()

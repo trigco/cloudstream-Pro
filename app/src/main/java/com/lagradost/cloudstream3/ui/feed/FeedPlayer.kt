@@ -18,7 +18,9 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
+import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.LiveStreamLoadResponse
@@ -131,6 +133,11 @@ object FeedPlayer {
     var links: List<ExtractorLink> = emptyList()
         private set
     var subs: List<SubtitleData> = emptyList()
+
+    // Phase 8.37: one cross-provider attempt per play() — when
+    // this provider has no playable links for the title, try the
+    // same title on other providers before showing the error page.
+    private var fallbackAllowed = false
         private set
     var linkIndex: Int = 0
         private set
@@ -300,6 +307,7 @@ object FeedPlayer {
         resumeSeekDone = false
         extracting = true
         pendingRetry = false
+        fallbackAllowed = true
         links = emptyList()
         subs = emptyList()
         linkIndex = 0
@@ -322,6 +330,10 @@ object FeedPlayer {
             ) {
                 is Resource.Success -> res.value
                 else -> {
+                    if (gen == generation && fallbackAllowed) {
+                        fallbackAllowed = false
+                        if (tryCrossProviderFallback(gen, null)) return@launch
+                    }
                     if (gen == generation) {
                         status = Status.ERROR
                         notifyListeners()
@@ -332,8 +344,14 @@ object FeedPlayer {
             if (gen != generation) return@launch
             episodes = buildResultEpisodes(response)
             if (episodes.isEmpty()) {
-                status = Status.ERROR
-                notifyListeners()
+                if (fallbackAllowed) {
+                    fallbackAllowed = false
+                    if (tryCrossProviderFallback(gen, null)) return@launch
+                }
+                if (gen == generation) {
+                    status = Status.ERROR
+                    notifyListeners()
+                }
                 return@launch
             }
             currentPage = response
@@ -360,6 +378,7 @@ object FeedPlayer {
 
     fun playEpisode(index: Int) {
         if (index !in episodes.indices) return
+        fallbackAllowed = false
         savePosition()
         val gen = ++generation
         status = Status.LOADING
@@ -379,6 +398,11 @@ object FeedPlayer {
     fun downloadCurrentEpisode(): Boolean {
         val page = currentPage ?: return false
         val episode = currentEpisode ?: return false
+        // Phase 8.37: hand the downloader the link that is
+        // actually selected (source + quality + its audio) and
+        // the extracted subtitles, instead of letting it pick
+        // its own — the service downloads given links as-is.
+        val chosen = links.getOrNull(linkIndex)
         DownloadQueueManager.addToQueue(
             DownloadObjects.DownloadQueueItem(
                 episode,
@@ -388,10 +412,85 @@ object FeedPlayer {
                 page.posterUrl,
                 page.apiName,
                 page.getId(),
-                page.url
+                page.url,
+                links = chosen?.let { listOf(it) },
+                subs = subs.ifEmpty { null }
             ).toWrapper()
         )
         return true
+    }
+
+    private fun normalizedTitle(raw: String): String =
+        raw.lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(Regex("\s+"), " ")
+            .trim()
+
+    private fun titlesMatch(candidate: String, wanted: String): Boolean {
+        val a = normalizedTitle(candidate)
+        val b = normalizedTitle(wanted)
+        if (a.isEmpty() || b.isEmpty()) return false
+        return a == b || (b.length >= 3 && a.contains(b)) ||
+            (a.length >= 3 && b.contains(a))
+    }
+
+    /**
+     * Phase 8.37: the title is not playable on its own provider —
+     * search the other providers for the same title and continue
+     * playback there, without ever showing the error page. One
+     * level only; the caller consumes fallbackAllowed first.
+     * Returns true when a candidate took over (its extraction is
+     * already running as this call returns).
+     */
+    private suspend fun tryCrossProviderFallback(
+        gen: Int,
+        origEp: ResultEpisode?
+    ): Boolean {
+        val title = currentName?.takeIf { it.isNotBlank() } ?: return false
+        val others = APIHolder.apis.filter {
+            it.name != currentApiName && it.name != "None"
+        }
+        if (others.isEmpty()) return false
+        dbg("cross-provider search: " + title.take(40))
+        val candidates = others.amap { api ->
+            try {
+                when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title) }) {
+                    is Resource.Success -> r.value.firstOrNull {
+                        titlesMatch(it.name, title)
+                    }?.let { hit -> hit to api }
+                    else -> null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }.filterNotNull()
+        for ((hit, api) in candidates.take(3)) {
+            if (gen != generation) return false
+            val page = when (
+                val res = withContext(Dispatchers.IO) { APIRepository(api).load(hit.url) }
+            ) {
+                is Resource.Success -> res.value
+                else -> continue
+            }
+            val eps = buildResultEpisodes(page)
+            if (eps.isEmpty()) continue
+            val target = if (origEp != null && (origEp.season != null || origEp.episode > 0)) {
+                eps.indexOfFirst {
+                    it.season == origEp.season && it.episode == origEp.episode
+                }.takeIf { it >= 0 } ?: 0
+            } else {
+                0
+            }
+            currentUrl = hit.url
+            currentApiName = api.name
+            currentPage = page
+            episodes = eps
+            generator = RepoLinkGenerator(eps, page = page)
+            dbg("cross-provider -> " + api.name)
+            extractAndPlay(target, gen)
+            return true
+        }
+        return false
     }
 
     private fun playableOf(all: List<ExtractorLink>): List<ExtractorLink> =
@@ -526,6 +625,12 @@ object FeedPlayer {
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
         subs = synchronized(newSubs) { ArrayList(newSubs) }
         if (full.isEmpty()) {
+            if (fallbackAllowed && gen == generation) {
+                fallbackAllowed = false
+                if (tryCrossProviderFallback(gen, episodes.getOrNull(index))) {
+                    return@coroutineScope
+                }
+            }
             pendingRetry = false
             status = Status.ERROR
             notifyListeners()
