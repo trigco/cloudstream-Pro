@@ -8,7 +8,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.cronet.CronetDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -24,7 +28,9 @@ import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
+import com.lagradost.cloudstream3.ui.player.CS3IPlayer
 import com.lagradost.cloudstream3.ui.player.FixedNextRenderersFactory
+import com.lagradost.cloudstream3.ui.player.UpdatedDefaultExtractorsFactory
 import com.lagradost.cloudstream3.ui.player.LOADTYPE_INAPP
 import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.player.SubtitleData
@@ -43,6 +49,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
 
 /**
  * Phase 8.20/8.21 — the Feed's shared playback engine. The ExoPlayer
@@ -157,11 +164,17 @@ object FeedPlayer {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         }
-        // A preview player should start fast: ~1 s of media buffered is
-        // enough to show the first frame (the app default waits ~2.5 s).
+        // The main player's buffering, unchanged: the lighter preview
+        // load control from the fast-start experiment is gone — with
+        // multi-source providers, parity beats shaving a second.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_000)
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+            )
+            .setBackBuffer(30_000, true)
             .build()
         val player = ExoPlayer.Builder(appContext)
             .setRenderersFactory(renderersFactory)
@@ -434,23 +447,59 @@ object FeedPlayer {
         handler.postDelayed(runnable, 12_000L)
     }
 
+    /**
+     * The main player's transport, replicated from
+     * CS3IPlayer.createVideoSource (Phase 8.26): a provider may
+     * supply a custom interceptor for its links — then playback
+     * goes through OkHttp with that interceptor applied. Otherwise
+     * it goes through a Cronet engine (Chromium's network stack:
+     * HTTP/2, QUIC, Chrome TLS fingerprint, its own cookie
+     * handling) when one can be created, falling back to the app's
+     * OkHttp client. The feed previously always used plain OkHttp,
+     * which is the one remaining way its requests differed from the
+     * main player's — some providers' CDNs stall or refuse it
+     * while serving the main player fine.
+     */
+    private fun createVideoDataSource(context: Context, link: ExtractorLink): DataSource.Factory {
+        val userAgent = link.headers.entries.find {
+            it.key.equals("User-Agent", ignoreCase = true)
+        }?.value ?: USER_AGENT
+        val interceptor = getApiFromNameNull(link.source)?.getVideoInterceptor(link)
+        val source: HttpDataSource.Factory = if (interceptor != null) {
+            val client = app.baseClient.newBuilder()
+                .addInterceptor(interceptor)
+                .build()
+            OkHttpDataSource.Factory(client).setUserAgent(userAgent)
+        } else {
+            val engine = CS3IPlayer.tryCreateEngine(context, 0L)
+            if (engine != null) {
+                CronetDataSource.Factory(engine, Executors.newSingleThreadExecutor())
+                    .setUserAgent(userAgent)
+                    .setConnectionTimeoutMs(15_000)
+                    .setReadTimeoutMs(15_000)
+                    .setResetTimeoutOnRedirects(true)
+                    .setHandleSetCookieRequests(true)
+            } else {
+                OkHttpDataSource.Factory(app.baseClient).setUserAgent(userAgent)
+            }
+        }
+        val refererMap = if (link.referer.isBlank()) {
+            emptyMap()
+        } else {
+            mapOf("referer" to link.referer)
+        }
+        return source.apply {
+            setDefaultRequestProperties(refererMap + link.headers)
+        }
+    }
+
     private fun playCurrentLink(keepPosition: Boolean) {
         val link = links.getOrNull(linkIndex) ?: return
         val player = exo ?: return
         val context = appContext ?: return
         triedLinks.add(linkIndex)
         val keepPos = if (keepPosition) player.currentPosition else 0L
-        // Same transport as the main player: the app's OkHttp client
-        // and its browser user-agent (or the link's own). Plain
-        // URLConnection requests get refused by some CDNs — DASH
-        // manifests in particular — which is why a few videos only
-        // played in the feed after the main player had warmed them.
-        val userAgent = link.headers.entries.find {
-            it.key.equals("User-Agent", ignoreCase = true)
-        }?.value ?: USER_AGENT
-        val dataSourceFactory = OkHttpDataSource.Factory(app.baseClient)
-            .setUserAgent(userAgent)
-            .setDefaultRequestProperties(link.getAllHeaders())
+        val dataSourceFactory = createVideoDataSource(context, link)
         val item = MediaItem.Builder()
             .setUri(link.url)
             .setMimeType(
@@ -477,9 +526,13 @@ object FeedPlayer {
             })
             .build()
         player.setMediaSource(
-            DefaultMediaSourceFactory(context)
-                .setDataSourceFactory(dataSourceFactory)
-                .createMediaSource(item)
+            DefaultMediaSourceFactory(
+                dataSourceFactory,
+                UpdatedDefaultExtractorsFactory()
+                    .setFragmentedMp4ExtractorFlags(
+                        FragmentedMp4Extractor.FLAG_MERGE_FRAGMENTED_SIDX
+                    )
+            ).createMediaSource(item)
         )
         player.prepare()
         player.playWhenReady = true
