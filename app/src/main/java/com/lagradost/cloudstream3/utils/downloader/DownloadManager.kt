@@ -86,6 +86,8 @@ import com.lagradost.cloudstream3.utils.downloader.DownloadUtils.join
 import com.lagradost.cloudstream3.utils.txt
 import com.lagradost.safefile.SafeFile
 import com.lagradost.safefile.closeQuietly
+import java.io.File
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,10 +96,20 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -1471,6 +1483,183 @@ object VideoDownloadManager {
         return "$name.$extension"
     }
 
+    /**
+     * Phase 8.40: DASH download support for the shared downloader.
+     * A DASH stream cannot be saved as-is (the .mpd is a manifest,
+     * not a video), so it is exported to a real MP4 with media3
+     * Transformer — the same engine family that plays it — using
+     * the link's own headers, then copied into the download
+     * destination. This is what makes "it plays" imply "it
+     * downloads" for DASH-only sources, in the main downloader
+     * and everywhere else this path is used.
+     * Pause/resume are not supported for exports: Stop cancels.
+     */
+    @OptIn(UnstableApi::class)
+    private suspend fun downloadDash(
+        context: Context,
+        link: ExtractorLink,
+        name: String,
+        folder: String,
+        parentId: Int?,
+        notificationCallback: (CreateNotificationMetadata) -> Unit,
+    ): DownloadStatus = withContext(Dispatchers.IO) {
+        val (baseFile, basePath) = context.getBasePath()
+        if (baseFile == null) return@withContext DOWNLOAD_BAD_CONFIG
+
+        val displayName = getDisplayName(name, "mp4")
+        val metadata = DownloadMetaData(
+            totalBytes = 0,
+            bytesDownloaded = 0,
+            createNotificationCallback = notificationCallback,
+            id = parentId,
+            linkHash = link.url.hashCode(),
+            isHLS = false
+        )
+        val tempFile = File(
+            context.cacheDir,
+            "dash_export_" + (parentId ?: link.url.hashCode()) + ".mp4"
+        )
+        var stream: StreamData? = null
+        var fileStream: OutputStream? = null
+        try {
+            stream = setupStream(baseFile, name, folder, "mp4", false)
+            metadata.type = DownloadType.IsPending
+            metadata.setDownloadFileInfoTemplate(
+                DownloadedFileInfo(
+                    totalBytes = 0,
+                    relativePath = folder,
+                    displayName = displayName,
+                    basePath = basePath
+                )
+            )
+
+            val pollJob = launch {
+                var last = 0L
+                while (true) {
+                    val len = if (tempFile.exists()) tempFile.length() else 0L
+                    val delta = len - last
+                    if (delta > 0) {
+                        metadata.addBytes(delta)
+                        metadata.addBytesWritten(delta)
+                        last = len
+                    }
+                    delay(700)
+                }
+            }
+            val exported = try {
+                exportDashToFile(context, link, tempFile, metadata)
+            } finally {
+                pollJob.cancel()
+            }
+
+            if (metadata.type == DownloadType.IsStopped) {
+                metadata.onDelete()
+                stream.delete()
+                return@withContext DOWNLOAD_STOPPED
+            }
+            if (!exported || !tempFile.exists() || tempFile.length() <= 0L) {
+                metadata.onDelete()
+                stream.delete()
+                return@withContext metadata.failedStatus()
+            }
+
+            fileStream = stream.open()
+            tempFile.inputStream().use { input -> input.copyTo(fileStream) }
+            fileStream.flush()
+            val size = tempFile.length()
+            if (metadata.bytesDownloaded < size) {
+                metadata.addBytes(size - metadata.bytesDownloaded)
+                metadata.addBytesWritten(size - metadata.bytesWritten)
+            }
+            metadata.totalBytes = size
+            metadata.type = DownloadType.IsDone
+            DOWNLOAD_SUCCESS
+        } catch (t: Throwable) {
+            if (t is CancellationException) {
+                try {
+                    metadata.onDelete()
+                    stream?.delete()
+                } catch (_: Throwable) {
+                }
+                return@withContext DOWNLOAD_STOPPED
+            }
+            logError(t)
+            metadata.failedStatus()
+        } finally {
+            fileStream?.closeQuietly()
+            metadata.close()
+            tempFile.delete()
+        }
+    }
+
+    /**
+     * Runs one Transformer export of a DASH link into [tempFile]
+     * on the main thread (Transformer requires a Looper thread)
+     * and reports completion through the coroutine. The link's
+     * headers/referer ride along as default request properties,
+     * mirroring how the player fetches the same stream.
+     */
+    @OptIn(UnstableApi::class)
+    private suspend fun exportDashToFile(
+        context: Context,
+        link: ExtractorLink,
+        tempFile: File,
+        metadata: DownloadMetaData,
+    ): Boolean {
+        tempFile.delete()
+        return withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    val dataSourceFactory =
+                        OkHttpDataSource.Factory(app.baseClient)
+                            .setUserAgent(USER_AGENT)
+                            .setDefaultRequestProperties(link.getAllHeaders())
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(link.url)
+                        .setMimeType(MimeTypes.APPLICATION_MPD)
+                        .build()
+                    val edited = EditedMediaItem.Builder(mediaItem).build()
+                    val transformer = Transformer.Builder(context)
+                        .setDataSourceFactory(dataSourceFactory)
+                        .addListener(object : Transformer.Listener {
+                            override fun onCompleted(
+                                composition: Composition,
+                                exportResult: ExportResult
+                            ) {
+                                if (cont.isActive) cont.resume(true)
+                            }
+
+                            override fun onError(
+                                composition: Composition,
+                                exportResult: ExportResult,
+                                exportException: ExportException
+                            ) {
+                                logError(exportException)
+                                if (cont.isActive) cont.resume(false)
+                            }
+                        })
+                        .build()
+                    metadata.setOnStop {
+                        try {
+                            transformer.cancel()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    cont.invokeOnCancellation {
+                        try {
+                            transformer.cancel()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    transformer.start(edited, tempFile.absolutePath)
+                } catch (t: Throwable) {
+                    logError(t)
+                    if (cont.isActive) cont.resume(false)
+                }
+            }
+        }
+    }
+
     private suspend fun downloadSingleEpisode(
         context: Context,
         source: String?,
@@ -1481,7 +1670,7 @@ object VideoDownloadManager {
         tryResume: Boolean = false,
     ): DownloadStatus {
         // no support for these file formats
-        if (link.type == ExtractorLinkType.MAGNET || link.type == ExtractorLinkType.TORRENT || link.type == ExtractorLinkType.DASH) {
+        if (link.type == ExtractorLinkType.MAGNET || link.type == ExtractorLinkType.TORRENT) {
             return DOWNLOAD_INVALID_INPUT
         }
 
@@ -1514,6 +1703,17 @@ object VideoDownloadManager {
 
         try {
             when (link.type) {
+                ExtractorLinkType.DASH -> {
+                    return downloadDash(
+                        context,
+                        link,
+                        name,
+                        folder ?: "",
+                        ep.id,
+                        callback
+                    )
+                }
+
                 ExtractorLinkType.M3U8 -> {
                     val startIndex = if (tryResume) {
                         context.getKey<DownloadedFileInfo>(

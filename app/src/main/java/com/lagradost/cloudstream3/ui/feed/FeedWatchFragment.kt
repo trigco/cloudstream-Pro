@@ -236,6 +236,21 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchToTop.isVisible = first >= 8
             }
         })
+        // Storyline: hidden by default; the "More" label beside
+        // the title expands it ("Less" collapses). Expanding
+        // changes the title box height, so the collapse
+        // animation's reference height is re-measured.
+        binding.feedWatchMore.setOnClickListener { view ->
+            view.hapticTick()
+            val open = !binding.feedWatchStorylineText.isVisible
+            binding.feedWatchStorylineText.isVisible = open
+            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_more)
+            val box = binding.feedWatchTitleBox
+            val params = box.layoutParams
+            params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            box.layoutParams = params
+            box.post { titleFullHeight = box.height }
+        }
         binding.feedWatchToTop.setOnClickListener { view ->
             view.hapticTick()
             val first = (binding.feedWatchUpnext.layoutManager as? GridLayoutManager)
@@ -497,6 +512,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchMeta.text =
             listOf(FeedPlayer.currentApiName ?: apiName, typeText)
                 .filter { it.isNotBlank() }.joinToString(" • ") + epText
+        // Storyline (plot) of the loaded page, collapsed by
+        // default; the "More" label only appears with a plot.
+        val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
+        binding.feedWatchMore.isVisible = plot != null
+        binding.feedWatchMore.setText(R.string.feed_more)
+        binding.feedWatchStorylineText.isVisible = false
+        if (plot != null) binding.feedWatchStorylineText.text = plot
     }
 
     // Phase 8.39: urls already presented at the top of Up next;

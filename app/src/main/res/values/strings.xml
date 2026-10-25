@@ -351,6 +351,8 @@
     <string name="feed_loading_video">Loading video…</string>
     <string name="feed_sources">Sources</string>
     <string name="feed_finding_sources">Finding sources… %1$d found</string>
+    <string name="feed_more">More</string>
+    <string name="feed_less">Less</string>
     <string name="feed_back_to_top">Back to top</string>
     <string name="feed_show_all">Show all</string>
     <string name="feed_select_all">Select all</string>
