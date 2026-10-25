@@ -120,6 +120,7 @@ object FeedPlayer {
     private val listeners = mutableSetOf<() -> Unit>()
 
     private val handler = Handler(Looper.getMainLooper())
+    private var watchdog: Runnable? = null
     private val saveRunnable = object : Runnable {
         override fun run() {
             savePosition()
@@ -204,31 +205,7 @@ object FeedPlayer {
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // Walk the link list before declaring failure — other
-                // links of the chosen resolution first, then anything.
-                val nextSame = links.indices.firstOrNull {
-                    it != linkIndex && it !in triedLinks &&
-                        links[it].quality == preferredQuality
-                }
-                val nextAny = links.indices.firstOrNull {
-                    it != linkIndex && it !in triedLinks
-                }
-                val next = nextSame ?: nextAny
-                if (next != null) {
-                    linkIndex = next
-                    playCurrentLink(keepPosition = true)
-                } else if (extracting) {
-                    // More links are still being fetched in the
-                    // background — failing now is what made slow /
-                    // DASH sources "not play the first time". Wait:
-                    // extractAndPlay picks the next link up as soon
-                    // as extraction completes.
-                    pendingRetry = true
-                    status = Status.LOADING
-                } else {
-                    status = Status.ERROR
-                }
-                notifyListeners()
+                failOver()
             }
         })
         exo = player
@@ -331,7 +308,20 @@ object FeedPlayer {
             it.type == ExtractorLinkType.VIDEO ||
                 it.type == ExtractorLinkType.M3U8 ||
                 it.type == ExtractorLinkType.DASH
-        }.sortedByDescending { it.quality }
+        }.sortedWith(
+            // Best resolution first; within one resolution prefer
+            // adaptive formats (DASH, then HLS) over a progressive
+            // file — the main player's source list orders them the
+            // same way, and adaptive starts far faster on mobile data.
+            compareByDescending<ExtractorLink> { it.quality }
+                .thenBy {
+                    when (it.type) {
+                        ExtractorLinkType.DASH -> 0
+                        ExtractorLinkType.M3U8 -> 1
+                        else -> 2
+                    }
+                }
+        )
 
     private suspend fun extractAndPlay(index: Int, gen: Int) = coroutineScope {
         episodeIndex = index
@@ -407,22 +397,63 @@ object FeedPlayer {
                 triedLinks.add(idx)
             }
         }
-        // The first link may have failed while the rest were still
-        // being fetched (the error handler waits instead of failing
-        // in that case) — continue with the next link that arrived.
+        // The first link may have failed (or hung) while the rest
+        // were still being fetched — the fail-over waited instead of
+        // failing in that case; continue with the links that arrived.
         if (pendingRetry) {
             pendingRetry = false
-            val nextIdx = links.indices.firstOrNull {
-                it !in triedLinks && links[it].quality == preferredQuality
-            } ?: links.indices.firstOrNull { it !in triedLinks }
-            if (nextIdx != null) {
-                linkIndex = nextIdx
-                playCurrentLink(keepPosition = true)
-            } else if (status == Status.LOADING) {
-                status = Status.ERROR
-            }
+            failOver()
         }
         notifyListeners()
+    }
+
+    /**
+     * Moves to the next untried link — other links of the chosen
+     * resolution first, then anything. While extraction is still
+     * running in the background this waits instead of failing: the
+     * pickup in extractAndPlay continues when the rest arrive.
+     */
+    private fun failOver() {
+        val nextSame = links.indices.firstOrNull {
+            it != linkIndex && it !in triedLinks &&
+                links[it].quality == preferredQuality
+        }
+        val nextAny = links.indices.firstOrNull {
+            it != linkIndex && it !in triedLinks
+        }
+        val next = nextSame ?: nextAny
+        if (next != null) {
+            linkIndex = next
+            playCurrentLink(keepPosition = true)
+        } else if (extracting) {
+            pendingRetry = true
+            status = Status.LOADING
+        } else {
+            status = Status.ERROR
+        }
+        notifyListeners()
+    }
+
+    /**
+     * A bad link does not always error — some just hang in BUFFERING
+     * forever (a frame at the resume point, zero data flowing). If
+     * 12 s after starting a link the player still has essentially
+     * nothing buffered ahead and is not playing, treat the link as a
+     * dud and walk on, exactly like an error.
+     */
+    private fun armWatchdog(gen: Int, idx: Int) {
+        watchdog?.let { handler.removeCallbacks(it) }
+        val runnable = Runnable {
+            if (gen != generation || idx != linkIndex) return@Runnable
+            val player = exo ?: return@Runnable
+            val stuck = player.playbackState == Player.STATE_BUFFERING ||
+                (player.playbackState == Player.STATE_READY &&
+                    player.playWhenReady && !player.isPlaying &&
+                    player.bufferedPosition <= player.currentPosition + 1_000L)
+            if (stuck) failOver()
+        }
+        watchdog = runnable
+        handler.postDelayed(runnable, 12_000L)
     }
 
     private fun playCurrentLink(keepPosition: Boolean) {
@@ -476,6 +507,7 @@ object FeedPlayer {
         player.playWhenReady = true
         if (keepPos > 0) player.seekTo(keepPos)
         if (keepPosition) resumeSeekDone = true
+        armWatchdog(generation, linkIndex)
     }
 
     /**
@@ -483,6 +515,15 @@ object FeedPlayer {
      * one resolution; picking it starts at its first link and the error
      * fallback stays inside the same resolution before moving on.
      */
+    /** Plays one specific link (the source picker's rows). */
+    fun selectLink(index: Int) {
+        if (index !in links.indices || index == linkIndex) return
+        linkIndex = index
+        preferredQuality = links[index].quality
+        playCurrentLink(keepPosition = true)
+        notifyListeners()
+    }
+
     fun selectQuality(quality: Int) {
         if (links.none { it.quality == quality }) return
         preferredQuality = quality
@@ -510,6 +551,8 @@ object FeedPlayer {
         generation++
         extracting = false
         pendingRetry = false
+        watchdog?.let { handler.removeCallbacks(it) }
+        watchdog = null
         loadJob?.cancel()
         handler.removeCallbacks(saveRunnable)
         exo?.stop()

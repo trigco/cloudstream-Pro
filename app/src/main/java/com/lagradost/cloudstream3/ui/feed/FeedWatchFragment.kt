@@ -367,7 +367,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 if (exo.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
             )
         }
-        binding.feedWatchQuality.isVisible = FeedPlayer.qualities.size > 1
+        binding.feedWatchQuality.isVisible = FeedPlayer.links.size > 1
         binding.feedWatchNext.isVisible = FeedPlayer.hasNextEpisode
         updateHeader()
         val current = FeedPlayer.currentUrl
@@ -474,19 +474,36 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     // ---------- pickers ----------
 
+    /**
+     * Phase 8.24 — the source list, like the main player's: one row
+     * per link, but labelled compactly (resolution + audio language
+     * or format) instead of the full release name the owner rejected
+     * in 8.21. Languages on multi-audio sources are separate links,
+     * so this list is also where the audio language is chosen.
+     */
     private fun showQuality() {
         val context = context ?: return
-        val qualities = FeedPlayer.qualities
-        if (qualities.size < 2) return
-        // Resolution tags only — links that share a resolution stay
-        // under the one tag, and the fallback walks them automatically.
-        val labels = qualities.map { quality ->
-            if (quality > 0) "${quality}p" else "Auto"
-        }.toTypedArray()
+        val links = FeedPlayer.links
+        if (links.size < 2) return
+        val labels = links.map { linkLabel(it) }.toTypedArray()
         AlertDialog.Builder(context)
-            .setTitle(R.string.feed_quality)
-            .setItems(labels) { _, which -> FeedPlayer.selectQuality(qualities[which]) }
+            .setTitle(R.string.feed_sources)
+            .setSingleChoiceItems(labels, FeedPlayer.linkIndex) { dialog, which ->
+                FeedPlayer.selectLink(which)
+                dialog.dismiss()
+            }
             .show()
+    }
+
+    private fun linkLabel(link: com.lagradost.cloudstream3.utils.ExtractorLink): String {
+        val res = if (link.quality > 0) "${link.quality}p" else "Auto"
+        val audio = Regex("\\(([^)]+)\\)").find(link.name)?.groupValues?.get(1)
+        val kind = when (link.type) {
+            com.lagradost.cloudstream3.utils.ExtractorLinkType.DASH -> "DASH"
+            com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 -> "HLS"
+            else -> "MP4"
+        }
+        return if (audio != null) "$res • $audio" else "$res • $kind"
     }
 
     private data class TrackOption(
@@ -552,7 +569,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val exo = FeedPlayer.exo ?: return
         val options = trackOptions(TRACK_TYPE_AUDIO)
         if (options.size <= 1) {
-            Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
+            // Multi-language sources carry one link per language, not
+            // extra audio tracks — the language choice lives in the
+            // source list for those.
+            if (FeedPlayer.links.size > 1) {
+                showQuality()
+            } else {
+                Toast.makeText(context, R.string.feed_single_audio, Toast.LENGTH_SHORT).show()
+            }
             return
         }
         val labels = options.map { it.label }.toTypedArray()
