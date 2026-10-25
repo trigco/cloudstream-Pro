@@ -73,7 +73,7 @@ class DownloadQueueAdapter(val fragment: Fragment) : BaseAdapter<DownloadAdapter
                 sampleMap[id] = downloaded to now
             }
         }
-        val pos = currentList.indexOfFirst { it.item?.id == id }
+        val pos = immutableCurrentList.indexOfFirst { it.item?.id == id }
         if (pos >= 0) notifyItemChanged(pos)
     }
 
