@@ -32,7 +32,7 @@ import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.player.CS3IPlayer
 import com.lagradost.cloudstream3.ui.player.FixedNextRenderersFactory
 import com.lagradost.cloudstream3.ui.player.UpdatedDefaultExtractorsFactory
-import com.lagradost.cloudstream3.ui.player.LOADTYPE_INAPP
+import com.lagradost.cloudstream3.ui.player.LOADTYPE_ALL
 import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.player.SubtitleData
 import com.lagradost.cloudstream3.ui.result.ResultEpisode
@@ -382,10 +382,11 @@ object FeedPlayer {
         }
         val newLinks = mutableListOf<ExtractorLink>()
         val newSubs = mutableListOf<SubtitleData>()
+        val extractStart = System.currentTimeMillis()
         val deferred = async {
             gen2.generateLinks(
                 clearCache = false,
-                sourceTypes = LOADTYPE_INAPP,
+                sourceTypes = LOADTYPE_ALL,
                 callback = { pair ->
                     pair.first?.let { synchronized(newLinks) { newLinks.add(it) } }
                 },
@@ -408,7 +409,25 @@ object FeedPlayer {
             false
         }
         extracting = false
-        dbg("extract ok=" + ok + " links=" + newLinks.size)
+        dbg(
+            "extract ok=" + ok + " links=" + newLinks.size +
+                " dur=" + (System.currentTimeMillis() - extractStart) + "ms"
+        )
+        episodes.getOrNull(index)?.let { ep ->
+            val entry = synchronized(RepoLinkGenerator.cache) {
+                RepoLinkGenerator.cache[ep.apiName to ep.id]
+            }
+            if (entry == null) {
+                dbg("gcache=none")
+            } else {
+                val info = synchronized(entry) {
+                    "gcache=" + entry.linkCache.size + " sat=" + entry.saturated +
+                        " types=" + entry.linkCache.map { it.type }.distinct()
+                        .joinToString(",")
+                }
+                dbg(info)
+            }
+        }
         newLinks.forEachIndexed { i, l ->
             dbg(
                 "L$i " + l.name.take(44) + " q=" + l.quality +
