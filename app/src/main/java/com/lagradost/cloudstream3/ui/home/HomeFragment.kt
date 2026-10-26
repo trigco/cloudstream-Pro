@@ -811,14 +811,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         }
         // Phase 8.50: Family Mode strips NSFW items from every
         // row (rows left empty disappear) on all home variants.
+        // Phase 8.51: adult-labelled shelves go entirely, and
+        // items are judged by title as well as declared type —
+        // mixed providers file porn under plain "Movie".
         val visibleFiltered = if (FamilyMode.isEnabled()) {
-            visible.mapNotNull { row ->
-                val items = row.list.list.filterNot {
-                    FamilyMode.isAdultItem(it.type)
+            visible
+                .filterNot { FamilyMode.isAdultSection(it.list.name) }
+                .mapNotNull { row ->
+                    val items = row.list.list.filterNot {
+                        FamilyMode.isAdultItem(it)
+                    }
+                    if (items.isEmpty()) null
+                    else row.copy(list = row.list.copy(list = items))
                 }
-                if (items.isEmpty()) null
-                else row.copy(list = row.list.copy(list = items))
-            }
         } else {
             visible
         }

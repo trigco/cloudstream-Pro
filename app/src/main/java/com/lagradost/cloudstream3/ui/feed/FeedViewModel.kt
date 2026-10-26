@@ -194,7 +194,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         return results.flatten()
             .filterNot {
                 FamilyMode.isEnabled() &&
-                    FamilyMode.isAdultItem(it.response.type)
+                    FamilyMode.isAdultItem(it.response)
             }
             .filter { seen.add(it.response.url) }
     }
@@ -211,9 +211,14 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                     is Resource.Success -> res.value
                         .filterNotNull()
                         .flatMap { it.items }
+                        // Phase 8.51: drop adult-labelled shelves
+                        // whole, then judge items by title too.
+                        .filterNot {
+                            familyOn && FamilyMode.isAdultSection(it.name)
+                        }
                         .flatMap { it.list }
                         .filterNot {
-                            familyOn && FamilyMode.isAdultItem(it.type)
+                            familyOn && FamilyMode.isAdultItem(it)
                         }
                         .take(40)
                         .map { FeedEntry(it, api.name) }

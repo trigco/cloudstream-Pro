@@ -52,11 +52,29 @@ object SearchResultBuilder {
         "Vietnamese", "Indonesian"
     )
 
+    /**
+     * Phase 8.51: some providers trail the real title with a
+     * release-spec block ("Alaap Bengali Hoichoi – 480P | 720P |
+     * 1080P – x264 – 250MB | 1.8GB ESub – Download"). Everything
+     * from the first quality/size/codec token on is junk; cut it
+     * there and let the normal cleanup finish. A token at the
+     * very start is part of the name and is kept.
+     */
+    private val RELEASE_JUNK = Regex(
+        """(?i)\b(240p|360p|480p|720p|1080p|1440p|2160p|4320p|x264|x265|h\.?264|h\.?265|hevc|10bit|8bit|\d+(?:\.\d+)?\s?(?:mb|gb))\b"""
+    )
+
+    private fun truncateReleaseJunk(raw: String): String {
+        val match = RELEASE_JUNK.find(raw) ?: return raw
+        if (match.range.first <= 0) return raw
+        return raw.substring(0, match.range.first)
+    }
+
     fun cleanPosterTitle(raw: String): String {
         val season = Regex("""(?i)\bS(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
             ?: Regex("""(?i)\bSeason\s*(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
 
-        var title = raw
+        var title = truncateReleaseJunk(raw)
             .replace(Regex("""\[[^\]]*\]"""), " ")
             .replace(Regex("""\(\s*(19|20)\d{2}\s*\)"""), " ")
             .replace(Regex("""(?i)\bS\d{1,2}\b"""), " ")

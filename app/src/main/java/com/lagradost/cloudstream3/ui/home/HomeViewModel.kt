@@ -442,7 +442,7 @@ class HomeViewModel : ViewModel() {
                                 .flatMap { it.list }
                                 .distinctBy { it.url }
                                 .filterNot {
-                                    familyOn && FamilyMode.isAdultItem(it.type)
+                                    familyOn && FamilyMode.isAdultItem(it)
                                 }
                                 .toList()
 
@@ -606,7 +606,7 @@ class HomeViewModel : ViewModel() {
             val flat = built.values.flatMap { it.list.list }
                 .distinctBy { it.url }
                 .filterNot {
-                    FamilyMode.isEnabled() && FamilyMode.isAdultItem(it.type)
+                    FamilyMode.isEnabled() && FamilyMode.isAdultItem(it)
                 }
                 .shuffled()
             currentShuffledList = flat

@@ -293,8 +293,10 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         nextAiringEpisode = nextAiringEpisode,
         // Phase 8.50: Family Mode shows no art for NSFW titles
         // (the details page falls back to the placeholder).
+        // Phase 8.51: the title is a signal too (mixed providers
+        // file adult titles under the plain Movie type).
         posterImage = if (FamilyMode.isEnabled() &&
-            FamilyMode.isAdultItem(type)
+            (FamilyMode.isAdultItem(type) || FamilyMode.isAdultTitle(name))
         ) {
             null
         } else {
@@ -302,7 +304,7 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         },
         posterHeaders = posterHeaders,
         posterBackgroundImage = if (FamilyMode.isEnabled() &&
-            FamilyMode.isAdultItem(type)
+            (FamilyMode.isAdultItem(type) || FamilyMode.isAdultTitle(name))
         ) {
             null
         } else {

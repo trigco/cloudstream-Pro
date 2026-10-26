@@ -225,7 +225,7 @@
                     android:nextFocusUp="@id/settings_extensions"
                     android:nextFocusDown="@id/settings_family_mode"
                     android:text="@string/home_custom_categories_row"
-                    app:drawableStartCompat="@drawable/ic_settings_layout" />
+                    app:drawableStartCompat="@drawable/baseline_list_alt_24" />
 
                 <View
                     android:layout_width="match_parent"
@@ -254,7 +254,7 @@
                         android:text="@string/family_mode_title"
                         android:textAppearance="?android:attr/textAppearanceListItemSmall"
                         android:textColor="?attr/textColor"
-                        app:drawableStartCompat="@drawable/ic_settings_layout" />
+                        app:drawableStartCompat="@drawable/ic_settings_family" />
 
                     <androidx.appcompat.widget.SwitchCompat
                         android:id="@+id/settings_family_mode_switch"

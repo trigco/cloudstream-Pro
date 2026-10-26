@@ -157,7 +157,7 @@ class SearchViewModel : ViewModel() {
                     // Phase 8.50: Family Mode drops NSFW results here too.
                     val nextItems = if (FamilyMode.isEnabled()) {
                         nextValue.items.filterNot {
-                            FamilyMode.isAdultItem(it.type)
+                            FamilyMode.isAdultItem(it)
                         }
                     } else {
                         nextValue.items
@@ -254,7 +254,7 @@ class SearchViewModel : ViewModel() {
                         // Phase 8.50: Family Mode drops NSFW results.
                         val items = if (FamilyMode.isEnabled()) {
                             searchValue.items.filterNot {
-                                FamilyMode.isAdultItem(it.type)
+                                FamilyMode.isAdultItem(it)
                             }
                         } else {
                             searchValue.items
