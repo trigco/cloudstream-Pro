@@ -19,6 +19,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.navigation.fragment.findNavController
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.net.toUri
@@ -700,9 +701,39 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private val apiChangeClickListener = View.OnClickListener { view ->
-        view.context.selectHomepage(currentApiName) { api ->
-            homeViewModel.loadAndCancel(api, forceReload = true, fromUI = true)
+        // Phase 8.44: the switcher also offers the user's custom
+        // home lists and their manager.
+        val ctx = view.context
+        val lists = HomeCustomLists.getLists(ctx)
+        val activeId = HomeCustomLists.activeId(ctx)
+        val labels = mutableListOf<String>()
+        labels += ctx.getString(R.string.home_custom_providers)
+        lists.forEach { list ->
+            labels += if (list.id == activeId) {
+                "✓ " + list.name
+            } else {
+                list.name
+            }
         }
+        labels += ctx.getString(R.string.home_custom_manage)
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.home_custom_switch_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                when {
+                    which == 0 -> ctx.selectHomepage(currentApiName) { api ->
+                        homeViewModel.exitCustomMode()
+                        homeViewModel.loadAndCancel(
+                            api, forceReload = true, fromUI = true
+                        )
+                    }
+                    which <= lists.size ->
+                        homeViewModel.activateCustomList(lists[which - 1])
+                    else -> findNavController().navigate(
+                        R.id.global_to_navigation_home_custom_lists
+                    )
+                }
+            }
+            .show()
         /*val validAPIs = view.context?.filterProviderByPreferredMedia()?.toMutableList() ?: mutableListOf()
 
         validAPIs.add(0, randomApi)
@@ -748,8 +779,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private fun applyHomeCategories() {
-        val hidden = hiddenCategoryNames()
-        val visible = lastHomeCopies.filterNot { it.list.name in hidden }
+        // Phase 8.44: hidden-category rules belong to the
+        // per-provider home; a custom list shows what it holds.
+        val visible = if (homeViewModel.isCustomActive) {
+            lastHomeCopies
+        } else {
+            val hidden = hiddenCategoryNames()
+            lastHomeCopies.filterNot { it.list.name in hidden }
+        }
         homeCategoryItems = visible.toMutableList()
         (binding?.homeMasterRecycler?.adapter as? ParentItemAdapter)
             ?.submitList(visible)
@@ -1282,11 +1319,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         // Phase 8.17: re-apply the viewer's saved category
                         // order; categories the save does not know keep
                         // their load order after the known ones.
-                        val orderedCopies = d.values.map {
+                        val copies = d.values.map {
                             it.copy(
                                 list = it.list.copy(list = it.list.list.toMutableList())
                             )
-                        }.sortedBy { savedCategoryOrderIndex(it.list.name) }
+                        }
+                        // Phase 8.44: a custom list keeps ITS
+                        // order — the saved-order sort belongs to
+                        // the per-provider home.
+                        val orderedCopies =
+                            if (homeViewModel.isCustomActive) {
+                                copies
+                            } else {
+                                copies.sortedBy {
+                                    savedCategoryOrderIndex(it.list.name)
+                                }
+                            }
                         lastHomeCopies = orderedCopies
                         applyHomeCategories()
 
