@@ -585,6 +585,12 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                 navigate(R.id.action_navigation_global_to_navigation_settings_extensions)
             }
 
+            // Phase 8.45: Categories lives in the Content group
+            // (his ask) and opens the custom home list manager.
+            settingsCategories.setOnClickListener {
+                navigate(R.id.global_to_navigation_home_custom_lists)
+            }
+
             if (isLayout(TV)) {
                 (accordionGroups.map { it.header } + settingsExtensions).forEach { view ->
                     view.isFocusable = true

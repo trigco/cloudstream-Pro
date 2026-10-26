@@ -114,10 +114,5 @@
             android:icon="@drawable/ic_baseline_filter_list_24"
             android:key="@string/pref_filter_search_quality_key"
             android:title="@string/pref_filter_search_quality" />
-        <Preference
-            android:icon="@drawable/ic_baseline_filter_list_24"
-            android:key="@string/custom_home_lists_key"
-            android:summary="@string/home_custom_lists_summary"
-            android:title="@string/home_custom_lists_title" />
     </PreferenceCategory>
 </PreferenceScreen>

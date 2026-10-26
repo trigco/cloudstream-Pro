@@ -1,5 +1,4 @@
 package com.lagradost.cloudstream3.ui.settings
-import androidx.navigation.fragment.findNavController
 
 import android.os.Build
 import android.os.Bundle
@@ -45,14 +44,6 @@ class SettingsUI : BasePreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         hideKeyboard()
         setPreferencesFromResource(R.xml.settings_ui, rootKey)
-
-        // Phase 8.44: open the custom home list manager.
-        getPref(R.string.custom_home_lists_key)?.setOnPreferenceClickListener {
-            findNavController().navigate(
-                R.id.global_to_navigation_home_custom_lists
-            )
-            true
-        }
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(requireContext())
 
         (getPref(R.string.overscan_key)?.hideOn(PHONE or EMULATOR) as? SeekBarPreference)?.setOnPreferenceChangeListener { pref, newValue ->

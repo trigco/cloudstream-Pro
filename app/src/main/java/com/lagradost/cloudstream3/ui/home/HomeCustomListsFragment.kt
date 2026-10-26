@@ -37,9 +37,11 @@ class HomeCustomListsFragment : Fragment() {
         binding?.customListsRecycler?.layoutManager =
             LinearLayoutManager(requireContext())
         binding?.customListsNew?.setOnClickListener {
+            // No arguments: the destination's listId defaults to
+            // null. (Passing an explicit null in a bundle crashed
+            // the nav runtime — wrong argument type in savedState.)
             findNavController().navigate(
-                R.id.action_home_custom_lists_to_edit,
-                bundleOf("listId" to null)
+                R.id.action_home_custom_lists_to_edit
             )
         }
         refresh()
