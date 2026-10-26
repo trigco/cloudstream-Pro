@@ -73,7 +73,7 @@
     <string name="feed_download_preparing">Preparing download…</string>
     <string name="custom_home_lists_key">custom_home_lists</string>
     <string name="home_custom_lists_title">Custom Home Lists</string>
-    <string name="home_custom_lists_summary">Build home lists from any provider's categories</string>
+    <string name="home_custom_lists_summary">Build home lists from any provider\'s categories</string>
     <string name="home_custom_providers">Providers…</string>
     <string name="home_custom_manage">Manage custom lists…</string>
     <string name="home_custom_switch_title">Home source</string>
