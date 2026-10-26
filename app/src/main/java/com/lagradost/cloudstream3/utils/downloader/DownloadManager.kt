@@ -2147,6 +2147,48 @@ object VideoDownloadManager {
         /** Phase 8.42: fresh links for this download from another
          * provider carrying the same title. The file still lands
          * under the chosen title's name and folder. */
+        // Phase 8.43: the fallback ranks by what the user
+        // actually picked — same language first, then the
+        // closest quality (his report: asked for 1080p Hindi,
+        // the fallback delivered 720p English). The signature
+        // comes from the first primary link: the feed queues
+        // the selected link first, and the details flow tries
+        // its links in order.
+        private val fallbackLanguages = listOf(
+            "hindi", "english", "bengali", "bangla", "tamil",
+            "telugu", "malayalam", "kannada", "punjabi", "marathi",
+            "gujarati", "urdu", "korean", "japanese", "chinese",
+            "spanish", "arabic", "odia", "assamese"
+        )
+
+        private fun languageToken(text: String?): String? {
+            val t = text?.lowercase() ?: return null
+            return fallbackLanguages.firstOrNull { t.contains(it) }
+        }
+
+        private fun rankFallbackLinks(
+            links: List<ExtractorLink>,
+            item: DownloadItem
+        ): List<ExtractorLink> {
+            val chosen = item.links.firstOrNull()
+            val wantedQuality = chosen?.quality ?: 0
+            val wantedLang = chosen?.let {
+                languageToken(it.name) ?: languageToken(it.source)
+            }
+            return links.distinctBy { it.url }.sortedWith(
+                compareByDescending<ExtractorLink> {
+                    if (wantedLang == null) 0
+                    else {
+                        val token = languageToken(it.name)
+                            ?: languageToken(it.source)
+                        if (token == wantedLang) 1 else 0
+                    }
+                }.thenBy {
+                    kotlin.math.abs(it.quality - wantedQuality)
+                }.thenByDescending { it.quality }
+            )
+        }
+
         private suspend fun findDownloadFallbackLinks(
             item: DownloadItem
         ): List<ExtractorLink>? {
@@ -2209,7 +2251,7 @@ object VideoDownloadManager {
                     }
                     if (playable.isNotEmpty()) {
                         downloadFailureReasons.remove(item.ep.id)
-                        return sortUrls(playable.toSet())
+                        return rankFallbackLinks(playable, item)
                     }
                 } catch (e: Exception) {
                     continue

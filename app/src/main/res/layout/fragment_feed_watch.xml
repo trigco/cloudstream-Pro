@@ -376,7 +376,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:contentDescription="@string/download"
-                    android:src="@drawable/baseline_downloading_24" />
+                    android:src="@drawable/ic_feed_download" />
 
                 <TextView
                     android:layout_width="wrap_content"

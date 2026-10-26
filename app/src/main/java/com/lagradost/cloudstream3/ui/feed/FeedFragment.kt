@@ -165,16 +165,27 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
                         binding.setFeedEmpty( pool.isEmpty() )
-                        if (scrollTopOnNextFeed && viewModel.lastBuildWasPrepend) {
+                        // Phase 8.43: scroll to the top AFTER the
+                        // prepended list commits. Scrolling before
+                        // submitList let the layout manager anchor
+                        // to the old first item, which the prepend
+                        // pushed far down — a refresh flung the
+                        // list toward the end (his report).
+                        val goTop = scrollTopOnNextFeed &&
+                            viewModel.lastBuildWasPrepend
+                        if (goTop) {
                             scrollTopOnNextFeed = false
                             listState = null
-                            binding.feedRecycler.scrollToPosition(0)
                         }
                         adapter.submitList(pool) {
-                            listState?.let { state ->
-                                binding.feedRecycler.layoutManager
-                                    ?.onRestoreInstanceState(state)
-                                listState = null
+                            if (goTop) {
+                                binding.feedRecycler.scrollToPosition(0)
+                            } else {
+                                listState?.let { state ->
+                                    binding.feedRecycler.layoutManager
+                                        ?.onRestoreInstanceState(state)
+                                    listState = null
+                                }
                             }
                         }
                     } else {

@@ -35,6 +35,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
 import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
@@ -346,6 +347,38 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 // chips, per-episode multi-select).
                 goingToBatch = true
                 findNavController().navigate(R.id.navigation_feed_download)
+            } else if (
+                FeedPlayer.links.isEmpty() &&
+                FeedPlayer.currentEpisode != null &&
+                FeedPlayer.status == FeedPlayer.Status.LOADING
+            ) {
+                // Phase 8.43: the video is still loading — wait
+                // for the playback extraction already in flight
+                // and download with THOSE links, instead of
+                // queueing a blind second extraction that may
+                // never produce a file.
+                Toast.makeText(
+                    requireContext(), R.string.feed_download_preparing,
+                    Toast.LENGTH_SHORT
+                ).show()
+                updateDownloadPill()
+                viewLifecycleOwner.lifecycleScope.launch {
+                    var waited = 0
+                    while (FeedPlayer.links.isEmpty() && waited < 60) {
+                        if (FeedPlayer.status == FeedPlayer.Status.ERROR) break
+                        delay(500)
+                        waited++
+                    }
+                    if (FeedPlayer.downloadCurrentEpisode()) {
+                        context?.let {
+                            Toast.makeText(
+                                it, R.string.download_started,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    updateDownloadPill()
+                }
             } else if (FeedPlayer.downloadCurrentEpisode()) {
                 Toast.makeText(requireContext(), R.string.download_started, Toast.LENGTH_SHORT)
                     .show()
@@ -572,8 +605,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val rest = all.filter { it.response.url in upNextShownUrls }.shuffled()
         val merged = fresh + rest
         upNextShownUrls = merged.take(30).map { it.response.url }.toSet()
-        upNextAdapter.submitList(merged)
-        binding?.feedWatchUpnext?.scrollToPosition(0)
+        // Phase 8.43: scroll AFTER the diff commits — scrolling
+        // first let the layout manager re-anchor to the old
+        // first item's new position, flinging the list down.
+        upNextAdapter.submitList(merged) {
+            binding?.feedWatchUpnext?.scrollToPosition(0)
+        }
     }
 
     // ---------- controls ----------
@@ -757,7 +794,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchDownloadIcon.isVisible = !active || done
         binding.feedWatchDownloadIcon.setImageResource(
             if (done) R.drawable.ic_baseline_check_24
-            else R.drawable.baseline_downloading_24
+            else R.drawable.ic_feed_download
         )
     }
 

@@ -70,6 +70,7 @@
     <string name="downloading">Downloading</string>
     <string name="download_paused">Download Paused</string>
     <string name="download_started">Download Started</string>
+    <string name="feed_download_preparing">Preparing download…</string>
     <string name="download_failed">Download Failed</string>
     <string name="download_canceled">Download Canceled</string>
     <string name="download_done">Download Done</string>
