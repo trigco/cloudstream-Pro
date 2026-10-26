@@ -715,11 +715,14 @@ class HomeViewModel : ViewModel() {
                 context?.let { HomeCustomLists.activeList(it) }
             // Phase 8.46: the list was deactivated in Settings —
             // drop the stale custom rows and force a normal load.
+            // (No recursive call here: this function has an
+            // inferred return type, and a self-call makes the
+            // type checker loop — CI caught exactly that.)
+            var effectiveForce = forceReload
             if (activeCustom == null && customRoutes.isNotEmpty()) {
                 customRoutes.clear()
                 loadedCustomSignature = null
-                loadAndCancel(preferredApiName, true, fromUI)
-                return@ioSafe
+                effectiveForce = true
             }
             if (activeCustom != null) {
                 if (!forceReload &&
@@ -741,7 +744,7 @@ class HomeViewModel : ViewModel() {
 
             // if we don't need to reload and we have a valid homepage or currently loading the same thing then return
             val currentLoading = isCurrentlyLoadingName
-            if (!forceReload && (currentPage is Resource.Success && currentPage.value.isNotEmpty() || (currentLoading != null && currentLoading == preferredApiName))) {
+            if (!effectiveForce && (currentPage is Resource.Success && currentPage.value.isNotEmpty() || (currentLoading != null && currentLoading == preferredApiName))) {
                 return@ioSafe
             }
 
