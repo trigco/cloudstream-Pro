@@ -139,6 +139,158 @@ object FeedPlayer {
     // this provider has no playable links for the title, try the
     // same title on other providers before showing the error page.
     private var fallbackAllowed = false
+
+    // Phase 8.42: pre-fetched backup — the same title on another
+    // provider, fetched in parallel with the primary (his ask:
+    // do not wait on a slow/dead server when another provider
+    // has the same video). Ready links swap in instantly on
+    // stall or failure instead of re-searching at error time.
+    private var backupJob: Job? = null
+    private var backupActive = false
+    private var backupUrl: String? = null
+    private var backupApiName: String? = null
+    private var backupPage: LoadResponse? = null
+    private var backupEpisodes: List<ResultEpisode> = emptyList()
+    private var backupIndex = 0
+    private var backupLinks: List<ExtractorLink> = emptyList()
+    private var backupSubs: List<SubtitleData> = emptyList()
+
+    private fun clearBackup() {
+        backupJob?.cancel()
+        backupJob = null
+        backupActive = false
+        backupUrl = null
+        backupApiName = null
+        backupPage = null
+        backupEpisodes = emptyList()
+        backupIndex = 0
+        backupLinks = emptyList()
+        backupSubs = emptyList()
+    }
+
+    /** Starts (or restarts) the parallel backup fetch for the
+     * item that is now loading on its own provider. */
+    private fun startBackupPrefetch(gen: Int) {
+        clearBackup()
+        val title = currentName?.takeIf { it.isNotBlank() } ?: return
+        val fromApi = currentApiName
+        val origEp = episodes.getOrNull(0)
+        backupJob = scope.launch {
+            val others = APIHolder.apis.filter {
+                it.name != fromApi && it.name != "None"
+            }
+            if (others.isEmpty()) return@launch
+            val candidates = others.amap { api ->
+                try {
+                    when (
+                        val r = withContext(Dispatchers.IO) {
+                            APIRepository(api).search(title, 1)
+                        }
+                    ) {
+                        is Resource.Success -> r.value.items.firstOrNull {
+                            titlesMatch(it.name, title)
+                        }?.let { hit -> hit to api }
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }.filterNotNull()
+            for ((hit, api) in candidates.take(2)) {
+                if (gen != generation) return@launch
+                val page = when (
+                    val res = withContext(Dispatchers.IO) {
+                        APIRepository(api).load(hit.url)
+                    }
+                ) {
+                    is Resource.Success -> res.value
+                    else -> continue
+                }
+                val eps = buildResultEpisodes(page)
+                if (eps.isEmpty()) continue
+                val target = if (origEp != null &&
+                    (origEp.season != null || origEp.episode > 0)
+                ) {
+                    eps.indexOfFirst {
+                        it.season == origEp.season &&
+                            it.episode == origEp.episode
+                    }.takeIf { it >= 0 } ?: 0
+                } else {
+                    0
+                }
+                val gen2 = RepoLinkGenerator(eps, page = page)
+                val collected = mutableListOf<ExtractorLink>()
+                val collectedSubs = mutableListOf<SubtitleData>()
+                try {
+                    withContext(Dispatchers.IO) {
+                        gen2.generateLinks(
+                            clearCache = false,
+                            sourceTypes = LOADTYPE_ALL,
+                            callback = { pair ->
+                                pair.first?.let {
+                                    synchronized(collected) { collected.add(it) }
+                                }
+                            },
+                            subtitleCallback = {
+                                synchronized(collectedSubs) { collectedSubs.add(it) }
+                            },
+                            offset = target,
+                            isCasting = false
+                        )
+                    }
+                } catch (e: Exception) {
+                    continue
+                }
+                val playable = playableOf(collected)
+                if (playable.isEmpty()) continue
+                if (gen != generation) return@launch
+                backupUrl = hit.url
+                backupApiName = api.name
+                backupPage = page
+                backupEpisodes = eps
+                backupIndex = target
+                backupLinks = playable
+                backupSubs = ArrayList(collectedSubs)
+                dbg("backup ready: " + api.name + " " + playable.size + " links")
+                notifyListeners()
+                return@launch
+            }
+        }
+    }
+
+    /** Swaps playback to the pre-fetched backup copy. */
+    private fun applyBackup(gen: Int): Boolean {
+        if (gen != generation || backupActive) return false
+        val bl = backupLinks
+        val page = backupPage ?: return false
+        if (bl.isEmpty() || backupEpisodes.isEmpty()) return false
+        // The backup was fetched for one episode; never let it
+        // hijack a different episode the viewer moved to.
+        val wanted = backupEpisodes.getOrNull(backupIndex)
+        val current = episodes.getOrNull(episodeIndex)
+        if (wanted != null && current != null &&
+            (wanted.season != current.season || wanted.episode != current.episode)
+        ) {
+            return false
+        }
+        dbg("backup take-over -> " + backupApiName)
+        backupActive = true
+        currentUrl = backupUrl
+        currentApiName = backupApiName
+        currentPage = page
+        episodes = backupEpisodes
+        episodeIndex = backupIndex
+        generator = RepoLinkGenerator(backupEpisodes, page = page)
+        links = bl
+        subs = backupSubs
+        linkIndex = 0
+        triedLinks.clear()
+        pendingRetry = false
+        preferredQuality = bl.first().quality
+        playCurrentLink(keepPosition = false)
+        notifyListeners()
+        return true
+    }
         private set
     var linkIndex: Int = 0
         private set
@@ -309,6 +461,7 @@ object FeedPlayer {
         extracting = true
         pendingRetry = false
         fallbackAllowed = true
+        clearBackup()
         links = emptyList()
         subs = emptyList()
         linkIndex = 0
@@ -366,6 +519,9 @@ object FeedPlayer {
                 currentName = response.name
             }
             generator = RepoLinkGenerator(episodes, page = response)
+            // Phase 8.42: fetch the same title on another
+            // provider in parallel, ready to take over.
+            startBackupPrefetch(gen)
             extractAndPlay(0, gen)
         }
     }
@@ -632,9 +788,13 @@ object FeedPlayer {
             )
         }
         if (gen != generation) return@coroutineScope
+        if (backupActive) return@coroutineScope
         val full = synchronized(newLinks) { playableOf(ArrayList(newLinks)) }
         subs = synchronized(newSubs) { ArrayList(newSubs) }
         if (full.isEmpty()) {
+            if (applyBackup(gen)) {
+                return@coroutineScope
+            }
             if (fallbackAllowed && gen == generation) {
                 fallbackAllowed = false
                 if (tryCrossProviderFallback(gen, episodes.getOrNull(index))) {
@@ -727,6 +887,10 @@ object FeedPlayer {
         } else if (extracting) {
             pendingRetry = true
             status = Status.LOADING
+        } else if (applyBackup(generation)) {
+            // Phase 8.42: the pre-fetched copy on another
+            // provider takes over instead of the error screen.
+            dbg("failover -> backup")
         } else {
             // Truly giving up: silence the player so sound never
             // plays behind the error screen.
@@ -941,6 +1105,7 @@ object FeedPlayer {
     fun stop() {
         savePosition()
         generation++
+        clearBackup()
         extracting = false
         pendingRetry = false
         watchdog?.let { handler.removeCallbacks(it) }

@@ -357,6 +357,8 @@
     <string name="download_queue_queued">Queued</string>
     <string name="download_queue_failed">Download failed</string>
     <string name="download_queue_progress">%1$s of %2$s</string>
+    <string name="download_queue_downloading">Downloading\u2026</string>
+    <string name="download_queue_so_far">%1$s downloaded</string>
     <string name="feed_show_all">Show all</string>
     <string name="feed_select_all">Select all</string>
     <string name="feed_download_n">Download %1$d episodes</string>

@@ -20,7 +20,19 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
 import androidx.preference.PreferenceManager
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
+import com.lagradost.cloudstream3.AnimeLoadResponse
+import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.LiveStreamLoadResponse
+import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.amap
+import com.lagradost.cloudstream3.mvvm.Resource
+import com.lagradost.cloudstream3.ui.APIRepository
+import com.lagradost.cloudstream3.ui.result.buildResultEpisode
+import com.lagradost.cloudstream3.ui.result.getId
 import com.lagradost.cloudstream3.BuildConfig
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CommonActivity.showToast
@@ -226,6 +238,11 @@ object VideoDownloadManager {
     val downloadDeleteEvent = Event<Int>()
     val downloadEvent = Event<Pair<Int, DownloadActionType>>()
     val downloadProgressEvent = Event<Triple<Int, Long, Long>>()
+
+    /** Phase 8.42: why a download failed, per episode id -- the
+     * queue rows show it, so a failure explains itself instead
+     * of only saying "Download Failed". */
+    val downloadFailureReasons = HashMap<Int, String>()
 //    val downloadQueue = LinkedList<DownloadResumePackage>()
 
     private var hasCreatedNotChannel = false
@@ -1552,11 +1569,12 @@ object VideoDownloadManager {
                     delay(700)
                 }
             }
-            val exported = try {
+            val exportError = try {
                 exportDashToFile(context, link, tempFile, metadata)
             } finally {
                 pollJob.cancel()
             }
+            val exported = exportError == null
 
             if (metadata.type == DownloadType.IsStopped) {
                 metadata.onDelete()
@@ -1564,6 +1582,12 @@ object VideoDownloadManager {
                 return@withContext DOWNLOAD_STOPPED
             }
             if (!exported || !tempFile.exists() || tempFile.length() <= 0L) {
+                if (exportError != null) {
+                    parentId?.let {
+                        downloadFailureReasons[it] =
+                            ("DASH " + exportError).take(140)
+                    }
+                }
                 metadata.onDelete()
                 stream.delete()
                 return@withContext metadata.failedStatus()
@@ -1600,20 +1624,17 @@ object VideoDownloadManager {
 
     /**
      * Runs one Transformer export of a DASH link into [tempFile]
-     * on the main thread (Transformer requires a Looper thread)
-     * and reports completion through the coroutine. Transformer
-     * in media3 1.9.3 has no data-source hook on its Builder,
-     * so the manifest and segments are fetched with media3's
-     * default HTTP stack — fine for the signed CDN URLs these
-     * providers hand out; a provider that refuses still falls
-     * through to the next link in the download loop.
+     * on the main thread (Transformer requires a Looper thread).
+     * Returns null on success, or the failure reason (Phase 8.42:
+     * the reason is surfaced in the download queue, so a failed
+     * DASH download says WHY instead of failing silently).
      */
     private suspend fun exportDashToFile(
         context: Context,
         link: ExtractorLink,
         tempFile: File,
         metadata: DownloadMetaData,
-    ): Boolean {
+    ): String? {
         tempFile.delete()
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
@@ -1645,7 +1666,7 @@ object VideoDownloadManager {
                                 composition: Composition,
                                 exportResult: ExportResult
                             ) {
-                                if (cont.isActive) cont.resume(true)
+                                if (cont.isActive) cont.resume(null)
                             }
 
                             override fun onError(
@@ -1654,7 +1675,10 @@ object VideoDownloadManager {
                                 exportException: ExportException
                             ) {
                                 logError(exportException)
-                                if (cont.isActive) cont.resume(false)
+                                if (cont.isActive) cont.resume(
+                                    "export " + exportException.errorCode +
+                                        ": " + (exportException.message ?: "failed")
+                                )
                             }
                         })
                         .build()
@@ -1673,7 +1697,9 @@ object VideoDownloadManager {
                     transformer.start(edited, tempFile.absolutePath)
                 } catch (t: Throwable) {
                     logError(t)
-                    if (cont.isActive) cont.resume(false)
+                    if (cont.isActive) cont.resume(
+                        "export: " + (t.message ?: t.javaClass.simpleName)
+                    )
                 }
             }
         }
@@ -1985,6 +2011,213 @@ object VideoDownloadManager {
             }
         }
 
+        /** Phase 8.42: runs the link loop of downloadFromResume
+         * over one link set. Returns true on success. */
+        private suspend fun attemptLinks(
+            item: DownloadItem,
+            links: List<ExtractorLink>,
+            resumeIndex: Int?,
+            notificationCallback: (Int, Notification) -> Unit,
+            persistResume: Boolean
+        ): Boolean {
+            for (index in (resumeIndex ?: 0) until links.size) {
+                val link = links[index]
+                val resume = resumeIndex == index
+
+                if (persistResume) {
+                    setKey(
+                        KEY_RESUME_PACKAGES,
+                        item.ep.id.toString(),
+                        DownloadResumePackage(item, index)
+                    )
+                }
+
+                var connectionResult =
+                    downloadSingleEpisode(
+                        context,
+                        item.source,
+                        item.folder,
+                        item.ep,
+                        link,
+                        notificationCallback,
+                        resume
+                    )
+
+                if (connectionResult.retrySame) {
+                    connectionResult = downloadSingleEpisode(
+                        context,
+                        item.source,
+                        item.folder,
+                        item.ep,
+                        link,
+                        notificationCallback,
+                        true
+                    )
+                }
+
+                if (connectionResult.success) { // SUCCESS
+                    isCompleted = true
+                    return true
+                } else if (!connectionResult.tryNext || index >= links.lastIndex) {
+                    return false
+                }
+            }
+            return false
+        }
+
+        private fun downloadTitlesMatch(candidate: String, wanted: String): Boolean {
+            fun norm(s: String): String =
+                s.lowercase().replace(Regex("[^a-z0-9]+"), "")
+            val a = norm(candidate)
+            val b = norm(wanted)
+            if (a.isEmpty() || b.isEmpty()) return false
+            return a == b || (b.length >= 3 && a.contains(b)) ||
+                (a.length >= 3 && b.contains(a))
+        }
+
+        /** Phase 8.42: the same episode of the same title on
+         * another provider, as a ResultEpisode to extract from. */
+        private fun fallbackEpisodeFor(
+            page: LoadResponse,
+            season: Int?,
+            episode: Int
+        ): ResultEpisode? {
+            val mainId = page.getId()
+            return when (page) {
+                is MovieLoadResponse -> buildResultEpisode(
+                    page.name, page.name, null, 0, null, null,
+                    page.dataUrl, page.apiName, mainId, 0,
+                    null, null, null, page.type, mainId, null
+                )
+
+                is LiveStreamLoadResponse -> buildResultEpisode(
+                    page.name, page.name, null, 0, null, null,
+                    page.dataUrl, page.apiName, mainId, 0,
+                    null, null, null, page.type, mainId, null
+                )
+
+                is TvSeriesLoadResponse -> {
+                    val sorted = page.episodes.sortedBy {
+                        (it.season?.times(10_000) ?: 0) + (it.episode ?: 0)
+                    }
+                    val target = sorted.firstOrNull {
+                        (season == null || it.season == season) &&
+                            (it.episode ?: 0) == episode
+                    } ?: sorted.firstOrNull() ?: return null
+                    val episodeIndex = target.episode ?: (sorted.indexOf(target) + 1)
+                    val id = mainId + (target.season?.times(100_000) ?: 0) +
+                        episodeIndex + 1
+                    buildResultEpisode(
+                        page.name, target.name, target.posterUrl, episodeIndex,
+                        target.season, target.season, target.data, page.apiName,
+                        id, sorted.indexOf(target),
+                        target.score, target.description, null, page.type,
+                        mainId, null,
+                        airDate = target.date, runTime = target.runTime
+                    )
+                }
+
+                is AnimeLoadResponse -> {
+                    val dub = if (page.episodes.containsKey(DubStatus.Subbed)) {
+                        DubStatus.Subbed
+                    } else {
+                        page.episodes.keys.firstOrNull()
+                    } ?: return null
+                    val list = page.episodes[dub].orEmpty()
+                    val target = list.firstOrNull {
+                        (it.episode ?: 0) == episode
+                    } ?: list.firstOrNull() ?: return null
+                    val episodeIndex = target.episode ?: (list.indexOf(target) + 1)
+                    val id = mainId + episodeIndex + dub.id * 1_000_000 +
+                        (target.season?.times(10_000) ?: 0)
+                    buildResultEpisode(
+                        page.name, target.name, target.posterUrl, episodeIndex,
+                        target.season, target.season, target.data, page.apiName,
+                        id, list.indexOf(target),
+                        target.score, target.description, null, page.type,
+                        mainId, null,
+                        airDate = target.date, runTime = target.runTime
+                    )
+                }
+
+                else -> null
+            }
+        }
+
+        /** Phase 8.42: fresh links for this download from another
+         * provider carrying the same title. The file still lands
+         * under the chosen title's name and folder. */
+        private suspend fun findDownloadFallbackLinks(
+            item: DownloadItem
+        ): List<ExtractorLink>? {
+            val wrapperItem = downloadQueueWrapper.downloadItem ?: return null
+            val title = wrapperItem.resultName.takeIf { it.isNotBlank() }
+                ?: item.ep.headerName
+            if (title.isBlank()) return null
+            val others = APIHolder.apis.filter {
+                it.name != item.ep.apiName && it.name != "None"
+            }
+            if (others.isEmpty()) return null
+            val candidates = others.amap { api ->
+                try {
+                    when (
+                        val r = withContext(Dispatchers.IO) {
+                            APIRepository(api).search(title, 1)
+                        }
+                    ) {
+                        is Resource.Success -> r.value.items.firstOrNull {
+                            downloadTitlesMatch(it.name, title)
+                        }?.let { hit -> hit to api }
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }.filterNotNull()
+            for ((hit, api) in candidates.take(2)) {
+                try {
+                    val page = when (
+                        val res = withContext(Dispatchers.IO) {
+                            APIRepository(api).load(hit.url)
+                        }
+                    ) {
+                        is Resource.Success -> res.value
+                        else -> continue
+                    }
+                    val ep = fallbackEpisodeFor(
+                        page, item.ep.season, item.ep.episode
+                    ) ?: continue
+                    val collected = mutableListOf<ExtractorLink>()
+                    withContext(Dispatchers.IO) {
+                        RepoLinkGenerator(listOf(ep), page = page).generateLinks(
+                            clearCache = false,
+                            sourceTypes = LOADTYPE_INAPP_DOWNLOAD,
+                            callback = { pair ->
+                                pair.first?.let {
+                                    synchronized(collected) { collected.add(it) }
+                                }
+                            },
+                            subtitleCallback = { },
+                            offset = 0,
+                            isCasting = false
+                        )
+                    }
+                    val playable = collected.filter {
+                        it.type == ExtractorLinkType.VIDEO ||
+                            it.type == ExtractorLinkType.M3U8 ||
+                            it.type == ExtractorLinkType.DASH
+                    }
+                    if (playable.isNotEmpty()) {
+                        downloadFailureReasons.remove(item.ep.id)
+                        return sortUrls(playable.toSet())
+                    }
+                } catch (e: Exception) {
+                    continue
+                }
+            }
+            return null
+        }
+
         private suspend fun downloadFromResume(
             downloadResumePackage: DownloadResumePackage,
             notificationCallback: (Int, Notification) -> Unit,
@@ -2001,49 +2234,36 @@ object VideoDownloadManager {
             }
 
             try {
-                for (index in (downloadResumePackage.linkIndex ?: 0) until item.links.size) {
-                    val link = item.links[index]
-                    val resume = downloadResumePackage.linkIndex == index
-
-                    setKey(
-                        KEY_RESUME_PACKAGES,
-                        id.toString(),
-                        DownloadResumePackage(item, index)
-                    )
-
-                    var connectionResult =
-                        downloadSingleEpisode(
-                            context,
-                            item.source,
-                            item.folder,
-                            item.ep,
-                            link,
+                var done = attemptLinks(
+                    item,
+                    item.links,
+                    downloadResumePackage.linkIndex,
+                    notificationCallback,
+                    persistResume = true
+                )
+                if (!done && !isCancelled && !isCompleted) {
+                    // Phase 8.42: every server of the chosen
+                    // provider failed (or its links died) -- try
+                    // the same title on another provider before
+                    // giving up, the way playback falls over.
+                    val fallbackLinks = findDownloadFallbackLinks(item)
+                    if (!fallbackLinks.isNullOrEmpty()) {
+                        done = attemptLinks(
+                            item,
+                            fallbackLinks,
+                            null,
                             notificationCallback,
-                            resume
-                        )
-
-                    if (connectionResult.retrySame) {
-                        connectionResult = downloadSingleEpisode(
-                            context,
-                            item.source,
-                            item.folder,
-                            item.ep,
-                            link,
-                            notificationCallback,
-                            true
+                            persistResume = false
                         )
                     }
-
-                    if (connectionResult.success) { // SUCCESS
-                        isCompleted = true
-                        break
-                    } else if (!connectionResult.tryNext || index >= item.links.lastIndex) {
-                        isFailed = true
-                        break
-                    }
+                }
+                if (!done && !isCompleted) {
+                    isFailed = true
                 }
             } catch (e: Exception) {
                 isFailed = true
+                downloadFailureReasons[id] =
+                    (e.message ?: e.javaClass.simpleName).take(140)
                 logError(e)
             } finally {
                 isFailed = !isCompleted
@@ -2092,6 +2312,7 @@ object VideoDownloadManager {
         }
 
         fun startDownload() {
+            downloadFailureReasons.remove(downloadQueueWrapper.id)
             Log.d(TAG, "Starting download ${downloadQueueWrapper.id}")
             setKey(KEY_RESUME_IN_QUEUE, downloadQueueWrapper.id.toString(), downloadQueueWrapper)
 
@@ -2277,6 +2498,8 @@ object VideoDownloadManager {
                 isCancelled = true
                 return
             } else if (currentLinks.isEmpty()) {
+                downloadFailureReasons[downloadItem.episode.id] =
+                    "No downloadable links on this provider"
                 main {
                     showToast(
                         R.string.no_links_found_toast,

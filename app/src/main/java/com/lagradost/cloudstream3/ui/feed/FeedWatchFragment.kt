@@ -149,7 +149,31 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         })
     }
 
+    private var titleHeightDirty = false
+
     private fun animateTitleBox(binding: FragmentFeedWatchBinding, show: Boolean) {
+        if (titleHeightDirty) {
+            titleHeightDirty = false
+            val box = binding.feedWatchTitleBox
+            val widthSpec = if (box.width > 0) {
+                android.view.View.MeasureSpec.makeMeasureSpec(
+                    box.width, android.view.View.MeasureSpec.EXACTLY
+                )
+            } else {
+                android.view.View.MeasureSpec.makeMeasureSpec(
+                    0, android.view.View.MeasureSpec.UNSPECIFIED
+                )
+            }
+            box.measure(
+                widthSpec,
+                android.view.View.MeasureSpec.makeMeasureSpec(
+                    0, android.view.View.MeasureSpec.UNSPECIFIED
+                )
+            )
+            if (box.measuredHeight > 0) {
+                titleFullHeight = box.measuredHeight
+            }
+        }
         if (show == titleShown || titleFullHeight == 0) return
         titleShown = show
         val box = binding.feedWatchTitleBox
@@ -524,6 +548,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchMore.setText(R.string.feed_more)
         binding.feedWatchStorylineText.isVisible = false
         if (plot != null) binding.feedWatchStorylineText.text = plot
+        // Phase 8.42: the collapse animation's full height was
+        // measured once per view -- a new item whose title/meta
+        // needs a different height kept the old (smaller) one
+        // and the meta line drew OVER the title. Re-measure on
+        // the next collapse animation instead.
+        titleHeightDirty = true
     }
 
     // Phase 8.39: urls already presented at the top of Up next;

@@ -58,20 +58,21 @@ class DownloadQueueAdapter(val fragment: Fragment) : BaseAdapter<DownloadAdapter
 
     fun updateProgress(data: Triple<Int, Long, Long>) {
         val (id, downloaded, total) = data
-        if (total > 0) {
-            progressMap[id] = downloaded to total
-            val now = System.currentTimeMillis()
-            val last = sampleMap[id]
-            if (last != null && now - last.second >= 500L &&
-                downloaded >= last.first
-            ) {
-                val speed =
-                    (downloaded - last.first) * 1000L / (now - last.second)
-                if (speed > 0) speedMap[id] = speed
-                sampleMap[id] = downloaded to now
-            } else if (last == null) {
-                sampleMap[id] = downloaded to now
-            }
+        // Phase 8.42: keep unknown-total progress too (DASH
+        // exports report total 0 until the file is done) -- the
+        // row can still show how much has arrived.
+        progressMap[id] = downloaded to total
+        val now = System.currentTimeMillis()
+        val last = sampleMap[id]
+        if (last != null && now - last.second >= 500L &&
+            downloaded >= last.first
+        ) {
+            val speed =
+                (downloaded - last.first) * 1000L / (now - last.second)
+            if (speed > 0) speedMap[id] = speed
+            sampleMap[id] = downloaded to now
+        } else if (last == null) {
+            sampleMap[id] = downloaded to now
         }
         val pos = immutableCurrentList.indexOfFirst { it.item?.id == id }
         if (pos >= 0) notifyItemChanged(pos)
@@ -85,24 +86,35 @@ class DownloadQueueAdapter(val fragment: Fragment) : BaseAdapter<DownloadAdapter
         val progress = progressMap[id]
         if (progress != null && status != VideoDownloadManager.DownloadType.IsDone) {
             val mb = "%.1f MB"
-            val base = context.getString(
-                R.string.download_queue_progress,
-                mb.format(progress.first / 1000000f),
-                mb.format(progress.second / 1000000f)
+            if (progress.second > 0) {
+                val base = context.getString(
+                    R.string.download_queue_progress,
+                    mb.format(progress.first / 1000000f),
+                    mb.format(progress.second / 1000000f)
+                )
+                val eta = getEstimatedTimeLeft(
+                    context,
+                    speedMap[id] ?: 0L,
+                    progress.first,
+                    progress.second
+                )
+                return if (eta.isBlank()) base else "$base \u2022 $eta"
+            }
+            return context.getString(
+                R.string.download_queue_so_far,
+                mb.format(progress.first / 1000000f)
             )
-            val eta = getEstimatedTimeLeft(
-                context,
-                speedMap[id] ?: 0L,
-                progress.first,
-                progress.second
-            )
-            return if (eta.isBlank()) base else "$base \u2022 $eta"
         }
         return when (status) {
             VideoDownloadManager.DownloadType.IsPending ->
                 context.getString(R.string.download_queue_queued)
-            VideoDownloadManager.DownloadType.IsFailed ->
-                context.getString(R.string.download_queue_failed)
+            VideoDownloadManager.DownloadType.IsDownloading ->
+                context.getString(R.string.download_queue_downloading)
+            VideoDownloadManager.DownloadType.IsFailed -> {
+                val base = context.getString(R.string.download_queue_failed)
+                val reason = VideoDownloadManager.downloadFailureReasons[id]
+                if (reason.isNullOrBlank()) base else "$base \u2022 $reason"
+            }
             else -> null
         }
     }
@@ -258,6 +270,7 @@ class DownloadQueueAdapter(val fragment: Fragment) : BaseAdapter<DownloadAdapter
             // (title alone did not say what is downloading,
             // how much is done, or how long is left).
             val posterUrl = queueWrapper.downloadItem?.episode?.poster
+                ?: queueWrapper.downloadItem?.resultPoster
                 ?: queueWrapper.resumePackage?.item?.ep?.poster
             downloadChildEpisodePoster.isGone = posterUrl.isNullOrBlank()
             if (!posterUrl.isNullOrBlank()) {
