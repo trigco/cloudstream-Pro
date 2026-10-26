@@ -594,15 +594,25 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     // that window first, so the visible content actually changes.
     private var upNextShownUrls: Set<String> = emptySet()
 
+    /** Phase 8.55: genre words the For You ranking listens for. */
+    private val FOR_YOU_GENRES = listOf(
+        "horror", "comedy", "romance", "thriller", "action",
+        "drama", "family", "fantasy", "mystery", "crime",
+        "korean", "animation", "sci-fi", "war", "history",
+        "musical", "western", "documentary"
+    )
+
     private fun refreshUpNext(exceptUrl: String, rotate: Boolean = false) {
-        val all = FeedPool.entries.filter { it.response.url != exceptUrl }
+        val all = forYouRanked(
+            FeedPool.entries.filter { it.response.url != exceptUrl }
+        )
         if (!rotate) {
             upNextShownUrls = all.take(30).map { it.response.url }.toSet()
             upNextAdapter.submitList(all)
             return
         }
-        val fresh = all.filter { it.response.url !in upNextShownUrls }.shuffled()
-        val rest = all.filter { it.response.url in upNextShownUrls }.shuffled()
+        val fresh = all.filter { it.response.url !in upNextShownUrls }
+        val rest = all.filter { it.response.url in upNextShownUrls }
         val merged = fresh + rest
         upNextShownUrls = merged.take(30).map { it.response.url }.toSet()
         // Phase 8.43: scroll AFTER the diff commits — scrolling
@@ -611,6 +621,47 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         upNextAdapter.submitList(merged) {
             binding?.feedWatchUpnext?.scrollToPosition(0)
         }
+    }
+
+    /**
+     * Phase 8.55: "For You" ranking (his ask — the watch page's
+     * Up next becomes For You, ordered by what the user leans
+     * toward). Signals: the current title's type / provider /
+     * page tags (thriller, korean drama…), the types and
+     * providers of everything he has LIKED in the feed, and —
+     * as the top/trending proxy — the item's rating.
+     */
+    private fun forYouRanked(all: List<FeedEntry>): List<FeedEntry> {
+        val ctx = context ?: return all
+        val likes = FeedLikes.getAll(ctx)
+        val likedTypes = likes.map { it.typeName }.toSet()
+        val likedApis = likes.map { it.apiName }.toSet()
+        val currentType = FeedPlayer.currentEpisode?.tvType?.name
+        val currentApi = FeedPlayer.currentApiName
+        val currentTitle = (FeedPlayer.currentName ?: "").lowercase()
+        val genres = mutableSetOf<String>()
+        FeedPlayer.currentPage?.tags?.forEach { tag ->
+            tag.lowercase().split(" ", "-", "/").forEach {
+                if (it.length > 2) genres += it
+            }
+        }
+        FOR_YOU_GENRES.forEach { g ->
+            if (currentTitle.contains(g)) genres += g
+        }
+        fun scoreOf(e: FeedEntry): Double {
+            var s = 0.0
+            val typeName = e.response.type?.name ?: ""
+            if (typeName.isNotEmpty() && typeName == currentType) s += 3.0
+            if (e.apiName == currentApi) s += 2.0
+            if (typeName in likedTypes) s += 2.0
+            if (e.apiName in likedApis) s += 1.5
+            val title = e.response.name.lowercase()
+            genres.forEach { g -> if (title.contains(g)) s += 2.0 }
+            s += (e.response.score?.toStringNull(0.1, 10, 1)
+                ?.toDoubleOrNull() ?: 0.0) / 10.0
+            return s
+        }
+        return all.sortedByDescending { scoreOf(it) }
     }
 
     // ---------- controls ----------
