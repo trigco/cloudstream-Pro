@@ -173,7 +173,6 @@ android {
             } else {
                 logger.warn("No prerelease signing config!")
             }
-            versionNameSuffix = "-PRE"
             versionCode = (System.currentTimeMillis() / 60000).toInt()
         }
     }
