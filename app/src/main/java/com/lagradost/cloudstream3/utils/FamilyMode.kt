@@ -16,11 +16,22 @@ import com.lagradost.cloudstream3.TvType
  * - the TvType.NSFW the provider itself declares;
  * - the provider/section NAME (dedicated adult providers and
  *   adult shelves on mixed providers label themselves);
- * - the item TITLE (phase 8.51: mixed providers like MovieBox
- *   file porn under the plain "Movie" type, so the title is
- *   the only signal — explicit phrases match as substrings of
- *   the normalised title, explicit words match whole tokens,
- *   so innocent titles that merely contain letters are safe).
+ * - the item TITLE / metadata (phase 8.51: mixed providers
+ *   like MovieBox file porn under the plain "Movie" type, so
+ *   the title is the only signal — explicit phrases match as
+ *   substrings of the normalised title, explicit words match
+ *   whole tokens, so innocent titles that merely contain
+ *   letters are safe).
+ *
+ * Phase 8.52 (his call: "metadata use korte hobe — 18+,
+ * adult, porn, sex, xxx, xx etc"): the net is deliberately
+ * wide. Standalone sex/adult/xx are keywords, and so are the
+ * 18+ OTT platform names that ride inside titles as metadata
+ * (a title tagged Ullu / Vivamax / Kooku / PrimePlay /
+ * Shemaroome IS an adult web series, whatever its words say).
+ * The cost — a rare mainstream title containing one of these
+ * words is hidden too — is the trade he asked for: power over
+ * precision.
  */
 object FamilyMode {
     const val KEY = "family_mode_v1"
@@ -30,7 +41,7 @@ object FamilyMode {
     )
 
     private val ADULT_TITLE_PHRASES = listOf(
-        "anal sex", "oral sex", "group sex", "rough sex",
+        "18+", "anal sex", "oral sex", "group sex", "rough sex",
         "hot sex", "sex tape", "sex with", "big tits",
         "big boobs", "big dick", "big cock", "cum shot",
         "cumshot", "blow job", "blowjob", "hand job",
@@ -40,10 +51,15 @@ object FamilyMode {
     )
 
     private val ADULT_TITLE_WORDS = setOf(
-        "porn", "porno", "xxx", "creampie", "orgy",
-        "threesome", "incest", "milf", "hentai", "erotic",
-        "erotica", "pussy", "cock", "cocks", "cum", "dildo",
-        "vibrator", "busty", "horny", "lesbian"
+        "porn", "porno", "xxx", "xx", "sex", "sexy", "adult",
+        "creampie", "orgy", "threesome", "incest", "milf",
+        "hentai", "erotic", "erotica", "pussy", "cock",
+        "cocks", "cum", "dildo", "vibrator", "busty", "horny",
+        "lesbian", "uncut", "unrated", "lust",
+        // 18+ OTT platforms whose names ride in titles.
+        "ullu", "vivamax", "kooku", "primeplay",
+        "rabbitmovies", "shemaroome", "nuefliks", "flizmovies",
+        "hothit", "gupchup"
     )
 
     private val ADULT_TITLE_STEMS = listOf(
