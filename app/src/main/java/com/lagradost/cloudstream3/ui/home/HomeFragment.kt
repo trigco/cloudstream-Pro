@@ -701,39 +701,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private val apiChangeClickListener = View.OnClickListener { view ->
-        // Phase 8.44: the switcher also offers the user's custom
-        // home lists and their manager.
-        val ctx = view.context
-        val lists = HomeCustomLists.getLists(ctx)
-        val activeId = HomeCustomLists.activeId(ctx)
-        val labels = mutableListOf<String>()
-        labels += ctx.getString(R.string.home_custom_providers)
-        lists.forEach { list ->
-            labels += if (list.id == activeId) {
-                "✓ " + list.name
-            } else {
-                list.name
-            }
+        // Phase 8.46: back to the plain provider picker (his
+        // correction — custom lists live in Settings → Content →
+        // Categories and show on Home when active, not here).
+        view.context.selectHomepage(currentApiName) { api ->
+            // Picking a provider leaves custom mode (the custom
+            // list itself is managed in Settings, not here).
+            homeViewModel.exitCustomMode()
+            homeViewModel.loadAndCancel(api, forceReload = true, fromUI = true)
         }
-        labels += ctx.getString(R.string.home_custom_manage)
-        AlertDialog.Builder(ctx)
-            .setTitle(R.string.home_custom_switch_title)
-            .setItems(labels.toTypedArray()) { _, which ->
-                when {
-                    which == 0 -> ctx.selectHomepage(currentApiName) { api ->
-                        homeViewModel.exitCustomMode()
-                        homeViewModel.loadAndCancel(
-                            api, forceReload = true, fromUI = true
-                        )
-                    }
-                    which <= lists.size ->
-                        homeViewModel.activateCustomList(lists[which - 1])
-                    else -> findNavController().navigate(
-                        R.id.global_to_navigation_home_custom_lists
-                    )
-                }
-            }
-            .show()
         /*val validAPIs = view.context?.filterProviderByPreferredMedia()?.toMutableList() ?: mutableListOf()
 
         validAPIs.add(0, randomApi)

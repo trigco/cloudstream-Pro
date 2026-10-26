@@ -234,8 +234,14 @@ class HomeViewModel : ViewModel() {
     // Phase 8.44: custom home lists — rows served by several
     // providers. customRoutes maps a row's unique display name to
     // (provider repo, main-page index, real page name).
-    val customRoutes =
-        mutableMapOf<String, Triple<APIRepository, Int, String>>()
+    data class CustomRoute(
+        val repo: APIRepository,
+        val pageIndex: Int?,
+        val pageName: String,
+        val dynamic: Boolean
+    )
+
+    val customRoutes = mutableMapOf<String, CustomRoute>()
 
     @Volatile
     var loadedCustomSignature: String? = null
@@ -251,7 +257,9 @@ class HomeViewModel : ViewModel() {
         // provider, not the single home repo.
         val customRoute = customRoutes[name]
         if (customRoute != null) {
-            val (repoX, pageIndex, pageName) = customRoute
+            val repoX = customRoute.repo
+            val pageIndex = customRoute.pageIndex
+            val pageName = customRoute.pageName
             expandable[name]?.let { current ->
                 if (current.hasNext) {
                     val nextPage = current.currentPage + 1
@@ -487,7 +495,7 @@ class HomeViewModel : ViewModel() {
 
     private fun customSignature(list: HomeCustomLists.CustomList): String =
         list.id + "|" + list.entries.joinToString(",") {
-            it.apiName + ":" + it.pageName
+            it.apiName + ":" + it.pageName + ":" + it.dynamic
         }
 
     fun activateCustomList(list: HomeCustomLists.CustomList) {
@@ -516,13 +524,25 @@ class HomeViewModel : ViewModel() {
                 try {
                     val api = getApiFromNameNull(entry.apiName)
                         ?: continue
-                    val idx = api.mainPage.indexOfFirst {
-                        it.name == entry.pageName
-                    }
-                    if (idx < 0) continue
                     val repoX = APIRepository(api)
                     if (!repoX.hasMainPage) continue
-                    val res = repoX.getMainPage(1, idx)
+                    // Phase 8.46: dynamic entries (provider
+                    // declares no mainPage) load the whole
+                    // homepage and pick their category by name;
+                    // declared entries load by page index.
+                    val idx = if (entry.dynamic) {
+                        -1
+                    } else {
+                        api.mainPage.indexOfFirst {
+                            it.name == entry.pageName
+                        }
+                    }
+                    if (!entry.dynamic && idx < 0) continue
+                    val res = if (entry.dynamic) {
+                        repoX.getMainPage(1, null)
+                    } else {
+                        repoX.getMainPage(1, idx)
+                    }
                     if (res !is Resource.Success) continue
                     res.value.filterNotNull().forEach { home ->
                         home.items.filter { it.name == entry.pageName }
@@ -544,8 +564,12 @@ class HomeViewModel : ViewModel() {
                                     1,
                                     home.hasNext
                                 )
-                                customRoutes[display] =
-                                    Triple(repoX, idx, entry.pageName)
+                                customRoutes[display] = CustomRoute(
+                                    repoX,
+                                    if (entry.dynamic) null else idx,
+                                    entry.pageName,
+                                    entry.dynamic
+                                )
                             }
                     }
                 } catch (e: Exception) {
@@ -689,6 +713,14 @@ class HomeViewModel : ViewModel() {
             // via exitCustomMode() (the provider switcher).
             val activeCustom =
                 context?.let { HomeCustomLists.activeList(it) }
+            // Phase 8.46: the list was deactivated in Settings —
+            // drop the stale custom rows and force a normal load.
+            if (activeCustom == null && customRoutes.isNotEmpty()) {
+                customRoutes.clear()
+                loadedCustomSignature = null
+                loadAndCancel(preferredApiName, true, fromUI)
+                return@ioSafe
+            }
             if (activeCustom != null) {
                 if (!forceReload &&
                     loadedCustomSignature ==

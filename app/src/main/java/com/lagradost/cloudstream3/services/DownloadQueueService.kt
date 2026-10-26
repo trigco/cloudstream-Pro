@@ -168,7 +168,14 @@ class DownloadQueueService : Service() {
             // Ensure this is up to date to prevent race conditions with MainActivity launches
             setLastError(context)
             // Early return, to prevent waiting for plugins in safe mode
-            if (lastError != null) return@ioSafe
+            // Phase 8.46: gate on the safe-mode FILE only. The
+            // in-memory crash record (lastError) also fires after
+            // any unrelated crash, and while it is set this job
+            // used to die instantly — every download then sat
+            // "Queued" forever in a healthy session (his report).
+            // Real safe mode (file present, extensions off) still
+            // stops the queue, keeping the crash-loop protection.
+            if (PluginManager.checkSafeModeFile()) return@ioSafe
 
             // Try to ensure all plugins are loaded before starting the downloader.
             // To prevent infinite stalls we use a timeout of 15 seconds, it is judged as long enough
@@ -202,8 +209,10 @@ class DownloadQueueService : Service() {
                     isRunning
                             // Run as long as there is a queue to process
                             && (instances.isNotEmpty() || queue.isNotEmpty())
-                            // Run as long as there are no app crashes
-                            && lastError == null
+                            // Run unless real safe mode is on
+                            // (Phase 8.46: a stale crash record
+                            // must not freeze the queue)
+                            && !PluginManager.checkSafeModeFile()
                 }
                 .collect { (_, queue, currentDownloads) ->
                     // Remove completed or failed

@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -16,15 +17,28 @@ import com.lagradost.cloudstream3.databinding.HomeCustomCategoryRowBinding
 import com.lagradost.cloudstream3.databinding.HomeCustomProviderHeaderBinding
 import com.lagradost.cloudstream3.databinding.HomeCustomSelectedRowBinding
 import java.util.Collections
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/** Phase 8.44: build/edit one custom home list. */
+/**
+ * Phase 8.44/8.46: build/edit one custom home list. One scrolling
+ * sectioned list (his UI feedback): selected entries on top with
+ * drag-reorder, then every provider's categories under clear
+ * section bars. Providers that declare no mainPage (Netflix-type
+ * multi-provider plugins) get a "tap to load" row — their
+ * categories are discovered by fetching the homepage once.
+ */
 class HomeCustomListEditFragment : Fragment() {
 
     private var binding: FragmentHomeCustomListEditBinding? = null
     private var listId: String? = null
     private val selected = mutableListOf<HomeCustomLists.Entry>()
-    private lateinit var selectedAdapter: SelectedAdapter
-    private lateinit var allAdapter: AllAdapter
+    private var declared: List<Pair<String, List<String>>> = emptyList()
+    private var dynamicProviders: List<String> = emptyList()
+    private val dynamicFetched = mutableMapOf<String, List<String>>()
+    private val fetching = mutableSetOf<String>()
+    private lateinit var adapter: EditAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -51,49 +65,62 @@ class HomeCustomListEditFragment : Fragment() {
                     selected += existing.entries
                 }
         }
+        declared = HomeCustomLists.allProviderCategories()
+        dynamicProviders = HomeCustomLists.dynamicProviders()
 
-        selectedAdapter = SelectedAdapter(selected) { entry ->
-            selected.remove(entry)
-            selectedAdapter.notifyDataSetChanged()
-            allAdapter.notifyDataSetChanged()
-        }
-        b.customEditSelected.layoutManager = LinearLayoutManager(ctx)
-        b.customEditSelected.adapter = selectedAdapter
+        adapter = EditAdapter(
+            isAdded = { entry -> selected.contains(entry) },
+            onRemove = { entry ->
+                selected.remove(entry)
+                rebuild()
+            },
+            onAdd = { entry ->
+                if (!selected.contains(entry)) selected += entry
+                rebuild()
+            },
+            onFetch = { api -> fetchDynamic(api) }
+        )
+        b.customEditList.layoutManager = LinearLayoutManager(ctx)
+        b.customEditList.adapter = adapter
         ItemTouchHelper(object :
-            ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
-            ) {
+            ItemTouchHelper.SimpleCallback(0, 0) {
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int {
+                // Only selected rows drag (they sit right under
+                // the section header, so selected index = pos - 1).
+                return if (viewHolder is EditAdapter.SelHolder) {
+                    makeMovementFlags(
+                        ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+                    )
+                } else 0
+            }
+
             override fun onMove(
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder
             ): Boolean {
-                val from = viewHolder.bindingAdapterPosition
-                val to = target.bindingAdapterPosition
-                if (from < 0 || to < 0) return false
+                if (target !is EditAdapter.SelHolder) return false
+                val from = viewHolder.bindingAdapterPosition - 1
+                val to = target.bindingAdapterPosition - 1
+                if (from !in selected.indices || to !in selected.indices) {
+                    return false
+                }
                 Collections.swap(selected, from, to)
-                selectedAdapter.notifyItemMoved(from, to)
+                adapter.notifyItemMoved(
+                    viewHolder.bindingAdapterPosition,
+                    target.bindingAdapterPosition
+                )
                 return true
             }
 
             override fun onSwiped(
                 viewHolder: RecyclerView.ViewHolder, direction: Int
             ) = Unit
-        }).attachToRecyclerView(b.customEditSelected)
-
-        allAdapter = AllAdapter(
-            groups = HomeCustomLists.allProviderCategories(),
-            isAdded = { api, page ->
-                selected.any { it.apiName == api && it.pageName == page }
-            },
-            onAdd = { api, page ->
-                selected += HomeCustomLists.Entry(api, page)
-                selectedAdapter.notifyDataSetChanged()
-                allAdapter.notifyDataSetChanged()
-            }
-        )
-        b.customEditAll.layoutManager = LinearLayoutManager(ctx)
-        b.customEditAll.adapter = allAdapter
+        }).attachToRecyclerView(b.customEditList)
+        rebuild()
 
         b.customEditSave.setOnClickListener {
             val name = b.customEditName.text?.toString()?.trim().orEmpty()
@@ -126,70 +153,114 @@ class HomeCustomListEditFragment : Fragment() {
         }
     }
 
+    private fun fetchDynamic(api: String) {
+        if (!fetching.add(api)) return
+        rebuild()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val names = withContext(Dispatchers.IO) {
+                HomeCustomLists.fetchDynamicCategories(api)
+            }
+            fetching.remove(api)
+            if (binding == null) return@launch
+            if (names.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    R.string.home_custom_fetch_empty,
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                dynamicFetched[api] = names
+            }
+            rebuild()
+        }
+    }
+
+    private fun rebuild() {
+        adapter.rows = buildRows()
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun buildRows(): List<Row> {
+        val rows = mutableListOf<Row>()
+        rows += Row.SelHeader
+        selected.forEach { rows += Row.SelItem(it) }
+        rows += Row.AllHeader
+        declared.forEach { (api, pages) ->
+            rows += Row.ProvHeader(api, pages.size)
+            pages.forEach {
+                rows += Row.Cat(HomeCustomLists.Entry(api, it))
+            }
+        }
+        dynamicProviders.forEach { api ->
+            val fetched = dynamicFetched[api]
+            if (fetched == null) {
+                rows += Row.Fetch(api, api in fetching)
+            } else {
+                rows += Row.ProvHeader(api, fetched.size)
+                fetched.forEach {
+                    rows += Row.Cat(
+                        HomeCustomLists.Entry(api, it, dynamic = true)
+                    )
+                }
+            }
+        }
+        return rows
+    }
+
     override fun onDestroyView() {
         binding = null
         super.onDestroyView()
     }
 
-    private class SelectedAdapter(
-        private val items: MutableList<HomeCustomLists.Entry>,
-        private val onRemove: (HomeCustomLists.Entry) -> Unit
-    ) : RecyclerView.Adapter<SelectedAdapter.Holder>() {
-
-        class Holder(val b: HomeCustomSelectedRowBinding) :
-            RecyclerView.ViewHolder(b.root)
-
-        override fun onCreateViewHolder(
-            parent: ViewGroup, viewType: Int
-        ): Holder = Holder(
-            HomeCustomSelectedRowBinding.inflate(
-                LayoutInflater.from(parent.context), parent, false
-            )
-        )
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onBindViewHolder(holder: Holder, position: Int) {
-            val entry = items[position]
-            holder.b.customSelName.text = entry.pageName
-            holder.b.customSelApi.text = entry.apiName
-            holder.b.customSelRemove.setOnClickListener { onRemove(entry) }
-        }
+    private sealed interface Row {
+        data object SelHeader : Row
+        data object AllHeader : Row
+        data class SelItem(val entry: HomeCustomLists.Entry) : Row
+        data class ProvHeader(val apiName: String, val count: Int) : Row
+        data class Cat(val entry: HomeCustomLists.Entry) : Row
+        data class Fetch(val apiName: String, val loading: Boolean) : Row
     }
 
-    private sealed class Row {
-        data class Header(val apiName: String) : Row()
-        data class Category(val apiName: String, val pageName: String) : Row()
-    }
-
-    private class AllAdapter(
-        groups: List<Pair<String, List<String>>>,
-        private val isAdded: (String, String) -> Boolean,
-        private val onAdd: (String, String) -> Unit
+    private class EditAdapter(
+        private val isAdded: (HomeCustomLists.Entry) -> Boolean,
+        private val onRemove: (HomeCustomLists.Entry) -> Unit,
+        private val onAdd: (HomeCustomLists.Entry) -> Unit,
+        private val onFetch: (String) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        private val rows: List<Row> = groups.flatMap { (api, pages) ->
-            listOf<Row>(Row.Header(api)) + pages.map {
-                Row.Category(api, it)
-            }
-        }
+        var rows: List<Row> = emptyList()
 
         override fun getItemViewType(position: Int): Int =
-            if (rows[position] is Row.Header) 0 else 1
+            when (rows[position]) {
+                is Row.SelHeader, is Row.AllHeader,
+                is Row.ProvHeader -> 0
+                is Row.SelItem -> 1
+                is Row.Cat -> 2
+                is Row.Fetch -> 3
+            }
 
         override fun onCreateViewHolder(
             parent: ViewGroup, viewType: Int
         ): RecyclerView.ViewHolder {
             val inflater = LayoutInflater.from(parent.context)
-            return if (viewType == 0) {
-                HeaderHolder(
+            return when (viewType) {
+                1 -> SelHolder(
+                    HomeCustomSelectedRowBinding.inflate(
+                        inflater, parent, false
+                    )
+                )
+                2 -> CatHolder(
+                    HomeCustomCategoryRowBinding.inflate(
+                        inflater, parent, false
+                    )
+                )
+                3 -> FetchHolder(
                     HomeCustomProviderHeaderBinding.inflate(
                         inflater, parent, false
                     )
                 )
-            } else {
-                CategoryHolder(
-                    HomeCustomCategoryRowBinding.inflate(
+                else -> HeaderHolder(
+                    HomeCustomProviderHeaderBinding.inflate(
                         inflater, parent, false
                     )
                 )
@@ -201,14 +272,34 @@ class HomeCustomListEditFragment : Fragment() {
         override fun onBindViewHolder(
             holder: RecyclerView.ViewHolder, position: Int
         ) {
+            val ctx = holder.itemView.context
             when (val row = rows[position]) {
-                is Row.Header ->
+                is Row.SelHeader ->
+                    (holder as HeaderHolder).b.customHeaderText.setText(
+                        R.string.home_custom_in_list
+                    )
+                is Row.AllHeader ->
+                    (holder as HeaderHolder).b.customHeaderText.setText(
+                        R.string.home_custom_all_categories
+                    )
+                is Row.ProvHeader ->
                     (holder as HeaderHolder).b.customHeaderText.text =
-                        row.apiName
-                is Row.Category -> {
-                    val b = (holder as CategoryHolder).b
-                    b.customCatName.text = row.pageName
-                    val added = isAdded(row.apiName, row.pageName)
+                        ctx.getString(
+                            R.string.home_custom_section_count,
+                            row.apiName, row.count
+                        )
+                is Row.SelItem -> {
+                    val b = (holder as SelHolder).b
+                    b.customSelName.text = row.entry.pageName
+                    b.customSelApi.text = row.entry.apiName
+                    b.customSelRemove.setOnClickListener {
+                        onRemove(row.entry)
+                    }
+                }
+                is Row.Cat -> {
+                    val b = (holder as CatHolder).b
+                    b.customCatName.text = row.entry.pageName
+                    val added = isAdded(row.entry)
                     b.customCatAdd.setText(
                         if (added) R.string.home_custom_added
                         else R.string.home_custom_add
@@ -216,10 +307,26 @@ class HomeCustomListEditFragment : Fragment() {
                     b.customCatAdd.isEnabled = !added
                     b.customCatAdd.alpha = if (added) 0.45f else 1f
                     b.root.setOnClickListener {
-                        if (!added) onAdd(row.apiName, row.pageName)
+                        if (!added) onAdd(row.entry)
                     }
                     b.customCatAdd.setOnClickListener {
-                        if (!added) onAdd(row.apiName, row.pageName)
+                        if (!added) onAdd(row.entry)
+                    }
+                }
+                is Row.Fetch -> {
+                    val b = (holder as FetchHolder).b
+                    val label = if (row.loading) {
+                        ctx.getString(R.string.home_custom_loading)
+                    } else {
+                        ctx.getString(
+                            R.string.home_custom_fetch_categories
+                        )
+                    }
+                    b.customHeaderText.text = "${row.apiName} — $label"
+                    b.customHeaderText.alpha =
+                        if (row.loading) 0.5f else 1f
+                    b.root.setOnClickListener {
+                        if (!row.loading) onFetch(row.apiName)
                     }
                 }
             }
@@ -228,7 +335,13 @@ class HomeCustomListEditFragment : Fragment() {
         class HeaderHolder(val b: HomeCustomProviderHeaderBinding) :
             RecyclerView.ViewHolder(b.root)
 
-        class CategoryHolder(val b: HomeCustomCategoryRowBinding) :
+        class SelHolder(val b: HomeCustomSelectedRowBinding) :
+            RecyclerView.ViewHolder(b.root)
+
+        class CatHolder(val b: HomeCustomCategoryRowBinding) :
+            RecyclerView.ViewHolder(b.root)
+
+        class FetchHolder(val b: HomeCustomProviderHeaderBinding) :
             RecyclerView.ViewHolder(b.root)
     }
 }

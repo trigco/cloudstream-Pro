@@ -17,7 +17,13 @@ import org.json.JSONObject
  */
 object HomeCustomLists {
 
-    data class Entry(val apiName: String, val pageName: String)
+    data class Entry(
+        val apiName: String,
+        val pageName: String,
+        /** True when the provider declares no mainPage and the
+         *  category was discovered by fetching its homepage. */
+        val dynamic: Boolean = false
+    )
 
     data class CustomList(
         val id: String,
@@ -42,7 +48,9 @@ object HomeCustomLists {
                 val e = entriesArr.optJSONObject(j) ?: return@mapNotNull null
                 val api = e.optString("a")
                 val page = e.optString("p")
-                if (api.isBlank() || page.isBlank()) null else Entry(api, page)
+                val dyn = e.optInt("d", 0) == 1
+                if (api.isBlank() || page.isBlank()) null
+                else Entry(api, page, dyn)
             }
             val id = obj.optString("id")
             val name = obj.optString("name")
@@ -59,6 +67,7 @@ object HomeCustomLists {
                 entriesArr.put(JSONObject().apply {
                     put("a", e.apiName)
                     put("p", e.pageName)
+                    put("d", if (e.dynamic) 1 else 0)
                 })
             }
             arr.put(JSONObject().apply {
@@ -96,6 +105,33 @@ object HomeCustomLists {
         val id = activeId(ctx) ?: return null
         return getLists(ctx).firstOrNull { it.id == id }
     }
+
+    /**
+     * Phase 8.46: providers that declare no mainPage (several
+     * multi-provider plugins) expose their categories only by
+     * fetching the homepage — discover them on demand.
+     */
+    suspend fun fetchDynamicCategories(apiName: String): List<String> {
+        val api = APIHolder.getApiFromNameNull(apiName) ?: return emptyList()
+        val repo = com.lagradost.cloudstream3.ui.APIRepository(api)
+        if (!repo.hasMainPage) return emptyList()
+        val res = repo.getMainPage(1, null)
+        if (res !is com.lagradost.cloudstream3.mvvm.Resource.Success) {
+            return emptyList()
+        }
+        return res.value.filterNotNull()
+            .flatMap { it.items }
+            .map { it.name }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    /** Providers whose categories can only be discovered by fetching. */
+    fun dynamicProviders(): List<String> =
+        APIHolder.apis
+            .filter { it.name.isNotBlank() && it.name != "None" }
+            .filter { it.mainPage.isEmpty() }
+            .map { it.name }
 
     fun newId(): String =
         System.currentTimeMillis().toString(36) +
