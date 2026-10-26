@@ -42,6 +42,7 @@ import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE_BACKUP
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.DataStoreHelper.deleteAllResumeStateIds
 import com.lagradost.cloudstream3.utils.DataStoreHelper.getAllResumeStateIds
 import com.lagradost.cloudstream3.utils.DataStoreHelper.getAllWatchStateIds
@@ -433,10 +434,17 @@ class HomeViewModel : ViewModel() {
 
                     //val home = data.value
                     if (items.isNotEmpty()) {
+                        // Phase 8.50: Family Mode keeps NSFW items
+                        // out of the hero pool and random strip.
+                        val familyOn = FamilyMode.isEnabled()
                         val currentList =
                             items.shuffled().filter { it.list.isNotEmpty() }
                                 .flatMap { it.list }
-                                .distinctBy { it.url }.toList()
+                                .distinctBy { it.url }
+                                .filterNot {
+                                    familyOn && FamilyMode.isAdultItem(it.type)
+                                }
+                                .toList()
 
                         if (currentList.isNotEmpty()) {
                             val randomItems =
@@ -596,7 +604,11 @@ class HomeViewModel : ViewModel() {
             // preview after EACH successful load, so the hero
             // appears with the first backdrop that is ready.
             val flat = built.values.flatMap { it.list.list }
-                .distinctBy { it.url }.shuffled()
+                .distinctBy { it.url }
+                .filterNot {
+                    FamilyMode.isEnabled() && FamilyMode.isAdultItem(it.type)
+                }
+                .shuffled()
             currentShuffledList = flat
             _randomItems.postValue(flat)
             _preview.postValue(Resource.Loading())

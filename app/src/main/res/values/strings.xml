@@ -74,6 +74,9 @@
     <string name="custom_home_lists_key">custom_home_lists</string>
     <string name="home_custom_lists_title">Custom Home Lists</string>
     <string name="home_custom_categories_row">Categories</string>
+    <string name="family_mode_title">Family Mode</string>
+    <string name="family_mode_enabled">Family Mode on — adult providers and content are hidden</string>
+    <string name="family_mode_disabled">Family Mode off</string>
     <string name="home_custom_lists_summary">Build home lists from any provider\'s categories</string>
     <string name="home_custom_providers">Providers…</string>
     <string name="home_custom_manage">Manage custom lists…</string>

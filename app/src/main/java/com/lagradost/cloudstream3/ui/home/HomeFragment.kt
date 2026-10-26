@@ -89,6 +89,7 @@ import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.attachBackPres
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.detachBackPressedCallback
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.EmptyEvent
 import com.lagradost.cloudstream3.utils.SubtitleHelper.getFlagFromIso
 import com.lagradost.cloudstream3.utils.TvChannelUtils
@@ -581,6 +582,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         addAll(remainingApis)
                     }
 
+                    // Phase 8.50: Family Mode hides adult providers
+                    // from the picker entirely.
+                    if (FamilyMode.isEnabled()) {
+                        currentValidApis.removeAll {
+                            FamilyMode.isAdultApi(it)
+                        }
+                    }
+
                     val names = currentValidApis.map {
                         val displayName = getDisplayName(it.name)
                         if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
@@ -800,9 +809,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             val hidden = hiddenCategoryNames()
             lastHomeCopies.filterNot { it.list.name in hidden }
         }
-        homeCategoryItems = visible.toMutableList()
+        // Phase 8.50: Family Mode strips NSFW items from every
+        // row (rows left empty disappear) on all home variants.
+        val visibleFiltered = if (FamilyMode.isEnabled()) {
+            visible.mapNotNull { row ->
+                val items = row.list.list.filterNot {
+                    FamilyMode.isAdultItem(it.type)
+                }
+                if (items.isEmpty()) null
+                else row.copy(list = row.list.copy(list = items))
+            }
+        } else {
+            visible
+        }
+        homeCategoryItems = visibleFiltered.toMutableList()
         (binding?.homeMasterRecycler?.adapter as? ParentItemAdapter)
-            ?.submitList(visible)
+            ?.submitList(visibleFiltered)
     }
 
     private fun showCategoryMenu(item: HomeViewModel.ExpandableHomepageList) {
@@ -1030,6 +1052,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     @SuppressLint("SetTextI18n")
+    // Phase 8.50: returning from Settings re-applies the row
+    // filters, so a Family Mode toggle takes effect at once.
+    override fun onResume() {
+        super.onResume()
+        if (lastHomeCopies.isNotEmpty()) {
+            applyHomeCategories()
+        }
+    }
+
     override fun onBindingCreated(binding: FragmentHomeBinding) {
         context?.let { HomeChildItemAdapter.updatePosterSize(it) }
         (activity as? ComponentActivity)?.attachBackPressedCallback("HomeFragment_BackPress") {

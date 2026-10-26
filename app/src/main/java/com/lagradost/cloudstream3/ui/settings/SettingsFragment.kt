@@ -16,6 +16,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.core.view.children
 import androidx.core.view.doOnLayout
@@ -23,6 +24,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
@@ -41,6 +43,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.GitInfo.currentCommitHash
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.clipboardHelper
@@ -589,6 +592,25 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
             // (his ask) and opens the custom home list manager.
             settingsCategories.setOnClickListener {
                 navigate(R.id.global_to_navigation_home_custom_lists)
+            }
+
+            // Phase 8.50: Family Mode switch (Content group) —
+            // hides adult providers and NSFW content app-wide.
+            val familyPrefs = PreferenceManager
+                .getDefaultSharedPreferences(requireContext())
+            settingsFamilyModeSwitch.isChecked =
+                familyPrefs.getBoolean(FamilyMode.KEY, false)
+            settingsFamilyMode.setOnClickListener {
+                val enabled = !settingsFamilyModeSwitch.isChecked
+                settingsFamilyModeSwitch.isChecked = enabled
+                familyPrefs.edit()
+                    .putBoolean(FamilyMode.KEY, enabled).apply()
+                Toast.makeText(
+                    requireContext(),
+                    if (enabled) R.string.family_mode_enabled
+                    else R.string.family_mode_disabled,
+                    Toast.LENGTH_SHORT
+                ).show()
             }
 
             if (isLayout(TV)) {

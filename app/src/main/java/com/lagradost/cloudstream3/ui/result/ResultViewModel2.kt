@@ -90,6 +90,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.CastHelper.startCast
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.Coroutines.ioWork
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.Coroutines.ioWorkSafe
 import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE
@@ -290,9 +291,23 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         ),
         nextAiringDate = nextAiringDate,
         nextAiringEpisode = nextAiringEpisode,
-        posterImage = posterUrl ?: backgroundPosterUrl,
+        // Phase 8.50: Family Mode shows no art for NSFW titles
+        // (the details page falls back to the placeholder).
+        posterImage = if (FamilyMode.isEnabled() &&
+            FamilyMode.isAdultItem(type)
+        ) {
+            null
+        } else {
+            posterUrl ?: backgroundPosterUrl
+        },
         posterHeaders = posterHeaders,
-        posterBackgroundImage = backgroundPosterUrl ?: posterUrl,
+        posterBackgroundImage = if (FamilyMode.isEnabled() &&
+            FamilyMode.isAdultItem(type)
+        ) {
+            null
+        } else {
+            backgroundPosterUrl ?: posterUrl
+        },
         titleText = txt(name),
         url = url,
         tags = tags ?: emptyList(),

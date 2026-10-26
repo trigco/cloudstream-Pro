@@ -314,6 +314,13 @@ object FeedPlayer {
     private var resumeSeekDone = false
     private var extracting = false
     private var pendingRetry = false
+    // Phase 8.50: set by replayCurrent() after a main-player
+    // handoff — the main player saved a NEWER position than the
+    // paused feed player holds, so play() must not overwrite the
+    // stored position with the stale one, and must reopen the
+    // episode that was handed off (not episode 0).
+    private var preserveStoredPosition = false
+    private var pendingStartIndex: Int? = null
     private var preferredQuality = 0
     private val triedLinks = mutableSetOf<Int>()
     private var appContext: Context? = null
@@ -446,7 +453,11 @@ object FeedPlayer {
             return
         }
         val player = ensurePlayer(context)
-        savePosition()
+        if (preserveStoredPosition) {
+            preserveStoredPosition = false
+        } else {
+            savePosition()
+        }
         loadJob?.cancel()
         val gen = ++generation
         debugLog.clear()
@@ -523,14 +534,25 @@ object FeedPlayer {
             // Phase 8.42: fetch the same title on another
             // provider in parallel, ready to take over.
             startBackupPrefetch(gen)
-            extractAndPlay(0, gen)
+            val startIndex = pendingStartIndex
+                ?.takeIf { it in episodes.indices } ?: 0
+            pendingStartIndex = null
+            extractAndPlay(startIndex, gen)
         }
     }
 
-    /** Replays the current item from scratch (used after a handoff). */
+    /**
+     * Replays the current item after a main-player handoff
+     * (Phase 8.50): resumes from the position the MAIN player
+     * saved — play() must not stamp the feed player's stale
+     * paused position over it, and the handed-off episode
+     * reopens instead of episode 0.
+     */
     fun replayCurrent(context: Context) {
         val url = currentUrl ?: return
         val apiName = currentApiName ?: return
+        preserveStoredPosition = true
+        pendingStartIndex = episodeIndex
         play(context, url, apiName, currentName ?: url, currentPoster, force = true)
     }
 

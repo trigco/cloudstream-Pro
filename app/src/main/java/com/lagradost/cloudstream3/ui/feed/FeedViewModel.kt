@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
+import com.lagradost.cloudstream3.utils.FamilyMode
 import kotlinx.coroutines.launch
 
 /** One feed card: a provider search result plus the provider it came from. */
@@ -174,7 +175,11 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Phase 8.19: search every provider at once (used by the feed search). */
     suspend fun searchAll(query: String): List<FeedEntry> {
-        val providers = apis.filter { it.hasMainPage && it.name != "None" }
+        val familyOn = FamilyMode.isEnabled()
+        val providers = apis.filter {
+            it.hasMainPage && it.name != "None" &&
+                (!familyOn || !FamilyMode.isAdultApi(it))
+        }
         val results: List<List<FeedEntry>> = providers.amap { api ->
             try {
                 when (val res = APIRepository(api).search(query, 1)) {
@@ -186,11 +191,20 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         val seen = mutableSetOf<String>()
-        return results.flatten().filter { seen.add(it.response.url) }
+        return results.flatten()
+            .filterNot {
+                FamilyMode.isEnabled() &&
+                    FamilyMode.isAdultItem(it.response.type)
+            }
+            .filter { seen.add(it.response.url) }
     }
 
     private suspend fun buildFeed(page: Int): List<FeedEntry> {
-        val providers = apis.filter { it.hasMainPage && it.name != "None" }
+        val familyOn = FamilyMode.isEnabled()
+        val providers = apis.filter {
+            it.hasMainPage && it.name != "None" &&
+                (!familyOn || !FamilyMode.isAdultApi(it))
+        }
         val perProvider: List<List<FeedEntry>> = providers.amap { api ->
             try {
                 when (val res = APIRepository(api).getMainPage(page, null)) {
@@ -198,6 +212,9 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                         .filterNotNull()
                         .flatMap { it.items }
                         .flatMap { it.list }
+                        .filterNot {
+                            familyOn && FamilyMode.isAdultItem(it.type)
+                        }
                         .take(40)
                         .map { FeedEntry(it, api.name) }
 

@@ -2287,6 +2287,14 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 // If no plugins bring up extensions screen
             } else if (PluginManager.getPluginsOnline().isEmpty()
                 && PluginManager.getPluginsLocal().isEmpty()
+                // Phase 8.50: on a fresh install the bundled
+                // default plugins are still downloading in the
+                // background — landing a new user on the raw
+                // repository page first is confusing; Home opens
+                // instead and the providers arrive on their own.
+                && !settingsManager.getBoolean(
+                    CloudStreamApp.DEFAULT_PLUGINS_PENDING, false
+                )
 //                && PREBUILT_REPOSITORIES.isNotEmpty()
             ) {
                 navController.navigate(
