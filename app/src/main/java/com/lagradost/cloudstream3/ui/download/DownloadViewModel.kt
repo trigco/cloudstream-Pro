@@ -36,7 +36,9 @@ import com.lagradost.cloudstream3.utils.DataStoreHelper.getLastWatched
 import com.lagradost.cloudstream3.utils.ResourceLiveData
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.deleteFilesAndUpdateSettings
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.downloadStatusEvent
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.downloadDeleteEvent
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.getDownloadFileInfo
 import kotlinx.coroutines.Dispatchers
@@ -74,11 +76,25 @@ class DownloadViewModel : ViewModel() {
         // anywhere in the app (result page button, queue, notification, etc.). See
         // onDownloadDeleted for the rationale (issue #1227).
         downloadDeleteEvent += ::onDownloadDeleted
+        // Phase 8.47: refresh live when a download completes,
+        // so it appears on the Downloads page without leaving
+        // and re-entering the screen.
+        downloadStatusEvent += ::onDownloadStatusChanged
     }
 
     override fun onCleared() {
         downloadDeleteEvent -= ::onDownloadDeleted
+        downloadStatusEvent -= ::onDownloadStatusChanged
         super.onCleared()
+    }
+
+    private fun onDownloadStatusChanged(
+        event: Pair<Int, VideoDownloadManager.DownloadType>
+    ) {
+        if (event.second == VideoDownloadManager.DownloadType.IsDone) {
+            val context = CloudStreamApp.context ?: return
+            updateHeaderList(context)
+        }
     }
 
     fun cancelSelection() {

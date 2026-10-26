@@ -588,33 +588,45 @@ class HomeViewModel : ViewModel() {
             loadedCustomSignature = customSignature(list)
             _page.postValue(Resource.Success(expandable))
 
-            // Hero: enrich a few shuffled posters, each loaded
-            // through its OWN provider.
+            // Phase 8.47: the hero used to wait for up to 3
+            // full page loads before posting anything — on
+            // slow providers it sat empty for ages (his
+            // report). Rows and the hero strip post NOW; the
+            // enrichment runs in its own job and re-posts the
+            // preview after EACH successful load, so the hero
+            // appears with the first backdrop that is ready.
             val flat = built.values.flatMap { it.list.list }
                 .distinctBy { it.url }.shuffled()
             currentShuffledList = flat
-            previewResponses.clear()
-            previewResponsesAdded.clear()
-            for (sr in flat.take(10)) {
-                if (previewResponses.size >= 3) break
-                val apiX = getApiFromNameNull(sr.apiName) ?: continue
-                val r = APIRepository(apiX).load(sr.url)
-                if (r is Resource.Success) {
-                    previewResponses.add(r.value)
-                    previewResponsesAdded.add(sr.url)
-                }
-            }
             _randomItems.postValue(flat)
-            _preview.postValue(
+            _preview.postValue(Resource.Loading())
+            ioSafe {
+                previewResponses.clear()
+                previewResponsesAdded.clear()
+                for (sr in flat.take(10)) {
+                    if (previewResponses.size >= 3) break
+                    val apiX = getApiFromNameNull(sr.apiName)
+                        ?: continue
+                    val r = APIRepository(apiX).load(sr.url)
+                    if (r is Resource.Success) {
+                        previewResponses.add(r.value)
+                        previewResponsesAdded.add(sr.url)
+                        _preview.postValue(
+                            Resource.Success(
+                                (previewResponsesAdded.size <
+                                    flat.size) to previewResponses
+                            )
+                        )
+                    }
+                }
                 if (previewResponses.isEmpty()) {
-                    Resource.Failure(false, "No homepage responses")
-                } else {
-                    Resource.Success(
-                        (previewResponsesAdded.size < flat.size) to
-                            previewResponses
+                    _preview.postValue(
+                        Resource.Failure(
+                            false, "No homepage responses"
+                        )
                     )
                 }
-            )
+            }
             isCurrentlyLoadingName = null
         }
     }

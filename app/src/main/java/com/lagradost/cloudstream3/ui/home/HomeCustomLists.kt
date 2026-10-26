@@ -126,11 +126,15 @@ object HomeCustomLists {
             .distinct()
     }
 
-    /** Providers whose categories can only be discovered by fetching. */
+    /** Providers whose categories can only be discovered by
+     * fetching: no declared pages at all, or only BLANK page
+     * names (the Netflix/Prime/Hotstar-type plugins declare a
+     * single nameless entry and build their real categories
+     * inside getMainPage — Phase 8.47, his report). */
     fun dynamicProviders(): List<String> =
         APIHolder.apis
             .filter { it.name.isNotBlank() && it.name != "None" }
-            .filter { it.mainPage.isEmpty() }
+            .filter { api -> api.mainPage.all { it.name.isBlank() } }
             .map { it.name }
 
     fun newId(): String =
@@ -145,6 +149,9 @@ object HomeCustomLists {
     fun allProviderCategories(): List<Pair<String, List<String>>> =
         APIHolder.apis
             .filter { it.name.isNotBlank() && it.name != "None" }
-            .map { api -> api.name to api.mainPage.map { it.name } }
+            .map { api ->
+                api.name to api.mainPage.map { it.name }
+                    .filter { name -> name.isNotBlank() }
+            }
             .filter { it.second.isNotEmpty() }
 }

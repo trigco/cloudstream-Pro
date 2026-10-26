@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -33,6 +35,22 @@ class HomeCustomListsFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        // Phase 8.47: status-bar inset — these are plain
+        // Fragments, so no BaseFragment fixLayout keeps the
+        // title / name field from sliding under the status bar.
+        val insetTarget = view
+        val baseTop = insetTarget.paddingTop
+        ViewCompat.setOnApplyWindowInsetsListener(insetTarget) { v, insets ->
+            val top = insets.getInsets(
+                WindowInsetsCompat.Type.statusBars()
+            ).top
+            v.setPadding(
+                v.paddingLeft, baseTop + top,
+                v.paddingRight, v.paddingBottom
+            )
+            insets
+        }
+        insetTarget.requestApplyInsets()
         super.onViewCreated(view, savedInstanceState)
         binding?.customListsRecycler?.layoutManager =
             LinearLayoutManager(requireContext())

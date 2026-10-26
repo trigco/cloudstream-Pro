@@ -5,6 +5,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -54,6 +56,22 @@ class HomeCustomListEditFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Phase 8.47: status-bar inset — these are plain
+        // Fragments, so no BaseFragment fixLayout keeps the
+        // title / name field from sliding under the status bar.
+        val insetTarget = view
+        val baseTop = insetTarget.paddingTop
+        ViewCompat.setOnApplyWindowInsetsListener(insetTarget) { v, insets ->
+            val top = insets.getInsets(
+                WindowInsetsCompat.Type.statusBars()
+            ).top
+            v.setPadding(
+                v.paddingLeft, baseTop + top,
+                v.paddingRight, v.paddingBottom
+            )
+            insets
+        }
+        insetTarget.requestApplyInsets()
         val b = binding ?: return
         listId = arguments?.getString("listId")
         val ctx = requireContext()

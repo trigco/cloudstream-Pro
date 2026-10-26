@@ -393,7 +393,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             }
         }
 
-        fun Context.selectHomepage(selectedApiName: String?, callback: (String) -> Unit) {
+        fun Context.selectHomepage(
+            selectedApiName: String?,
+            onCustomSelect: ((HomeCustomLists.CustomList) -> Unit)? = null,
+            callback: (String) -> Unit
+        ) {
             val validAPIs = filterProviderByPreferredMedia().toMutableList()
 
             validAPIs.add(0, randomApi)
@@ -411,6 +415,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             )
 
             builder.setContentView(binding.root)
+            // Phase 8.47: his custom lists are appended to this
+            // same picker (his request) so providers and custom
+            // lists are managed in one place.
+            val customLists = HomeCustomLists.getLists(this)
             builder.show()
             builder.let { dialog ->
                 val isMultiLang = getApiProviderLangSettings().let { set ->
@@ -492,12 +500,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                             )
                         }
 
-                        val providerApi = currentValidApis[position]
+                        val providerApi =
+                            currentValidApis.getOrNull(position)
                         val isPinned =
-                            pinnedphashset.contains(providerApi.name)
+                            providerApi != null &&
+                                pinnedphashset.contains(providerApi.name)
                         pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
 
-                        val pluginInstance = providerApi.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
+                        val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
                         val isDownloadedPluginWithSettings = pluginInstance?.openSettings != null && !isLayout(TV)
 
                         settingsIcon.visibility = if (isDownloadedPluginWithSettings) View.VISIBLE else View.GONE
@@ -519,11 +529,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 listView?.choiceMode = AbsListView.CHOICE_MODE_SINGLE
 
                 listView?.setOnItemClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty()) {
+                    if (i in currentValidApis.indices) {
                         currentApiName = currentValidApis[i].name
                         //to switch to apply simply remove this
                         currentApiName.let(callback)
                         dialog.dismissSafe()
+                    } else if (onCustomSelect != null) {
+                        val list = customLists.getOrNull(
+                            i - currentValidApis.size
+                        )
+                        if (list != null) {
+                            onCustomSelect(list)
+                            dialog.dismissSafe()
+                        }
                     }
                 }
 
@@ -567,14 +585,28 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         val displayName = getDisplayName(it.name)
                         if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
                     }
-                    val index = currentValidApis.map { it.name }.indexOf(currentApiName)
+                    val customNames = customLists.map { "\u2605 " + it.name }
+                    var index = currentValidApis.map { it.name }
+                        .indexOf(currentApiName)
+                    val activeCustomPos =
+                        HomeCustomLists.activeList(this@selectHomepage)
+                            ?.let { active ->
+                                customLists.indexOfFirst {
+                                    it.id == active.id
+                                }
+                            } ?: -1
+                    if (activeCustomPos >= 0) {
+                        index = currentValidApis.size + activeCustomPos
+                    }
                     listView?.setItemChecked(index, true)
-                    arrayAdapter.addAll(names)
+                    arrayAdapter.addAll(names + customNames)
                     arrayAdapter.notifyDataSetChanged()
                 }
                 // pin provider on hold
                 listView?.setOnItemLongClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty() && i > 1) {
+                    if (currentValidApis.isNotEmpty() && i > 1 &&
+                        i in currentValidApis.indices
+                    ) {
                         val pinnedp = DataStoreHelper.pinnedProviders.toMutableList()
                         val thisapi = currentValidApis[i].name
                         if (pinnedp.contains(thisapi)) {
@@ -704,7 +736,12 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         // Phase 8.46: back to the plain provider picker (his
         // correction — custom lists live in Settings → Content →
         // Categories and show on Home when active, not here).
-        view.context.selectHomepage(currentApiName) { api ->
+        view.context.selectHomepage(
+            currentApiName,
+            onCustomSelect = { list ->
+                homeViewModel.activateCustomList(list)
+            }
+        ) { api ->
             // Picking a provider leaves custom mode (the custom
             // list itself is managed in Settings, not here).
             homeViewModel.exitCustomMode()

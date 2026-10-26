@@ -1547,14 +1547,13 @@ object VideoDownloadManager {
         try {
             stream = setupStream(baseFile, name, folder, "mp4", false)
             metadata.type = DownloadType.IsPending
-            metadata.setDownloadFileInfoTemplate(
-                DownloadedFileInfo(
-                    totalBytes = 0,
-                    relativePath = folder,
-                    displayName = displayName,
-                    basePath = basePath
-                )
+            val fileInfoTemplate = DownloadedFileInfo(
+                totalBytes = 0,
+                relativePath = folder,
+                displayName = displayName,
+                basePath = basePath
             )
+            metadata.setDownloadFileInfoTemplate(fileInfoTemplate)
 
             val pollJob = launch {
                 var last = 0L
@@ -1601,6 +1600,16 @@ object VideoDownloadManager {
                 metadata.addBytes(size - metadata.bytesDownloaded)
                 metadata.addBytesWritten(size - metadata.bytesWritten)
             }
+            // Phase 8.47: persist the FINAL size into the
+            // saved file info. DownloadMetaData.close() only
+            // re-saves file info for HLS / unknown totals, so
+            // without this the info stayed totalBytes = 0 and
+            // the Downloads page filtered the finished download
+            // out entirely (his report: Download Done
+            // notification arrived, Downloads page stayed empty).
+            metadata.setDownloadFileInfoTemplate(
+                fileInfoTemplate.copy(totalBytes = size)
+            )
             metadata.totalBytes = size
             metadata.type = DownloadType.IsDone
             DOWNLOAD_SUCCESS

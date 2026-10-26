@@ -117,13 +117,73 @@ class DownloadQueueService : Service() {
             resources.getQuantityString(R.plurals.downloads_queued, queued).format(queued)
 
         val newNotification = baseNotification
+            // Phase 8.47: clear any live-progress title/bar a
+            // progress update put on the shared builder.
+            .setContentTitle(null)
             .setContentText(activeDownloads)
             .setSubText(activeQueue)
+            .setProgress(0, 0, false)
             .build()
 
         safe {
             NotificationManagerCompat.from(context)
                 .notify(DOWNLOAD_QUEUE_NOTIFICATION_ID, newNotification)
+        }
+    }
+
+    // Phase 8.47: live progress on the foreground notification
+    // (his ask) — title = the active download, text = percent
+    // and MB, with a real progress bar; unknown-total downloads
+    // (DASH exports) show MB so far with an indeterminate bar.
+    private var lastProgressNotifyMs = 0L
+    val queueProgressListener = { event: Triple<Int, Long, Long> ->
+        val now = System.currentTimeMillis()
+        if (now - lastProgressNotifyMs >= 1000L) {
+            lastProgressNotifyMs = now
+            updateProgressNotification(event.first, event.second, event.third)
+        }
+    }
+
+    private fun updateProgressNotification(
+        id: Int, downloaded: Long, total: Long
+    ) {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) return
+        val wrapper = downloadInstances.value
+            .firstOrNull { it.downloadQueueWrapper.id == id }
+            ?.downloadQueueWrapper ?: return
+        val name = wrapper.downloadItem?.resultName
+            ?: wrapper.resumePackage?.item?.ep?.mainName ?: return
+        val queued = DownloadQueueManager.queue.value.size
+        val activeQueue =
+            resources.getQuantityString(R.plurals.downloads_queued, queued)
+                .format(queued)
+        val mb = "%.1f MB"
+        val builder = baseNotification
+            .setContentTitle(name)
+            .setSubText(activeQueue)
+        if (total > 0) {
+            val pct = (downloaded * 100 / total).toInt()
+                .coerceIn(0, 100)
+            builder.setContentText(
+                "$pct% \u2022 " + getString(
+                    R.string.download_queue_progress,
+                    mb.format(downloaded / 1000000f),
+                    mb.format(total / 1000000f)
+                )
+            ).setProgress(100, pct, false)
+        } else {
+            builder.setContentText(
+                getString(
+                    R.string.download_queue_so_far,
+                    mb.format(downloaded / 1000000f)
+                )
+            ).setProgress(0, 0, true)
+        }
+        safe {
+            NotificationManagerCompat.from(this)
+                .notify(DOWNLOAD_QUEUE_NOTIFICATION_ID, builder.build())
         }
     }
 
@@ -163,6 +223,7 @@ class DownloadQueueService : Service() {
         }
 
         downloadEvent += downloadEventListener
+        VideoDownloadManager.downloadProgressEvent += queueProgressListener
 
         val queueJob = ioSafe {
             // Ensure this is up to date to prevent race conditions with MainActivity launches
@@ -270,6 +331,7 @@ class DownloadQueueService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "Download queue service stopped.")
         downloadEvent -= downloadEventListener
+        VideoDownloadManager.downloadProgressEvent -= queueProgressListener
         isRunning = false
         super.onDestroy()
     }
