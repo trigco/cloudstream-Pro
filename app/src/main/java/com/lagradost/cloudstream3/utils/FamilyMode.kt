@@ -66,7 +66,39 @@ object FamilyMode {
         "fuck", "masturbat", "squirt"
     )
 
+    /**
+     * Phase 8.53: well-known 18+ titles (IMDb/TV-parental
+     * rated, erotic franchises) whose names carry NO keyword —
+     * matched against the normalised title (lowercase, every
+     * non-alphanumeric run collapsed to one space).
+     */
+    private val KNOWN_18_TITLES = listOf(
+        "fifty shades", "365 days", "365 dni", "dark desire",
+        "lust stories", "gandii baat", "charmsukh", "mastram",
+        "rasbhari", "palang tod", "basic instinct", "showgirls",
+        "euphoria", "toy boy", "sex life"
+    )
+
+    /** Innocent words that merely contain "sex". */
+    private val SEX_SAFE_TOKENS = setOf(
+        "essex", "sussex", "middlesex", "sexton", "sextant",
+        "sexton", "sexagesimal"
+    )
+
     private val TOKEN_SPLIT = Regex("[^a-z0-9]+")
+    private val NORMALISE = Regex("[^a-z0-9]+")
+
+    /**
+     * Phase 8.53 (his instruction: "regex method use koro"):
+     * providers glue keywords onto other words — "MovieXXX",
+     * "SexStory", "XXXMovie". Split case transitions and
+     * letter/digit boundaries first so the tokens surface.
+     */
+    private fun unglue(name: String): String = name
+        .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+        .replace(Regex("(?<=[A-Z])(?=[A-Z][a-z])"), " ")
+        .replace(Regex("(?<=[a-zA-Z])(?=[0-9])"), " ")
+        .replace(Regex("(?<=[0-9])(?=[a-zA-Z])"), " ")
 
     fun isEnabled(): Boolean = try {
         val ctx = CloudStreamApp.context ?: return false
@@ -84,12 +116,20 @@ object FamilyMode {
 
     fun isAdultTitle(name: String?): Boolean {
         if (name.isNullOrBlank()) return false
-        val lower = name.lowercase()
+        val spaced = unglue(name)
+        val lower = spaced.lowercase()
         if (ADULT_TITLE_PHRASES.any { lower.contains(it) }) return true
+        val normalised = lower.replace(NORMALISE, " ").trim()
+        if (KNOWN_18_TITLES.any { normalised.contains(it) }) return true
         val tokens = lower.split(TOKEN_SPLIT).filter { it.isNotEmpty() }
         return tokens.any { token ->
             token in ADULT_TITLE_WORDS ||
-                ADULT_TITLE_STEMS.any { token.startsWith(it) }
+                ADULT_TITLE_STEMS.any { token.startsWith(it) } ||
+                // Phase 8.53: keywords glued INSIDE a word
+                // ("hotsex", "sexcam", "moviexxx") — tokenised
+                // matching alone missed them (his report).
+                token.contains("xxx") ||
+                (token.contains("sex") && token !in SEX_SAFE_TOKENS)
         }
     }
 

@@ -40,6 +40,10 @@ class HomeCustomListEditFragment : Fragment() {
     private var dynamicProviders: List<String> = emptyList()
     private val dynamicFetched = mutableMapOf<String, List<String>>()
     private val fetching = mutableSetOf<String>()
+    // Phase 8.53: provider sections start collapsed — with many
+    // providers the builder was one endless scroll. Only the
+    // header chevron toggles a section (his exact request).
+    private val expandedProviders = mutableSetOf<String>()
     private lateinit var adapter: EditAdapter
 
     override fun onCreateView(
@@ -96,7 +100,14 @@ class HomeCustomListEditFragment : Fragment() {
                 if (!selected.contains(entry)) selected += entry
                 rebuild()
             },
-            onFetch = { api -> fetchDynamic(api) }
+            onFetch = { api -> fetchDynamic(api) },
+            isExpanded = { api -> api in expandedProviders },
+            onToggle = { api ->
+                if (!expandedProviders.add(api)) {
+                    expandedProviders.remove(api)
+                }
+                rebuild()
+            }
         )
         b.customEditList.layoutManager = LinearLayoutManager(ctx)
         b.customEditList.adapter = adapter
@@ -205,8 +216,10 @@ class HomeCustomListEditFragment : Fragment() {
         rows += Row.AllHeader
         declared.forEach { (api, pages) ->
             rows += Row.ProvHeader(api, pages.size)
-            pages.forEach {
-                rows += Row.Cat(HomeCustomLists.Entry(api, it))
+            if (api in expandedProviders) {
+                pages.forEach {
+                    rows += Row.Cat(HomeCustomLists.Entry(api, it))
+                }
             }
         }
         dynamicProviders.forEach { api ->
@@ -215,10 +228,12 @@ class HomeCustomListEditFragment : Fragment() {
                 rows += Row.Fetch(api, api in fetching)
             } else {
                 rows += Row.ProvHeader(api, fetched.size)
-                fetched.forEach {
-                    rows += Row.Cat(
-                        HomeCustomLists.Entry(api, it, dynamic = true)
-                    )
+                if (api in expandedProviders) {
+                    fetched.forEach {
+                        rows += Row.Cat(
+                            HomeCustomLists.Entry(api, it, dynamic = true)
+                        )
+                    }
                 }
             }
         }
@@ -243,7 +258,9 @@ class HomeCustomListEditFragment : Fragment() {
         private val isAdded: (HomeCustomLists.Entry) -> Boolean,
         private val onRemove: (HomeCustomLists.Entry) -> Unit,
         private val onAdd: (HomeCustomLists.Entry) -> Unit,
-        private val onFetch: (String) -> Unit
+        private val onFetch: (String) -> Unit,
+        private val isExpanded: (String) -> Boolean,
+        private val onToggle: (String) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         var rows: List<Row> = emptyList()
@@ -292,20 +309,37 @@ class HomeCustomListEditFragment : Fragment() {
         ) {
             val ctx = holder.itemView.context
             when (val row = rows[position]) {
-                is Row.SelHeader ->
-                    (holder as HeaderHolder).b.customHeaderText.setText(
+                is Row.SelHeader -> {
+                    val b = (holder as HeaderHolder).b
+                    b.customHeaderText.setText(
                         R.string.home_custom_in_list
                     )
-                is Row.AllHeader ->
-                    (holder as HeaderHolder).b.customHeaderText.setText(
+                    b.customHeaderChevron.visibility = View.GONE
+                }
+                is Row.AllHeader -> {
+                    val b = (holder as HeaderHolder).b
+                    b.customHeaderText.setText(
                         R.string.home_custom_all_categories
                     )
-                is Row.ProvHeader ->
-                    (holder as HeaderHolder).b.customHeaderText.text =
+                    b.customHeaderChevron.visibility = View.GONE
+                }
+                is Row.ProvHeader -> {
+                    val b = (holder as HeaderHolder).b
+                    b.customHeaderText.text =
                         ctx.getString(
                             R.string.home_custom_section_count,
                             row.apiName, row.count
                         )
+                    // Phase 8.53: ONLY the chevron toggles the
+                    // section — tapping the bar itself does not,
+                    // so scrolling never opens sections by accident.
+                    b.customHeaderChevron.visibility = View.VISIBLE
+                    b.customHeaderChevron.rotation =
+                        if (isExpanded(row.apiName)) 180f else 0f
+                    b.customHeaderChevron.setOnClickListener {
+                        onToggle(row.apiName)
+                    }
+                }
                 is Row.SelItem -> {
                     val b = (holder as SelHolder).b
                     b.customSelName.text = row.entry.pageName
@@ -333,6 +367,7 @@ class HomeCustomListEditFragment : Fragment() {
                 }
                 is Row.Fetch -> {
                     val b = (holder as FetchHolder).b
+                    b.customHeaderChevron.visibility = View.GONE
                     val label = if (row.loading) {
                         ctx.getString(R.string.home_custom_loading)
                     } else {
