@@ -9,7 +9,7 @@
     android:layout_margin="6dp"
     android:clickable="true"
     android:focusable="true"
-    app:cardBackgroundColor="#FF232329"
+    app:cardBackgroundColor="?attr/primaryGrayBackground"
     app:cardCornerRadius="14dp"
     app:cardElevation="0dp">
 
@@ -40,80 +40,6 @@
             app:layout_constraintBottom_toBottomOf="@id/feed_card_poster"
             app:layout_constraintEnd_toEndOf="@id/feed_card_poster"
             app:tint="?attr/white" />
-
-        <!-- Phase 8.55: badges like his reference cards —
-             rating (top-start), quality (top-end), type and
-             language stacked at the poster's bottom-start. -->
-        <TextView
-            android:id="@+id/feed_card_rating"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:background="@drawable/feed_badge_bg"
-            android:paddingStart="7dp"
-            android:paddingTop="3dp"
-            android:paddingEnd="7dp"
-            android:paddingBottom="3dp"
-            android:textColor="#FFFFD54F"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:visibility="gone"
-            app:layout_constraintStart_toStartOf="@id/feed_card_poster"
-            app:layout_constraintTop_toTopOf="@id/feed_card_poster" />
-
-        <TextView
-            android:id="@+id/feed_card_quality"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:background="@drawable/feed_badge_bg"
-            android:paddingStart="7dp"
-            android:paddingTop="3dp"
-            android:paddingEnd="7dp"
-            android:paddingBottom="3dp"
-            android:textColor="@android:color/white"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:visibility="gone"
-            app:layout_constraintEnd_toEndOf="@id/feed_card_poster"
-            app:layout_constraintTop_toTopOf="@id/feed_card_poster" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:orientation="vertical"
-            app:layout_constraintBottom_toBottomOf="@id/feed_card_poster"
-            app:layout_constraintStart_toStartOf="@id/feed_card_poster">
-
-            <TextView
-                android:id="@+id/feed_card_type"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/feed_badge_bg"
-                android:paddingStart="7dp"
-                android:paddingTop="3dp"
-                android:paddingEnd="7dp"
-                android:paddingBottom="3dp"
-                android:textColor="@android:color/white"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/feed_card_lang"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:background="@drawable/feed_badge_lang_bg"
-                android:paddingStart="7dp"
-                android:paddingTop="3dp"
-                android:paddingEnd="7dp"
-                android:paddingBottom="3dp"
-                android:textColor="@android:color/white"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
-        </LinearLayout>
 
         <TextView
             android:id="@+id/feed_card_title"

@@ -13,8 +13,8 @@
         <item name="android:scrollbarThumbVertical">@null</item>
         <item name="android:scrollbarThumbHorizontal">@null</item>
 
-        <item name="fontFamily">@font/baloo_da_2_family</item> <!-- Phase 8D: Inter as the global app font (was Product Sans via @font/google_sans) -->
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="fontFamily">@font/inter</item> <!-- Phase 8D: Inter as the global app font (was Product Sans via @font/google_sans) -->
+        <item name="android:fontFamily">@font/inter</item>
 
         <item name="android:textViewStyle">@style/AppTextViewStyle</item>
         <item name="android:buttonStyle">@style/AppButtonStyle</item>
@@ -108,9 +108,9 @@
         <item name="textColor">@color/chip_color_text</item>
         <item name="android:textColor">@color/chip_color_text</item>
         <item name="checkedIconTint">@color/chip_color_text</item>
-        <item name="fontFamily">@font/baloo_da_2_family</item>
+        <item name="fontFamily">@font/inter</item>
         <item name="chipIconTint">@color/chip_color_text</item>
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:tag">@string/tv_no_focus_tag</item>
         <item name="chipMinTouchTargetSize">0dp</item>
         <item name="checkedIconVisible">false</item>
@@ -483,7 +483,7 @@
         <item name="android:searchIcon">@drawable/search_icon</item>
         <item name="android:queryHint">@string/search_hint</item>
         <item name="android:background">@color/transparent</item>
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="closeIcon">@drawable/ic_baseline_close_24</item>
     </style>
 
@@ -532,19 +532,19 @@
 
     <style name="TabNoCaps" parent="TextAppearance.Design.Tab">
         <item name="textAllCaps">false</item>
-        <item name="fontFamily">@font/baloo_da_2_family</item>
+        <item name="fontFamily">@font/inter</item>
     </style>
 
     <style name="AppTextViewStyle" parent="android:Widget.TextView">
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="AppButtonStyle" parent="android:Widget.Holo.Button">
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="AppEditStyle" parent="android:Widget.EditText">
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
         <!-- Phase 8.10-C: rounded filled text box (surface fill + subtle
              outline, stronger outline on focus) instead of the underline.
              A layout's own android:padding, when present, still wins over
@@ -571,7 +571,7 @@
     </style>
 
     <style name="AppMaterialButtonStyle" parent="Widget.MaterialComponents.Button">
-        <item name="android:fontFamily">@font/baloo_da_2_family</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="Theme.Widget.Tabs" parent="Widget.MaterialComponents.TabLayout.Colored">

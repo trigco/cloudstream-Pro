@@ -3,12 +3,10 @@ package com.lagradost.cloudstream3.ui.feed
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
-import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.lagradost.cloudstream3.R
-import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FeedCardBinding
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
@@ -69,7 +67,6 @@ class FeedAdapter(
                 onTitleNeeded(entry)
             }
             binding.feedCardMeta.text = "${entry.apiName} • ${typeLabel(response.type)}"
-            bindBadges(entry)
             bindLike(entry)
 
             binding.root.setOnClickListener { onPlay(entry) }
@@ -86,25 +83,6 @@ class FeedAdapter(
                 bindLike(entry)
                 onLikeChanged(entry, nowLiked)
             }
-        }
-
-        /** Phase 8.55: reference-style badges — rating, quality,
-         *  type, language — each shown only when the data exists. */
-        private fun bindBadges(entry: FeedEntry) {
-            val response = entry.response
-            val ratingText = response.score?.toStringNull(0.1, 10, 1)
-            binding.feedCardRating.isVisible = !ratingText.isNullOrBlank()
-            if (!ratingText.isNullOrBlank()) {
-                binding.feedCardRating.text = "★ $ratingText"
-            }
-            val quality = qualityLabel(response.quality)
-            binding.feedCardQuality.isVisible = quality != null
-            if (quality != null) binding.feedCardQuality.text = quality
-            binding.feedCardType.text =
-                typeLabel(response.type).uppercase()
-            val lang = languageBadge(response.name)
-            binding.feedCardLang.isVisible = lang != null
-            if (lang != null) binding.feedCardLang.text = lang
         }
 
         private fun bindLike(entry: FeedEntry) {
@@ -159,48 +137,6 @@ class FeedAdapter(
             TvType.Documentary -> "Documentary"
             TvType.Live -> "Live"
             else -> type?.name ?: ""
-        }
-
-        /** Phase 8.55: short quality label for the card badge. */
-        fun qualityLabel(quality: SearchQuality?): String? = when (quality) {
-            SearchQuality.BlueRay -> "BLURAY"
-            SearchQuality.Cam -> "CAM"
-            SearchQuality.CamRip -> "CAMRIP"
-            SearchQuality.DVD -> "DVD"
-            SearchQuality.HD -> "HD"
-            SearchQuality.HQ -> "HQ"
-            SearchQuality.HdCam -> "HDCAM"
-            SearchQuality.Telecine -> "TC"
-            SearchQuality.Telesync -> "TS"
-            SearchQuality.WorkPrint -> "WP"
-            SearchQuality.SD -> "SD"
-            SearchQuality.FourK -> "4K"
-            SearchQuality.UHD -> "UHD"
-            SearchQuality.SDR -> "SDR"
-            SearchQuality.HDR -> "HDR"
-            SearchQuality.WebRip -> "WEBRIP"
-            null -> null
-        }
-
-        private val BADGE_LANGUAGES = listOf(
-            "hindi", "bengali", "bangla", "tamil", "telugu",
-            "malayalam", "kannada", "punjabi", "english", "korean",
-            "japanese", "chinese", "urdu", "marathi", "gujarati",
-            "spanish", "french", "german", "russian", "turkish",
-            "thai", "arabic"
-        )
-
-        /**
-         * Phase 8.55: language badge parsed from the raw title,
-         * the way his reference cards tag it ("DUAL AUDIO",
-         * "HINDI", "BANGLA"…). Dual audio wins; otherwise the
-         * first language named in the title.
-         */
-        fun languageBadge(name: String): String? {
-            val lower = name.lowercase()
-            if (lower.contains("dual audio")) return "DUAL AUDIO"
-            val found = BADGE_LANGUAGES.firstOrNull { lower.contains(it) }
-            return found?.uppercase()
         }
     }
 }

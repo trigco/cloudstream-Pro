@@ -47,10 +47,7 @@ object FamilyMode {
         "cumshot", "blow job", "blowjob", "hand job",
         "handjob", "deep throat", "deepthroat", "gang bang",
         "gangbang", "double penetration", "golden shower",
-        "piss facial", "cream pie", "hot babe",
-        "casting couch", "cheating wife", "cheating husband",
-        "rated x", "x rated", "body massage",
-        "full body massage", "happy ending massage"
+        "piss facial", "cream pie"
     )
 
     private val ADULT_TITLE_WORDS = setOf(
@@ -62,37 +59,11 @@ object FamilyMode {
         // 18+ OTT platforms whose names ride in titles.
         "ullu", "vivamax", "kooku", "primeplay",
         "rabbitmovies", "shemaroome", "nuefliks", "flizmovies",
-        "hothit", "gupchup",
-        // Phase 8.54: scene-title vocabulary, from the titles
-        // that leaked through on his device (his call: "HOT
-        // babe, BBC, inappropriate — these ARE adult words").
-        "babe", "babes", "bbc", "pov", "inappropriate",
-        "pervert", "perverted", "masseur", "masseuse",
-        "nuru", "tantric", "sensual",
-        "pornstar", "pornhub", "naughty", "kinky", "fetish",
-        "bdsm", "bondage", "dominatrix", "gloryhole",
-        "hardcore", "softcore", "gonzo", "ecchi", "oppai",
-        "sekkusu", "jav", "onlyfans", "cuckold", "swinger",
-        "swingers", "foursome", "uncensored", "lewd",
-        "boobs", "tits", "nipples", "panties", "hookup",
-        "bhabhi", "aunty", "stepmom", "stepdad", "stepsis",
-        "stepbro", "stepbrother", "stepsister", "stepfather",
-        "stepmother", "stepdaughter", "stepson", "stepfamily"
+        "hothit", "gupchup"
     )
 
     private val ADULT_TITLE_STEMS = listOf(
-        "fuck", "masturbat", "squirt", "seduc", "stripper"
-    )
-
-    /**
-     * Phase 8.54: non-Latin adult markers, matched as raw
-     * substrings — his leaked feed had a pure-Japanese title
-     * (セックス = "sex" in katakana), which no Latin keyword
-     * list can ever see.
-     */
-    private val ADULT_SCRIPT_SUBSTRINGS = listOf(
-        "セックス", "おまんこ", "エッチ", "ポルノ",
-        "色情", "成人电影", "无码", "有码"
+        "fuck", "masturbat", "squirt"
     )
 
     /**
@@ -145,9 +116,6 @@ object FamilyMode {
 
     fun isAdultTitle(name: String?): Boolean {
         if (name.isNullOrBlank()) return false
-        if (ADULT_SCRIPT_SUBSTRINGS.any { name.contains(it) }) {
-            return true
-        }
         val spaced = unglue(name)
         val lower = spaced.lowercase()
         if (ADULT_TITLE_PHRASES.any { lower.contains(it) }) return true

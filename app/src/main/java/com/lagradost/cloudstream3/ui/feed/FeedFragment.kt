@@ -9,23 +9,15 @@ import android.text.TextWatcher
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.lagradost.cloudstream3.AnimeSearchResponse
-import com.lagradost.cloudstream3.MovieSearchResponse
 import com.lagradost.cloudstream3.R
-import com.lagradost.cloudstream3.TvSeriesSearchResponse
-import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentFeedBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.observe
@@ -88,16 +80,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private val searchHandler = Handler(Looper.getMainLooper())
     private var pendingSearch: Runnable? = null
 
-    // Phase 8.55: search results + filters (type / provider /
-    // year), applied client-side over the merged result list.
-    private var lastResults: List<FeedEntry> = emptyList()
-    private var filterType: String = "All"
-    private var filterProvider: String? = null
-    private var filterYear: Int? = null
-    private var selectedTypeChip: TextView? = null
-    private var providerChip: TextView? = null
-    private var yearChip: TextView? = null
-
     private var headerFullHeight = 0
     private var headerShown = true
     private var headerAnimator: ValueAnimator? = null
@@ -121,7 +103,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         binding.feedRecycler.setHasFixedSize(true)
         binding.feedRecycler.itemAnimator = null
         buildChips(binding)
-        buildFilterChips(binding)
         binding.feedEmptyReset.setOnClickListener {
             // Back to the unfiltered feed: clear the search text
             // (its watcher re-runs the pool filter) and reselect
@@ -162,26 +143,10 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 val query = s?.toString()?.trim().orEmpty()
                 binding.feedSearchClear.isVisible = query.isNotEmpty()
                 applySearch(query)
-                updateSearchPanel(binding)
             }
         })
         binding.feedSearchClear.setOnClickListener {
             binding.feedSearchInput.text.clear()
-        }
-        // Phase 8.55: recents/suggestions panel follows focus.
-        binding.feedSearchInput.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) updateSearchPanel(binding)
-            else binding.feedSearchPanel.isVisible = false
-        }
-        binding.feedSearchInput.setOnEditorActionListener { _, action, _ ->
-            if (action == EditorInfo.IME_ACTION_SEARCH) {
-                val q = binding.feedSearchInput.text.toString().trim()
-                if (q.isNotEmpty()) saveRecent(q)
-                binding.feedSearchPanel.isVisible = false
-                true
-            } else {
-                false
-            }
         }
 
         observe(viewModel.feed) { resource ->
@@ -383,11 +348,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         }
         binding.feedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                // Phase 8.55: scrolling dismisses the
-                // recents/suggestions drop-down.
-                if (dy != 0 && binding.feedSearchPanel.isVisible) {
-                    binding.feedSearchPanel.isVisible = false
-                }
                 if (dy > 12) {
                     animateHeader(binding, show = false)
                 } else if (dy < -12) {
@@ -507,8 +467,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     /**
      * Instant part: filter the loaded pool by title. Deep part (3+
      * chars, debounced): search all providers and merge new hits in.
-     * Phase 8.55: results land in [lastResults] and the type /
-     * provider / year filters are applied on top.
      */
     private fun applySearch(query: String) {
         val binding = binding ?: return
@@ -521,27 +479,18 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             val first = binding.feedChips.getChildAt(0) as? TextView
             selectedChip = first
             first?.let { styleChip(it, selected = true) }
-            lastResults = emptyList()
-            binding.feedFilterScroll.isVisible = false
-            hideSkeleton(binding)
             binding.setFeedEmpty( pool.isEmpty() )
             adapter.submitList(pool)
             return
         }
-        binding.feedFilterScroll.isVisible = true
         val local = pool.filter {
             it.response.name.contains(query, ignoreCase = true)
         }
-        lastResults = local
-        if (local.isNotEmpty()) hideSkeleton(binding)
-        submitFiltered(binding)
+        binding.setFeedEmpty( local.isEmpty() )
+        adapter.submitList(local)
         if (query.length < 3) return
-        // Nothing local and a real query: shimmer until the
-        // provider search lands (Phase 8.55).
-        if (local.isEmpty()) showSkeleton(binding)
 
         val task = Runnable {
-            saveRecent(query)
             searchJob = viewLifecycleOwner.lifecycleScope.launch {
                 val remote = viewModel.searchAll(query)
                 // Drop stale results if the query moved on meanwhile.
@@ -553,214 +502,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 val merged = local + remote.filter {
                     it.response.url !in hidden && seen.add(it.response.url)
                 }
-                lastResults = merged
-                hideSkeleton(binding)
-                submitFiltered(binding)
+                binding.setFeedEmpty( merged.isEmpty() )
+                adapter.submitList(merged)
             }
         }
         pendingSearch = task
         searchHandler.postDelayed(task, 600L)
     }
 
-    // ---------- Phase 8.55: search filters ----------
-
-    private fun buildFilterChips(binding: FragmentFeedBinding) {
-        val context = binding.feedFilterChips.context
-        fun makeChip(text: String): TextView = TextView(context).apply {
-            this.text = text
-            textSize = 13f
-            setPadding(30, 14, 30, 14)
-            layoutParams = ViewGroup.MarginLayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = 20 }
-        }
-        listOf("All", "Movie", "Series", "Anime").forEachIndexed { i, label ->
-            val chip = makeChip(label)
-            chip.setOnClickListener {
-                selectedTypeChip?.let { styleChip(it, selected = false) }
-                selectedTypeChip = chip
-                styleChip(chip, selected = true)
-                filterType = label
-                submitFiltered(binding)
-            }
-            styleChip(chip, selected = i == 0)
-            if (i == 0) selectedTypeChip = chip
-            binding.feedFilterChips.addView(chip)
-        }
-        providerChip = makeChip("Provider: All").apply {
-            setOnClickListener { showProviderMenu(binding, this) }
-            styleChip(this, selected = false)
-        }
-        binding.feedFilterChips.addView(providerChip)
-        yearChip = makeChip("Year: All").apply {
-            setOnClickListener { showYearMenu(binding, this) }
-            styleChip(this, selected = false)
-        }
-        binding.feedFilterChips.addView(yearChip)
-    }
-
-    private fun yearOf(entry: FeedEntry): Int? = when (val r = entry.response) {
-        is MovieSearchResponse -> r.year
-        is TvSeriesSearchResponse -> r.year
-        is AnimeSearchResponse -> r.year
-        else -> null
-    }
-
-    private fun typeMatches(entry: FeedEntry): Boolean = when (filterType) {
-        "Movie" -> entry.response.type in
-            setOf(TvType.Movie, TvType.AnimeMovie)
-        "Series" -> entry.response.type in
-            setOf(TvType.TvSeries, TvType.AsianDrama)
-        "Anime" -> entry.response.type in
-            setOf(TvType.Anime, TvType.OVA)
-        else -> true
-    }
-
-    private fun submitFiltered(binding: FragmentFeedBinding) {
-        val filtered = lastResults.filter { entry ->
-            typeMatches(entry) &&
-                (filterProvider == null || entry.apiName == filterProvider) &&
-                (filterYear == null || yearOf(entry) == filterYear)
-        }
-        binding.setFeedEmpty(filtered.isEmpty())
-        adapter.submitList(filtered)
-    }
-
-    private fun showProviderMenu(binding: FragmentFeedBinding, anchor: TextView) {
-        val providers = lastResults.map { it.apiName }.distinct().sorted()
-        val menu = PopupMenu(anchor.context, anchor)
-        menu.menu.add(0, 0, 0, "All providers")
-        providers.forEachIndexed { i, name -> menu.menu.add(0, i + 1, 0, name) }
-        menu.setOnMenuItemClickListener { item ->
-            filterProvider = if (item.itemId == 0) null
-            else providers.getOrNull(item.itemId - 1)
-            providerChip?.text = "Provider: ${filterProvider ?: "All"}"
-            submitFiltered(binding)
-            true
-        }
-        menu.show()
-    }
-
-    private fun showYearMenu(binding: FragmentFeedBinding, anchor: TextView) {
-        val years = lastResults.mapNotNull { yearOf(it) }
-            .distinct().sortedDescending().take(15)
-        val menu = PopupMenu(anchor.context, anchor)
-        menu.menu.add(0, 0, 0, "All years")
-        years.forEachIndexed { i, year -> menu.menu.add(0, i + 1, 0, year.toString()) }
-        menu.setOnMenuItemClickListener { item ->
-            filterYear = if (item.itemId == 0) null
-            else years.getOrNull(item.itemId - 1)
-            yearChip?.text = "Year: ${filterYear ?: "All"}"
-            submitFiltered(binding)
-            true
-        }
-        menu.show()
-    }
-
-    // ---------- Phase 8.55: recent searches + suggestions ----------
-
-    private fun recents(): List<String> {
-        val ctx = context ?: return emptyList()
-        val raw = PreferenceManager.getDefaultSharedPreferences(ctx)
-            .getString(RECENT_KEY, null) ?: return emptyList()
-        return raw.split("\u001F").filter { it.isNotBlank() }
-    }
-
-    private fun saveRecent(query: String) {
-        val ctx = context ?: return
-        val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
-        val updated = (listOf(query) + recents().filter {
-            !it.equals(query, ignoreCase = true)
-        }).take(10)
-        prefs.edit().putString(RECENT_KEY, updated.joinToString("\u001F")).apply()
-    }
-
-    private fun clearRecents() {
-        val ctx = context ?: return
-        PreferenceManager.getDefaultSharedPreferences(ctx)
-            .edit().remove(RECENT_KEY).apply()
-    }
-
-    private fun updateSearchPanel(binding: FragmentFeedBinding) {
-        val panel = binding.feedSearchPanel
-        val query = binding.feedSearchInput.text.toString().trim()
-        panel.removeAllViews()
-        val context = binding.root.context
-        fun row(text: String, bold: Boolean = false, action: () -> Unit) {
-            val tv = TextView(context).apply {
-                this.text = text
-                textSize = 14f
-                setTextColor(
-                    ContextCompat.getColor(
-                        context,
-                        if (bold) android.R.color.darker_gray
-                        else android.R.color.white
-                    )
-                )
-                setPadding(48, 26, 48, 26)
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-                setOnClickListener { action() }
-            }
-            panel.addView(tv)
-        }
-        if (query.isEmpty()) {
-            val recent = recents()
-            if (recent.isEmpty()) {
-                panel.isVisible = false
-                return
-            }
-            row("Recent searches", bold = true) {}
-            recent.forEach { q ->
-                row(q) { pickSuggestion(binding, q) }
-            }
-            row("Clear all", bold = true) {
-                clearRecents()
-                panel.isVisible = false
-            }
-        } else {
-            val suggestions = pool.map {
-                FeedAdapter.displayTitle(it.response.name, it.response.url)
-            }.filter {
-                it.contains(query, ignoreCase = true)
-            }.distinct().take(8)
-            val matchingRecents = recents().filter {
-                it.contains(query, ignoreCase = true) &&
-                    !it.equals(query, ignoreCase = true)
-            }.take(3)
-            if (suggestions.isEmpty() && matchingRecents.isEmpty()) {
-                panel.isVisible = false
-                return
-            }
-            matchingRecents.forEach { q ->
-                row(q) { pickSuggestion(binding, q) }
-            }
-            suggestions.forEach { title ->
-                row(title) { pickSuggestion(binding, title) }
-            }
-        }
-        panel.isVisible = true
-    }
-
-    private fun pickSuggestion(binding: FragmentFeedBinding, text: String) {
-        binding.feedSearchPanel.isVisible = false
-        saveRecent(text)
-        if (binding.feedSearchInput.text.toString() != text) {
-            binding.feedSearchInput.setText(text)
-            binding.feedSearchInput.setSelection(text.length)
-        } else {
-            applySearch(text)
-        }
-    }
-
     private fun openWatch(entry: FeedEntry) {
-        // Phase 8.55: opening a result counts as the search.
-        binding?.feedSearchInput?.text?.toString()?.trim()
-            ?.takeIf { it.isNotEmpty() }?.let { saveRecent(it) }
-        binding?.feedSearchPanel?.isVisible = false
         activity.navigate(
             R.id.navigation_feed_watch,
             Bundle().apply {
@@ -770,10 +520,5 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 putString("posterUrl", entry.response.posterUrl)
             }
         )
-    }
-
-    companion object {
-        private const val RECENT_KEY = "feed_recent_searches_v1"
-        private const val RECENT_SEP = "\u001F"
     }
 }

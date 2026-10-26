@@ -379,7 +379,7 @@
     <string name="title_feed">Feed</string>
     <string name="feed_empty">No content found. Check your providers, then pull to refresh.</string>
     <string name="feed_like">Like</string>
-    <string name="feed_up_next">For You</string>
+    <string name="feed_up_next">Up next</string>
     <string name="feed_open_details">Open details</string>
     <string name="feed_retry">Retry</string>
     <string name="feed_loading_video">Loading video…</string>

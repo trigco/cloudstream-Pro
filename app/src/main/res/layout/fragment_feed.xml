@@ -9,7 +9,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_main_gradient">
+    android:background="@android:color/black">
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/feed_swipe_refresh"
@@ -37,11 +37,7 @@
                 android:paddingStart="6dp"
                 android:paddingTop="6dp"
                 android:paddingEnd="6dp"
-                android:visibility="gone"
-                app:shimmer_auto_start="true"
-                app:shimmer_base_alpha="0.3"
-                app:shimmer_duration="1400"
-                app:shimmer_highlight_alpha="0.85">
+                android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -178,7 +174,7 @@
         android:id="@+id/feed_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_main_gradient"
+        android:background="@android:color/black"
         android:elevation="6dp"
         android:orientation="vertical">
 
@@ -212,8 +208,8 @@
                 android:importantForAutofill="no"
                 android:inputType="text"
                 android:maxLines="1"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
                 android:textColor="?attr/white"
                 android:textColorHint="?attr/grayTextColor"
                 android:textSize="14sp" />
@@ -246,38 +242,6 @@
                 android:orientation="horizontal" />
 
         </HorizontalScrollView>
-
-        <!-- Phase 8.55: search filters (type / provider / year),
-             visible only while a search is active. -->
-        <HorizontalScrollView
-            android:id="@+id/feed_filter_scroll"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="10dp"
-            android:scrollbars="none"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:id="@+id/feed_filter_chips"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-
-        </HorizontalScrollView>
-
-        <!-- Phase 8.55: recent searches + live suggestions,
-             dropped down under the header while typing. -->
-        <LinearLayout
-            android:id="@+id/feed_search_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="#FF1C1C22"
-            android:orientation="vertical"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:visibility="gone" />
 
     </LinearLayout>
 
