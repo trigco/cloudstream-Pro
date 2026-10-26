@@ -1358,6 +1358,53 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }
     }
 
+    /**
+     * Phase 8.49: after a fresh install applied the bundled
+     * default backup (CloudStreamApp), download ONLY the
+     * bundled default plugins (assets/pro_default_plugins.json)
+     * instead of every plugin in every restored repository.
+     * Runs in the background; retries on the next launch while
+     * any of the files is still missing (e.g. offline install).
+     */
+    private fun downloadDefaultPluginsIfPending() {
+        try {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            if (!prefs.getBoolean(CloudStreamApp.DEFAULT_PLUGINS_PENDING, false)) {
+                return
+            }
+            ioSafe {
+                val text = assets.open(CloudStreamApp.DEFAULT_PLUGINS_ASSET)
+                    .bufferedReader().readText()
+                val entries = org.json.JSONArray(text)
+                var allPresent = true
+                for (i in 0 until entries.length()) {
+                    val entry = entries.getJSONObject(i)
+                    val url = entry.optString("url")
+                    val name = entry.optString("internalName")
+                    val repo = entry.optString("repositoryUrl")
+                    if (url.isBlank() || name.isBlank() || repo.isBlank()) {
+                        continue
+                    }
+                    val file = PluginManager.getPluginPath(
+                        this@MainActivity, name, repo
+                    )
+                    if (file.exists()) continue
+                    val ok = PluginManager.downloadPlugin(
+                        this@MainActivity, url, null, name, repo, true
+                    )
+                    if (!ok && !file.exists()) allPresent = false
+                }
+                if (allPresent) {
+                    prefs.edit()
+                        .putBoolean(CloudStreamApp.DEFAULT_PLUGINS_PENDING, false)
+                        .apply()
+                }
+            }
+        } catch (t: Throwable) {
+            logError(t)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         app.initClient(this, ignoreSSL = false)
         @OptIn(UnsafeSSL::class)
@@ -1407,6 +1454,8 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 }
             }
         }
+
+        downloadDefaultPluginsIfPending()
 
         // just in case, MAIN SHOULD *NEVER* BOOT LOOP CRASH
         binding = try {

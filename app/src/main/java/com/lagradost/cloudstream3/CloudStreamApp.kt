@@ -137,6 +137,12 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
                     restoreSettings = true,
                     restoreDataStore = true
                 )
+                // The backup format carries no plugin list, so
+                // the bundled default plugins are downloaded
+                // separately by MainActivity on first launch.
+                marker.edit()
+                    .putBoolean(DEFAULT_PLUGINS_PENDING, true)
+                    .apply()
             }
             marker.edit()
                 .putBoolean(DEFAULT_BACKUP_MARKER, true)
@@ -160,6 +166,9 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
         const val DEFAULT_BACKUP_MARKER =
             "pro_default_backup_applied_v1"
         const val DEFAULT_BACKUP_ASSET = "pro_default_backup.json"
+        const val DEFAULT_PLUGINS_PENDING =
+            "pro_default_plugins_pending_v1"
+        const val DEFAULT_PLUGINS_ASSET = "pro_default_plugins.json"
 
         var exceptionHandler: ExceptionHandler? = null
 
