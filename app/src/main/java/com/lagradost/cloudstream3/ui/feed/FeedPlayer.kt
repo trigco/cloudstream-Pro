@@ -139,6 +139,7 @@ object FeedPlayer {
     // this provider has no playable links for the title, try the
     // same title on other providers before showing the error page.
     private var fallbackAllowed = false
+        private set
 
     // Phase 8.42: pre-fetched backup — the same title on another
     // provider, fetched in parallel with the primary (his ask:
@@ -291,7 +292,7 @@ object FeedPlayer {
         notifyListeners()
         return true
     }
-        private set
+
     var linkIndex: Int = 0
         private set
 

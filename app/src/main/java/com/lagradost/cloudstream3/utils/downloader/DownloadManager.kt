@@ -2151,11 +2151,11 @@ object VideoDownloadManager {
             item: DownloadItem
         ): List<ExtractorLink>? {
             val wrapperItem = downloadQueueWrapper.downloadItem ?: return null
-            val title = wrapperItem.resultName.takeIf { it.isNotBlank() }
-                ?: item.ep.headerName
+            val title = item.ep.mainName.takeIf { it.isNotBlank() }
+                ?: wrapperItem.resultName
             if (title.isBlank()) return null
             val others = APIHolder.apis.filter {
-                it.name != item.ep.apiName && it.name != "None"
+                it.name != item.ep.sourceApiName && it.name != "None"
             }
             if (others.isEmpty()) return null
             val candidates = others.amap { api ->
@@ -2185,7 +2185,7 @@ object VideoDownloadManager {
                         else -> continue
                     }
                     val ep = fallbackEpisodeFor(
-                        page, item.ep.season, item.ep.episode
+                        page, item.ep.season, item.ep.episode ?: 0
                     ) ?: continue
                     val collected = mutableListOf<ExtractorLink>()
                     withContext(Dispatchers.IO) {
