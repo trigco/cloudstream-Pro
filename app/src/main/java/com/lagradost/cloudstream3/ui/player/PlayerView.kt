@@ -230,30 +230,19 @@ class PlayerView @JvmOverloads constructor(
     private val subStyleListener: (SaveCaptionStyle) -> Unit = ::onSubStyleChanged
 
     /**
-     * Phase 8.60: YouTube-style double-tap seek feedback — a soft disc
-     * with chevrons and the seek amount blooms on the tapped side,
-     * independent of the control bars.
+     * Phase 8.61: feed-style skip badge - a small skip icon with the
+     * seek amount under it, shown briefly on the tapped side (the
+     * same feedback the feed player uses). No disc, no chevrons.
      */
     fun showSeekFx(forward: Boolean, seconds: Long) {
         val fx = (if (forward) seekFxRight else seekFxLeft) ?: return
         val label = if (forward) seekFxRightText else seekFxLeftText
-        label?.text = context.getString(R.string.seek_fx_seconds_format, seconds)
+        label?.text = "${seconds}s"
         val token = ++seekFxToken
-        fx.animate().cancel()
         fx.visibility = View.VISIBLE
-        fx.alpha = 0f
-        fx.scaleX = 0.85f
-        fx.scaleY = 0.85f
-        fx.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(140).start()
         fx.postDelayed({
-            if (token == seekFxToken) {
-                fx.animate().alpha(0f).setDuration(320)
-                    .withEndAction {
-                        if (token == seekFxToken) fx.visibility = View.GONE
-                    }
-                    .start()
-            }
-        }, 420)
+            if (token == seekFxToken) fx.visibility = View.GONE
+        }, 600)
     }
 
     /** View discovery */

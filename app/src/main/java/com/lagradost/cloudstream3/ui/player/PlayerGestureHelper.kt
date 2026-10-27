@@ -884,84 +884,22 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
         playerView.playerPausePlay?.startAnimation(makeAnim())
     }
 
-    /** Plays the rewind animation and seeks back by [fastForwardTime]. */
+    /**
+     * Seeks back by [fastForwardTime]. Phase 8.61: the on-screen skip
+     * buttons are hidden (his verdict), so the only feedback is the
+     * feed-style skip badge - no center-menu flash, no icon spin.
+     */
     fun rewind() {
         try {
-            val rewHolder = playerView.playerRewHolder ?: return
-            val rew = playerView.playerRew
-            val rewText = playerView.exoRewText
-            val wasShowing = playerView.callbacks?.isUIShowing() ?: false
-
-            // Only expose the parent chain when controls are currently hidden.
-            val prevCenterMenuGone = playerView.playerCenterMenu?.isGone ?: false
-            val prevVideoHolderVisible = playerView.playerVideoHolder?.isVisible ?: true
-            if (!wasShowing) {
-                playerView.playerCenterMenu?.isGone = false
-                playerView.playerVideoHolder?.isVisible = true
-            }
-            // Always clear any stale fillAfter alpha so the button is visible during animation.
-            rewHolder.alpha = 1f
-
-            rew?.startAnimation(AnimationUtils.loadAnimation(context, R.anim.rotate_left))
-            val goLeft = AnimationUtils.loadAnimation(context, R.anim.go_left)
-            goLeft.setAnimationListener(object : Animation.AnimationListener {
-                override fun onAnimationStart(animation: Animation?) {}
-                override fun onAnimationRepeat(animation: Animation?) {}
-                override fun onAnimationEnd(animation: Animation?) {
-                    rewText?.post {
-                        resetRewindText()
-                        // Restore parent chain only if we changed it and controls are still hidden.
-                        if (!wasShowing && !(playerView.callbacks?.isUIShowing() ?: false)) {
-                            playerView.playerCenterMenu?.isGone = prevCenterMenuGone
-                            playerView.playerVideoHolder?.isVisible = prevVideoHolderVisible
-                            rewHolder.alpha = 0f
-                        }
-                    }
-                }
-            })
             playerView.showSeekFx(false, fastForwardTime / 1000)
-            rewText?.startAnimation(goLeft)
-            rewText?.text = context.getString(R.string.rew_text_format).format(fastForwardTime / 1000)
             playerView.player.seekTime(-fastForwardTime)
         } catch (e: Exception) { logError(e) }
     }
 
-    /** Plays the fast-forward animation and seeks forward by [fastForwardTime]. */
+    /** Seeks forward by [fastForwardTime]; feedback as in [rewind]. */
     fun fastForward() {
         try {
-            val ffwdHolder = playerView.playerFfwdHolder ?: return
-            val ffwd = playerView.playerFfwd
-            val ffwdText = playerView.exoFfwdText
-            val wasShowing = playerView.callbacks?.isUIShowing() ?: false
-
-            val prevCenterMenuGone = playerView.playerCenterMenu?.isGone ?: false
-            val prevVideoHolderVisible = playerView.playerVideoHolder?.isVisible ?: true
-            if (!wasShowing) {
-                playerView.playerCenterMenu?.isGone = false
-                playerView.playerVideoHolder?.isVisible = true
-            }
-            // Always clear any stale fillAfter alpha so the button is visible during animation.
-            ffwdHolder.alpha = 1f
-
-            ffwd?.startAnimation(AnimationUtils.loadAnimation(context, R.anim.rotate_right))
-            val goRight = AnimationUtils.loadAnimation(context, R.anim.go_right)
-            goRight.setAnimationListener(object : Animation.AnimationListener {
-                override fun onAnimationStart(animation: Animation?) {}
-                override fun onAnimationRepeat(animation: Animation?) {}
-                override fun onAnimationEnd(animation: Animation?) {
-                    ffwdText?.post {
-                        resetFastForwardText()
-                        if (!wasShowing && !(playerView.callbacks?.isUIShowing() ?: false)) {
-                            playerView.playerCenterMenu?.isGone = prevCenterMenuGone
-                            playerView.playerVideoHolder?.isVisible = prevVideoHolderVisible
-                            ffwdHolder.alpha = 0f
-                        }
-                    }
-                }
-            })
             playerView.showSeekFx(true, fastForwardTime / 1000)
-            ffwdText?.startAnimation(goRight)
-            ffwdText?.text = context.getString(R.string.ffw_text_format).format(fastForwardTime / 1000)
             playerView.player.seekTime(fastForwardTime)
         } catch (e: Exception) { logError(e) }
     }

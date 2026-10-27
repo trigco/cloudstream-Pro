@@ -439,6 +439,7 @@
 
                 <FrameLayout
                     android:id="@+id/player_rew_holder"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical|start"
@@ -510,6 +511,7 @@
 
                 <FrameLayout
                     android:id="@+id/player_ffwd_holder"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical|end"
@@ -1136,85 +1138,58 @@
     </LinearLayout>
 
 
-    <!-- Phase 8.60: YouTube-style double-tap seek feedback -->
-    <FrameLayout
+    <!-- Phase 8.61: feed-style skip badge (small icon + seconds),
+         shown briefly on the tapped side; the center skip buttons
+         are hidden for good. -->
+    <LinearLayout
         android:id="@+id/player_seek_fx_left"
-        android:layout_width="230dp"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="start"
+        android:layout_marginEnd="180dp"
+        android:gravity="center"
+        android:orientation="vertical"
         android:visibility="gone">
 
-        <View
-            android:layout_width="190dp"
-            android:layout_height="190dp"
-            android:layout_gravity="center"
-            android:background="@drawable/seek_fx_circle" />
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@null"
+            android:src="@drawable/netflix_skip_back" />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/player_seek_fx_left_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            tools:text="10s" />
+    </LinearLayout>
 
-            <ImageView
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:src="@drawable/ic_seek_chevrons"
-                app:tint="@color/white"
-                tools:ignore="ContentDescription" />
-
-            <TextView
-                android:id="@+id/player_seek_fx_left_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                tools:text="10 seconds" />
-        </LinearLayout>
-    </FrameLayout>
-
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/player_seek_fx_right"
-        android:layout_width="230dp"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="end"
+        android:layout_marginStart="180dp"
+        android:gravity="center"
+        android:orientation="vertical"
         android:visibility="gone">
 
-        <View
-            android:layout_width="190dp"
-            android:layout_height="190dp"
-            android:layout_gravity="center"
-            android:background="@drawable/seek_fx_circle" />
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@null"
+            android:src="@drawable/netflix_skip_forward" />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/player_seek_fx_right_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <ImageView
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:scaleX="-1"
-                android:src="@drawable/ic_seek_chevrons"
-                app:tint="@color/white"
-                tools:ignore="ContentDescription" />
-
-            <TextView
-                android:id="@+id/player_seek_fx_right_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                tools:text="10 seconds" />
-        </LinearLayout>
-    </FrameLayout>
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            tools:text="10s" />
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/player_episode_overlay"

@@ -895,7 +895,6 @@
         <item quantity="other">%d downloads queued</item>
     </plurals>
     <string name="player_is_live">Live</string>
-    <string name="seek_fx_seconds_format">%1$d seconds</string>
     <string name="player_preload_buffer">Preload buffer</string>
     <string name="player_preload_buffer_des">How much video to download ahead while watching online, so playback survives network drops</string>
 </resources>
