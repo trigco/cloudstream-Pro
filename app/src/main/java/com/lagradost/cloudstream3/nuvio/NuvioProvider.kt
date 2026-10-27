@@ -347,7 +347,7 @@ class NuvioProvider : MainAPI() {
         return emitted > 0
     }
 
-    private data class Payload(
+    data class Payload(
         val type: String,
         val tmdbId: Int,
         val season: Int?,

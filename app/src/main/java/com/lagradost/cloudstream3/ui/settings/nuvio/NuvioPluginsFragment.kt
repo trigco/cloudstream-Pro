@@ -25,6 +25,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.app
