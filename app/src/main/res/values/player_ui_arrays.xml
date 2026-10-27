@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="player_controls_placement_entries">
+        <item>Scrollable row</item>
+        <item>Split clusters</item>
+    </string-array>
+    <string-array name="player_controls_placement_values">
+        <item>scroll</item>
+        <item>clusters</item>
+    </string-array>
+</resources>

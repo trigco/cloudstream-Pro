@@ -895,4 +895,22 @@
         <item quantity="other">%d downloads queued</item>
     </plurals>
     <string name="player_is_live">Live</string>
+    <string name="pref_category_player_controls">Player controls</string>
+    <string name="mpv_player_ui">MPV-style player UI</string>
+    <string name="mpv_player_ui_des">Glass pill controls inspired by mpv, in CloudStream Pro colors</string>
+    <string name="player_controls_placement">Button row placement</string>
+    <string name="show_screenshot_btt">Screenshot button</string>
+    <string name="show_ab_repeat_btt">A-B repeat button</string>
+    <string name="show_info_pill">Info pill (clock, speed, battery)</string>
+    <string name="show_episode_pills">Episode pills row</string>
+    <string name="show_center_episode_btt">Center episode buttons</string>
+    <string name="show_top_clock">Top clock</string>
+    <string name="screenshot_btt">Screenshot</string>
+    <string name="ab_repeat_btt">A-B Repeat</string>
+    <string name="screenshot_saved">Screenshot saved: %s</string>
+    <string name="screenshot_failed">Screenshot failed</string>
+    <string name="ab_point_a_set">A point set - tap A-B again at the end point</string>
+    <string name="ab_repeat_on">A-B repeat on</string>
+    <string name="ab_repeat_off">A-B repeat off</string>
+    <string name="ab_point_b_invalid">End point must be after the A point</string>
 </resources>
