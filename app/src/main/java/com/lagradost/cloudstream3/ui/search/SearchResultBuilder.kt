@@ -178,7 +178,18 @@ object SearchResultBuilder {
                 rating?.text = ratingText
             }
         } else if (showRatingView) {
+            // Phase 8.56: universal rating — a provider without a
+            // score falls back to the TMDB/IMDb cache; a miss kicks
+            // off background resolution (needs a key in Settings →
+            // Account) and the rebind listener fills it in later.
             val ratingText = card.score?.toStringNull(0.1, 10, 1)
+                ?: rating?.context?.let { ctx ->
+                    MetadataResolver.cached(
+                        ctx, card.name, MetadataResolver.yearOf(card)
+                    ).also { hit ->
+                        if (hit == null) MetadataResolver.resolve(ctx, card)
+                    }
+                }
             val showRating = !ratingText.isNullOrBlank()
             rating?.isVisible = showRating
             if (showRating) {

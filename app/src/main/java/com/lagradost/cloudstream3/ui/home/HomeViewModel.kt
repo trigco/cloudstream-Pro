@@ -615,26 +615,35 @@ class HomeViewModel : ViewModel() {
             ioSafe {
                 previewResponses.clear()
                 previewResponsesAdded.clear()
-                for (sr in flat.take(10)) {
-                    if (previewResponses.size >= 3) break
+                // Phase 8.56: these detail loads used to run one
+                // after another — with a slow provider first, the
+                // hero sat empty for the sum of every load (his
+                // "hero loads late" report). Fetch the candidates
+                // in parallel, take the first three successes.
+                val loaded = flat.take(10).amap { sr ->
                     val apiX = getApiFromNameNull(sr.apiName)
-                        ?: continue
-                    val r = APIRepository(apiX).load(sr.url)
-                    if (r is Resource.Success) {
-                        previewResponses.add(r.value)
-                        previewResponsesAdded.add(sr.url)
-                        _preview.postValue(
-                            Resource.Success(
-                                (previewResponsesAdded.size <
-                                    flat.size) to previewResponses
-                            )
-                        )
+                        ?: return@amap null
+                    when (val r = APIRepository(apiX).load(sr.url)) {
+                        is Resource.Success -> sr.url to r.value
+                        else -> null
                     }
+                }.filterNotNull()
+                for ((url, response) in loaded) {
+                    if (previewResponses.size >= 3) break
+                    previewResponses.add(response)
+                    previewResponsesAdded.add(url)
                 }
                 if (previewResponses.isEmpty()) {
                     _preview.postValue(
                         Resource.Failure(
                             false, "No homepage responses"
+                        )
+                    )
+                } else {
+                    _preview.postValue(
+                        Resource.Success(
+                            (previewResponsesAdded.size <
+                                flat.size) to previewResponses
                         )
                     )
                 }

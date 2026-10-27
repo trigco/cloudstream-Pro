@@ -380,6 +380,16 @@
     <string name="feed_empty">No content found. Check your providers, then pull to refresh.</string>
     <string name="feed_like">Like</string>
     <string name="feed_up_next">Up next</string>
+    <string name="pref_category_metadata">Ratings (Universal)</string>
+    <string name="tmdb_key_title">TMDB API Key</string>
+    <string name="omdb_key_title">IMDb API Key (OMDb)</string>
+    <string name="api_key_set">API key saved — universal ratings on</string>
+    <string name="api_key_not_set">Not set — tap to add your key</string>
+    <string name="api_key_hint">Paste API key</string>
+    <string name="api_key_saved">Saved</string>
+    <string name="save">Save</string>
+    <string name="add_to_list">Add to list</string>
+    <string name="share_label">Share</string>
     <string name="feed_open_details">Open details</string>
     <string name="feed_retry">Retry</string>
     <string name="feed_loading_video">Loading video…</string>

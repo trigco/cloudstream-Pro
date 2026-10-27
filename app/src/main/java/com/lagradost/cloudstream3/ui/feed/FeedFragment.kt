@@ -23,6 +23,7 @@ import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
@@ -66,7 +67,36 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     /** A resolved real title lands here and swaps into its card. */
     private val titleListener: (String, String) -> Unit = { url, title ->
-        adapter.setTitleOverride(url, title)
+        // Phase 8.56: titles resolve in bursts while scrolling and
+        // a rebind per title shakes the grid — queue them and
+        // apply once the list comes to rest (same cure as Home).
+        pendingTitleOverrides[url] = title
+        searchHandler.removeCallbacks(titleApplyRunnable)
+        searchHandler.postDelayed(titleApplyRunnable, 900L)
+    }
+
+    private val pendingTitleOverrides = mutableMapOf<String, String>()
+
+    private val titleApplyRunnable = object : Runnable {
+        override fun run() {
+            val rv = binding?.feedRecycler
+            if (rv != null &&
+                rv.scrollState != RecyclerView.SCROLL_STATE_IDLE
+            ) {
+                searchHandler.postDelayed(this, 600L)
+                return
+            }
+            val pending = pendingTitleOverrides.toMap()
+            pendingTitleOverrides.clear()
+            pending.forEach { (url, title) ->
+                adapter.setTitleOverride(url, title)
+            }
+        }
+    }
+
+    /** Phase 8.56: universal ratings land here as they resolve. */
+    private val ratingListener: (String, String) -> Unit = { key, rating ->
+        adapter.setRatingOverride(key, rating)
     }
 
     /** Set by a pull-to-refresh: the next feed value starts at the top. */
@@ -118,6 +148,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         setupMiniBar(binding)
 
         TitleResolver.addListener(titleListener)
+        MetadataResolver.addListener(ratingListener)
 
         // Phase 8.37: the refresh ring used to hide behind the
         // floating header — rest it below the search bar + chips.
@@ -221,10 +252,12 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // coming back must not throw the viewer back to the top.
         listState = binding?.feedRecycler?.layoutManager?.onSaveInstanceState()
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
+        searchHandler.removeCallbacks(titleApplyRunnable)
         searchJob?.cancel()
         headerAnimator?.cancel()
         FeedPlayer.removeListener(miniListener)
         TitleResolver.removeListener(titleListener)
+        MetadataResolver.removeListener(ratingListener)
         super.onDestroyView()
     }
 
@@ -369,7 +402,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     private fun animateHeader(binding: FragmentFeedBinding, show: Boolean) {
-        if (show == headerShown || headerFullHeight == 0) return
+        // Phase 8.56: the height was measured once in a post{} at
+        // setup; if that ran before layout it stayed 0 forever
+        // and auto-hide silently never worked (his report).
+        // Re-measure lazily whenever it is missing.
+        if (headerFullHeight <= 0) {
+            headerFullHeight = binding.feedHeader.height
+            if (headerFullHeight <= 0) return
+        }
+        if (show == headerShown) return
         headerShown = show
         val header = binding.feedHeader
         // Slide, don't resize: animating the header's height forced a
@@ -475,6 +516,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         searchJob?.cancel()
         if (query.isEmpty()) {
             // Back to the full pool — also reset the chips to "All".
+            binding.feedLoading.isVisible = false
             selectedChip?.let { styleChip(it, selected = false) }
             val first = binding.feedChips.getChildAt(0) as? TextView
             selectedChip = first
@@ -486,8 +528,26 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val local = pool.filter {
             it.response.name.contains(query, ignoreCase = true)
         }
-        binding.setFeedEmpty( local.isEmpty() )
-        adapter.submitList(local)
+        // Phase 8.56: the empty page used to appear the moment
+        // LOCAL hits were zero — over the still-loading skeleton —
+        // while the provider search was still running (his
+        // screenshot). Empty is only true once every source has
+        // answered; while a remote search is pending, the spinner
+        // shows instead.
+        if (local.isNotEmpty()) {
+            binding.feedLoading.isVisible = false
+            binding.setFeedEmpty( false )
+            adapter.submitList(local)
+        } else if (query.length >= 3) {
+            binding.setFeedEmpty( false )
+            binding.feedLoading.isVisible = true
+            adapter.submitList(local)
+        } else {
+            binding.feedLoading.isVisible = false
+            binding.setFeedEmpty( !viewModel.isBuilding )
+            adapter.submitList(local)
+            return
+        }
         if (query.length < 3) return
 
         val task = Runnable {
@@ -502,6 +562,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 val merged = local + remote.filter {
                     it.response.url !in hidden && seen.add(it.response.url)
                 }
+                binding.feedLoading.isVisible = false
                 binding.setFeedEmpty( merged.isEmpty() )
                 adapter.submitList(merged)
             }

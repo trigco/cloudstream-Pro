@@ -6,9 +6,11 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FeedCardBinding
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -34,6 +36,20 @@ class FeedAdapter(
     fun setTitleOverride(url: String, title: String) {
         titleOverrides[url] = title
         val idx = currentList.indexOfFirst { it.response.url == url }
+        if (idx >= 0) notifyItemChanged(idx)
+    }
+
+    /** Phase 8.56: universal ratings resolved by MetadataResolver,
+     *  keyed by its title+year cache key. */
+    private val ratingOverrides = mutableMapOf<String, String>()
+
+    fun setRatingOverride(key: String, rating: String) {
+        ratingOverrides[key] = rating
+        val idx = currentList.indexOfFirst {
+            MetadataResolver.keyFor(
+                it.response.name, MetadataResolver.yearOf(it.response)
+            ) == key
+        }
         if (idx >= 0) notifyItemChanged(idx)
     }
 
@@ -66,7 +82,32 @@ class FeedAdapter(
             if (override == null && TitleResolver.isIdLike(response.name)) {
                 onTitleNeeded(entry)
             }
-            binding.feedCardMeta.text = "${entry.apiName} • ${typeLabel(response.type)}"
+            // Phase 8.56: meta line gains the rating (provider
+            // score, else the universal TMDB/IMDb cache) and a
+            // DUB/SUB label when the provider declares one.
+            val ratingKey = MetadataResolver.keyFor(
+                response.name, MetadataResolver.yearOf(response)
+            )
+            val rating = ratingOverrides[ratingKey]
+                ?: MetadataResolver.cachedFor(context, response)
+            if (rating == null && response.score == null) {
+                MetadataResolver.resolve(context, response)
+            }
+            val dubSub = when {
+                response.dubStatus.isNullOrEmpty() -> null
+                response.dubStatus!!.contains(DubStatus.Dubbed) &&
+                    response.dubStatus!!.contains(DubStatus.Subbed) -> "DUB+SUB"
+                response.dubStatus!!.contains(DubStatus.Dubbed) -> "DUB"
+                response.dubStatus!!.contains(DubStatus.Subbed) -> "SUB"
+                else -> null
+            }
+            binding.feedCardMeta.text = buildString {
+                append(entry.apiName)
+                append(" • ")
+                append(typeLabel(response.type))
+                if (rating != null) append(" • ★ ").append(rating)
+                if (dubSub != null) append(" • ").append(dubSub)
+            }
             bindLike(entry)
 
             binding.root.setOnClickListener { onPlay(entry) }

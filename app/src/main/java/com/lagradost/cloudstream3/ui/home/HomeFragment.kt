@@ -31,6 +31,7 @@ import androidx.preference.PreferenceManager
 import android.os.Handler
 import android.os.Looper
 import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Collections
 import com.lagradost.cloudstream3.plugins.PluginManager
@@ -61,6 +62,7 @@ import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
@@ -719,6 +721,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         homeAutoRotateHandler.postDelayed(titleNotifyRunnable, 1_200L)
     }
 
+    /** Phase 8.56: a universal rating landing deserves the same
+     *  debounced, idle-only rebind as a resolved title. */
+    private val metadataResolveListener: (String, String) -> Unit = { _, _ ->
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        homeAutoRotateHandler.postDelayed(titleNotifyRunnable, 1_200L)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -726,11 +735,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     ): View? {
         bottomSheetDialog?.ownShow()
         TitleResolver.addListener(titleResolveListener)
+        MetadataResolver.addListener(metadataResolveListener)
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
     override fun onDestroyView() {
         TitleResolver.removeListener(titleResolveListener)
+        MetadataResolver.removeListener(metadataResolveListener)
         homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
@@ -904,27 +915,44 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     /**
-     * Phase 8.17: one auto-rotation step — every category row currently on
-     * screen drops its first poster to the back of the row, animated by
-     * the row's own item animator. Skipped while anything is scrolling or
-     * being dragged, and while the fragment is paused (e.g. a details page
-     * is open above the home screen).
+     * Phase 8.17: one auto-rotation step — every category row
+     * drops its first poster to the back of the row, so coming
+     * back to a row feels fresh.
+     * Phase 8.56: rotate only rows that are NOT on screen. The
+     * 8.17 version rotated the visible rows themselves, animated
+     * by the row's item animator — on an idle screen the whole
+     * page visibly shuffled every 20 seconds (his কাপাকাপি
+     * report). Off-screen rows now rotate silently through the
+     * parent adapter; visible rows keep still.
      */
     private fun rotateVisibleHomeRows() {
         if (!isResumed) return
         val recycler = binding?.homeMasterRecycler ?: return
         if (recycler.scrollState != RecyclerView.SCROLL_STATE_IDLE) return
-        for (i in 0 until recycler.childCount) {
-            val child = recycler.getChildAt(i)
-            if (recycler.getChildAdapterPosition(child) <= 0) continue
-            val row = child.findViewById<RecyclerView>(R.id.home_child_recyclerview)
-                ?: continue
-            if (row.scrollState != RecyclerView.SCROLL_STATE_IDLE) continue
-            val adapter = row.adapter as? HomeChildItemAdapter ?: continue
-            val current = adapter.immutableCurrentList
-            if (current.size < 4) continue
-            adapter.submitList(current.drop(1) + current.first())
+        val adapter = homeMasterAdapter ?: return
+        val lm = recycler.layoutManager as? LinearLayoutManager ?: return
+        // Adapter position 0 is the hero header; data index i sits
+        // at layout position i + 1.
+        val firstVisibleRow = lm.findFirstVisibleItemPosition() - 1
+        val lastVisibleRow = lm.findLastVisibleItemPosition() - 1
+        val items = adapter.immutableCurrentList
+        var changed = false
+        val rotated = items.mapIndexed { index, row ->
+            val posters = row.list.list
+            if (index in firstVisibleRow..lastVisibleRow || posters.size < 4) {
+                row
+            } else {
+                changed = true
+                row.copy(
+                    list = com.lagradost.cloudstream3.HomePageList(
+                        row.list.name,
+                        posters.drop(1) + posters.first(),
+                        row.list.isHorizontalImages
+                    )
+                )
+            }
         }
+        if (changed) adapter.submitList(rotated)
     }
 
     var lastSavedHomepage: String? = null
@@ -1091,6 +1119,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             )
             homeMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             homeMasterRecycler.adapter = homeMasterAdapter
+            // Phase 8.56: no item animator on the master list —
+            // change animations on rebinds (title/rating refresh,
+            // rotation) are a visible shudder (কাপাকাপি) source.
+            homeMasterRecycler.itemAnimator = null
 
             // Phase 8.10 (phone only): provider sections glide in as they
             // scroll into view instead of popping, and the hero shrinks /

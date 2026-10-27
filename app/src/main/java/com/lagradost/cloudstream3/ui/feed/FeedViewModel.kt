@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.utils.FamilyMode
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** One feed card: a provider search result plus the provider it came from. */
@@ -93,7 +94,13 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 // next page instead of replacing the grid.
                 val fresh = if (firstBuild) {
                     page = 2
-                    buildFeed(1) + buildFeed(2)
+                    // Phase 8.56: the two first pages used to load
+                    // one after another — the feed's first paint
+                    // waited for both rounds in sequence (his
+                    // "feed loads slowly" report). Side by side now.
+                    val p1 = async { buildFeed(1) }
+                    val p2 = async { buildFeed(2) }
+                    p1.await() + p2.await()
                 } else {
                     buildFeed(page)
                 }

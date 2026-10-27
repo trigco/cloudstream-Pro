@@ -123,7 +123,7 @@
     <string name="rew_text_format" formatted="true">-%d</string>
     <string name="ffw_text_regular_format" formatted="true">%d</string>
     <string name="rew_text_regular_format" formatted="true">%d</string>
-    <string name="rating_format" formatted="true">%s/10.0</string>
+    <string name="rating_format" formatted="true">★ %s/10</string>
     <string name="year_format" formatted="true">%d</string>
 
     <string name="episode_play_img_des">@string/play_episode</string>

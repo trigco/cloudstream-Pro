@@ -66,6 +66,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private val progressRunnable = object : Runnable {
         override fun run() {
             updateProgress()
+            // Phase 8.56: the buffering spinner and the controls
+            // auto-hide are re-evaluated on every tick — deciding
+            // them only on state-change callbacks is what left
+            // videos spinning without an animation and controls
+            // stuck on screen (his reports).
+            updateBuffering()
+            tickControlsHide()
             handler.postDelayed(this, 500L)
         }
     }
@@ -543,6 +550,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             lastShownUrl = current
             refreshUpNext(current)
         }
+        // Phase 8.56: buffering gets the final word — the READY
+        // branch above hides the spinner on every state callback,
+        // including the churn that precedes a rebuffer.
+        updateBuffering()
     }
 
     private fun updateBuffering() {
@@ -643,7 +654,29 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val binding = binding ?: return
         if (FeedPlayer.status != FeedPlayer.Status.READY) return
         binding.feedWatchControls.isVisible = true
+        controlsShownAt = System.currentTimeMillis()
         scheduleHideControls()
+    }
+
+    /** Phase 8.56: when the controls were (re)shown. */
+    private var controlsShownAt = 0L
+
+    /**
+     * Phase 8.56: the scheduled hide only posts while the player
+     * reports playing at schedule time — show the controls while
+     * paused, press play, and the timer was never set, so the
+     * bar stayed up forever (his "title bar auto-hide হয় না"
+     * report). The tick is the backstop: playing + visible for
+     * 3s = hide, no matter how we got here.
+     */
+    private fun tickControlsHide() {
+        val binding = binding ?: return
+        if (!binding.feedWatchControls.isVisible) return
+        if (!FeedPlayer.isPlaying) return
+        if (System.currentTimeMillis() - controlsShownAt >= 3_000L) {
+            binding.feedWatchControls.isVisible = false
+            handler.removeCallbacks(hideControlsRunnable)
+        }
     }
 
     private fun scheduleHideControls() {
