@@ -103,7 +103,7 @@ object NuvioStreamService {
             ?: return emptyList()
         val tmdbKey = NuvioTmdb.apiKey(context)
 
-        return coroutineScope {
+        val outcomes = coroutineScope {
             targets.map { (repo, scraper) ->
                 async {
                     val settings = NuvioRepository.scraperSettings(
@@ -114,11 +114,13 @@ object NuvioStreamService {
                         season?.toString() ?: "", episode?.toString() ?: "",
                         settings.toString()
                     ).joinToString("|")
-                    lookupCache(cacheKey)?.let { return@async it }
-                    val results = gate.withPermit {
+                    lookupCache(cacheKey)?.let {
+                        return@async it to "${scraper.name}: ${it.size} (cached)"
+                    }
+                    val result = gate.withPermit {
                         runCatching {
                             val code = NuvioRepository.fetchCode(context, repo, scraper)
-                                ?: return@runCatching emptyList()
+                                ?: throw IllegalStateException("code download failed")
                             val payload = NuvioEngine.run(
                                 context = context,
                                 repoUrl = repo.manifestUrl,
@@ -133,18 +135,28 @@ object NuvioStreamService {
                                 episode = episode,
                             )
                             if (payload.has("error")) {
-                                emptyList()
-                            } else {
-                                parseNuvioStreams(payload, scraper)
-                                    .mapNotNull { it.toStremioStream() }
+                                throw IllegalStateException(
+                                    payload.optString("error").ifBlank { "engine error" }
+                                )
                             }
-                        }.getOrElse { emptyList() }
+                            parseNuvioStreams(payload, scraper)
+                                .mapNotNull { it.toStremioStream() }
+                        }
                     }
-                    storeCache(cacheKey, results)
-                    results
+                    val streams = result.getOrElse { emptyList() }
+                    storeCache(cacheKey, streams)
+                    val note = if (result.isSuccess) {
+                        "${scraper.name}: ${streams.size}"
+                    } else {
+                        val e = result.exceptionOrNull()
+                        "${scraper.name}: error (${e?.message ?: e?.javaClass?.simpleName ?: "failed"})"
+                    }
+                    streams to note
                 }
-            }.awaitAll().flatten()
+            }.awaitAll()
         }
+        NuvioDiagnostics.record(mediaType, outcomes.map { it.second })
+        return outcomes.flatMap { it.first }
     }
 
     private fun NuvioStreamResult.toStremioStream(): StremioStream? {
@@ -187,5 +199,21 @@ object NuvioStreamService {
             cache.remove(cache.keys.first())
         }
         cache[key] = CacheEntry(now, results)
+    }
+}
+
+/**
+ * Summary of the most recent resolve() call, shown at the top of the Nuvio
+ * Plugins page so a failed or empty fetch is visible instead of silent.
+ */
+object NuvioDiagnostics {
+    @Volatile
+    var lastSummary: String? = null
+        private set
+
+    fun record(mediaType: String, notes: List<String>) {
+        val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+            .format(java.util.Date())
+        lastSummary = "$time · $mediaType — " + notes.joinToString(", ")
     }
 }

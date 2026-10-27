@@ -30,6 +30,8 @@ import com.lagradost.cloudstream3.stremio.StremioParse
 import com.lagradost.cloudstream3.stremio.StremioProviders
 import com.lagradost.cloudstream3.stremio.StremioTransport
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import coil3.request.transformations
+import coil3.transform.CircleCropTransformation
 import kotlinx.coroutines.launch
 
 /**
@@ -236,7 +238,14 @@ class StremioAddonAdapter(
                 logo.visibility = View.GONE
             } else {
                 logo.visibility = View.VISIBLE
-                logo.loadImage(logoUrl)
+                logo.loadImage(logoUrl) {
+                    transformations(CircleCropTransformation())
+                    error(
+                        com.lagradost.cloudstream3.utils.getImageFromDrawable(
+                            context, R.drawable.ic_baseline_extension_24
+                        )
+                    )
+                }
             }
             if (addon.lastError.isNullOrBlank()) {
                 errorView.visibility = View.GONE

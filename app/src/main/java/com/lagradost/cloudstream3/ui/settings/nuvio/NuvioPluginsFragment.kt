@@ -30,6 +30,7 @@ import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.nuvio.NuvioEngine
+import com.lagradost.cloudstream3.nuvio.NuvioDiagnostics
 import com.lagradost.cloudstream3.nuvio.NuvioParse
 import com.lagradost.cloudstream3.nuvio.NuvioProviders
 import com.lagradost.cloudstream3.nuvio.NuvioRepository
@@ -101,6 +102,12 @@ class NuvioPluginsFragment : Fragment() {
     }
 
     private fun refresh() {
+        val diag = NuvioDiagnostics.lastSummary
+        binding.nuvioDiagnostics.visibility =
+            if (diag.isNullOrBlank()) View.GONE else View.VISIBLE
+        if (!diag.isNullOrBlank()) {
+            binding.nuvioDiagnostics.text = "Last stream check · $diag"
+        }
         if (!::adapter.isInitialized) return
         val ctx = requireContext()
         val repos = NuvioRepository.getRepos(ctx)

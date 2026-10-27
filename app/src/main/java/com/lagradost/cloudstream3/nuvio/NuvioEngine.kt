@@ -358,9 +358,17 @@ object NuvioEngine {
                 val fromEval = runCatching {
                     evaluate<String>(callScript, "nuvio-call.js")
                 }.getOrNull()
+                // Both call scripts are async IIFEs: evaluate() returns the
+                // Promise object's own string form ("Promise { <state>: ... }"),
+                // never the payload. The real payload always lands in the
+                // bridge via __nuvio_result before evaluate() returns, so the
+                // bridge wins; the eval text is only a fallback when it
+                // actually looks like JSON. (Verified on the real engine —
+                // preferring fromEval silently discarded every result.)
                 when {
-                    !fromEval.isNullOrBlank() -> fromEval
+                    bridge.resultJson != null -> bridge.resultJson
                     bridge.resultDeferred.isCompleted -> bridge.resultDeferred.await()
+                    !fromEval.isNullOrBlank() && fromEval.trimStart().startsWith("{") -> fromEval
                     else -> bridge.resultJson
                 }
             }
