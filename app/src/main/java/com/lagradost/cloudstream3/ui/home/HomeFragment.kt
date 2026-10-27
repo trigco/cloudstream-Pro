@@ -27,7 +27,11 @@ import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.preference.PreferenceManager
+import android.os.Handler
+import android.os.Looper
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
+import java.util.Collections
 import com.lagradost.cloudstream3.plugins.PluginManager
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getActivity
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -69,6 +73,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.filterProviderByPreferredMedia
+import com.lagradost.cloudstream3.utils.hapticTick
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiProviderLangSettings
 import com.lagradost.cloudstream3.utils.AppContextUtils.isNetworkAvailable
 import com.lagradost.cloudstream3.utils.AppContextUtils.isRecyclerScrollable
@@ -658,6 +663,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun onDestroyView() {
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
+        // Phase 8.17: the auto-rotation timer must not outlive the view.
+        homeAutoRotateHandler.removeCallbacks(homeAutoRotateRunnable)
         // Never leave a pull-to-refresh spinner behind on a destroyed view
         binding?.homeSwipeRefresh?.isRefreshing = false
         super.onDestroyView()
@@ -681,6 +688,67 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
     private var bottomSheetDialog: BottomSheetDialog? = null
     private var homeMasterAdapter: HomeParentItemAdapterPreview? = null
+
+    // Phase 8.17: the category rows as last submitted (fragment-side
+    // copies), in display order — drag-reorder swaps these, and the saved
+    // order is re-applied to every fresh load. Plus the live auto-rotation
+    // timer that steps the visible rows while the home screen sits open.
+    private var homeCategoryItems: MutableList<HomeViewModel.ExpandableHomepageList> =
+        mutableListOf()
+    private val homeCategoryOrderKey = "home_category_order"
+    private val homeAutoRotateHandler = Handler(Looper.getMainLooper())
+    private val homeAutoRotateRunnable = object : Runnable {
+        override fun run() {
+            rotateVisibleHomeRows()
+            homeAutoRotateHandler.postDelayed(this, 20_000L)
+        }
+    }
+
+    private fun savedCategoryOrderIndex(name: String): Int {
+        val idx = savedCategoryOrder().indexOf(name)
+        return if (idx >= 0) idx else Int.MAX_VALUE
+    }
+
+    private fun savedCategoryOrder(): List<String> {
+        val ctx = context ?: return emptyList()
+        val raw = PreferenceManager.getDefaultSharedPreferences(ctx)
+            .getString(homeCategoryOrderKey, null) ?: return emptyList()
+        return raw.split('\u001F').filter { it.isNotEmpty() }
+    }
+
+    private fun saveCategoryOrder() {
+        val ctx = context ?: return
+        PreferenceManager.getDefaultSharedPreferences(ctx).edit()
+            .putString(
+                homeCategoryOrderKey,
+                homeCategoryItems.joinToString("\u001F") { it.list.name }
+            )
+            .apply()
+    }
+
+    /**
+     * Phase 8.17: one auto-rotation step — every category row currently on
+     * screen drops its first poster to the back of the row, animated by
+     * the row's own item animator. Skipped while anything is scrolling or
+     * being dragged, and while the fragment is paused (e.g. a details page
+     * is open above the home screen).
+     */
+    private fun rotateVisibleHomeRows() {
+        if (!isResumed) return
+        val recycler = binding?.homeMasterRecycler ?: return
+        if (recycler.scrollState != RecyclerView.SCROLL_STATE_IDLE) return
+        for (i in 0 until recycler.childCount) {
+            val child = recycler.getChildAt(i)
+            if (recycler.getChildAdapterPosition(child) <= 0) continue
+            val row = child.findViewById<RecyclerView>(R.id.home_child_recyclerview)
+                ?: continue
+            if (row.scrollState != RecyclerView.SCROLL_STATE_IDLE) continue
+            val adapter = row.adapter as? HomeChildItemAdapter ?: continue
+            val current = adapter.immutableCurrentList
+            if (current.size < 4) continue
+            adapter.submitList(current.drop(1) + current.first())
+        }
+    }
 
     var lastSavedHomepage: String? = null
 
@@ -846,12 +914,83 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 SectionEntranceAnimator(firstAnimatedPosition = 1)
                     .attachTo(homeMasterRecycler)
                 setupHeroScrollCollapse(homeMasterRecycler)
+
+                // Phase 8.17: long-press a category's title strip and drag
+                // it up or down to reorder the home categories; the order
+                // is saved on drop and re-applied on every load. The hero
+                // header (position 0) never moves. Poster touches belong
+                // to the rows' own lists, so poster long-press menus are
+                // untouched — the drag only starts from the row itself.
+                ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+                    ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+                ) {
+                    override fun isLongPressDragEnabled(): Boolean = true
+
+                    override fun getMovementFlags(
+                        recyclerView: RecyclerView,
+                        viewHolder: RecyclerView.ViewHolder
+                    ): Int {
+                        if (viewHolder.bindingAdapterPosition <= 0) return 0
+                        return super.getMovementFlags(recyclerView, viewHolder)
+                    }
+
+                    override fun onMove(
+                        recyclerView: RecyclerView,
+                        viewHolder: RecyclerView.ViewHolder,
+                        target: RecyclerView.ViewHolder
+                    ): Boolean {
+                        val from = viewHolder.bindingAdapterPosition
+                        val to = target.bindingAdapterPosition
+                        if (from <= 0 || to <= 0) return false
+                        // Adapter positions include the header at 0.
+                        val fromIndex = from - 1
+                        val toIndex = to - 1
+                        if (fromIndex !in homeCategoryItems.indices ||
+                            toIndex !in homeCategoryItems.indices
+                        ) return false
+                        Collections.swap(homeCategoryItems, fromIndex, toIndex)
+                        (recyclerView.adapter as? ParentItemAdapter)
+                            ?.notifyItemMoved(from, to)
+                        return true
+                    }
+
+                    override fun onSwiped(
+                        viewHolder: RecyclerView.ViewHolder,
+                        direction: Int
+                    ) = Unit
+
+                    override fun onSelectedChanged(
+                        viewHolder: RecyclerView.ViewHolder?,
+                        actionState: Int
+                    ) {
+                        super.onSelectedChanged(viewHolder, actionState)
+                        if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                            viewHolder?.itemView?.hapticTick()
+                        }
+                    }
+
+                    override fun clearView(
+                        recyclerView: RecyclerView,
+                        viewHolder: RecyclerView.ViewHolder
+                    ) {
+                        super.clearView(recyclerView, viewHolder)
+                        saveCategoryOrder()
+                    }
+                }).attachToRecyclerView(homeMasterRecycler)
+
+                // Phase 8.17: while the home screen sits open, the visible
+                // category rows step one poster forward every 20 seconds —
+                // a viewer watching the screen sees the shelves change on
+                // their own, animated by the rows' item animators.
+                homeAutoRotateHandler.removeCallbacks(homeAutoRotateRunnable)
+                homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 20_000L)
             }
 
             homeApiFab.isVisible = isLayout(PHONE)
             anchorHomeApiFab()
 
-            homePreviewReloadProvider.setOnClickListener {
+            homePreviewReloadProvider.setOnClickListener { view ->
+                view.hapticTick()
                 homeViewModel.loadAndCancel(
                     homeViewModel.apiName.value ?: noneApi.name,
                     forceReload = true,
@@ -880,6 +1019,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     setProgressViewOffset(false, (-40).toPx, 72.toPx)
                     setDistanceToTriggerSync(120.toPx)
                     setOnRefreshListener {
+                        homeSwipeRefresh.hapticTick()
                         homeViewModel.loadAndCancel(
                             homeViewModel.apiName.value ?: noneApi.name,
                             forceReload = true,
@@ -1025,17 +1165,38 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 when (data) {
                     is Resource.Success -> {
                         val d = data.value
-                        (homeMasterRecycler.adapter as? ParentItemAdapter)?.submitList(d.values.map {
+                        // Phase 8.17: re-apply the viewer's saved category
+                        // order; categories the save does not know keep
+                        // their load order after the known ones.
+                        val orderedCopies = d.values.map {
                             it.copy(
                                 list = it.list.copy(list = it.list.list.toMutableList())
                             )
-                        })
+                        }.sortedBy { savedCategoryOrderIndex(it.list.name) }
+                        homeCategoryItems = orderedCopies.toMutableList()
+                        (homeMasterRecycler.adapter as? ParentItemAdapter)
+                            ?.submitList(orderedCopies)
 
                         saveHomepageToTV(d)
 
-                        homeLoading.isVisible = false
+                        // Phase 8.16: the skeleton crossfades into the
+                        // content instead of cutting, when it was on screen.
+                        if (homeLoading.isVisible) {
+                            homeLoading.animate().alpha(0f).setDuration(250)
+                                .withEndAction {
+                                    homeLoading.isVisible = false
+                                    homeLoading.alpha = 1f
+                                }.start()
+                            homeMasterRecycler.alpha = 0f
+                            homeMasterRecycler.isVisible = true
+                            homeMasterRecycler.animate().alpha(1f)
+                                .setDuration(250).start()
+                        } else {
+                            homeLoading.isVisible = false
+                            homeMasterRecycler.alpha = 1f
+                            homeMasterRecycler.isVisible = true
+                        }
                         homeLoadingError.isVisible = false
-                        homeMasterRecycler.isVisible = true
                         homeLoadingShimmer.stopShimmer()
                         homeSwipeRefresh.isRefreshing = false
 

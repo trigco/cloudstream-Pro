@@ -33,6 +33,40 @@ import com.lagradost.cloudstream3.utils.getImageFromDrawable
 object SearchResultBuilder {
     private val showCache: MutableMap<String, Boolean> = mutableMapOf()
 
+    /**
+     * Phase 8.17: poster labels show the clean title only — providers pack
+     * the raw name with the year, quality tags and episode ranges
+     * ("DeSu7 (2026) [HDTS Best Quality]"), which crowds out the actual
+     * title. Everything bracketed goes, the year goes, quality words go;
+     * a season marker survives, normalised ("S5" -> "S05") and moved to
+     * the end: "Bachelor Point (2026) S05 [Ep 121-128]" becomes
+     * "Bachelor Point S05". Display only: the response itself is untouched,
+     * so search matching and the details page keep the full name. If
+     * cleaning would leave nothing, the raw name is used as-is.
+     */
+    fun cleanPosterTitle(raw: String): String {
+        val season = Regex("""(?i)\bS(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
+            ?: Regex("""(?i)\bSeason\s*(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
+
+        var title = raw
+            .replace(Regex("""\[[^\]]*\]"""), " ")
+            .replace(Regex("""\(\s*(19|20)\d{2}\s*\)"""), " ")
+            .replace(Regex("""(?i)\bS\d{1,2}\b"""), " ")
+            .replace(Regex("""(?i)\bSeason\s*\d{1,2}\b"""), " ")
+            .replace(
+                Regex("""(?i)\b(full\s?hd|hdts|hdtc|hdcam|hdrip|web-?dl|webrip|bluray|blu-ray|camrip|telesync|telecine|4k|uhd)\b"""),
+                " "
+            )
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+            .trim('-', ':', '•', '.', ' ')
+            .trim()
+
+        if (title.isBlank()) return raw.trim()
+        if (season != null) title += " S" + season.padStart(2, '0')
+        return title
+    }
+
     fun updateCache(context: Context?) {
         if (context == null) return
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(context)
@@ -151,7 +185,7 @@ object SearchResultBuilder {
             textQuality?.isVisible = false
         }
 
-        cardText?.text = card.name
+        cardText?.text = cleanPosterTitle(card.name)
         cardText?.isVisible = showTitle
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {

@@ -346,12 +346,23 @@ class HomeViewModel : ViewModel() {
                         home?.items?.forEach { list ->
                             val filteredList =
                                 context?.filterHomePageListByFilmQuality(list) ?: list
+                            // Phase 8.17: rotate each category by a random
+                            // offset on every fresh load, so a refresh leads
+                            // with different posters instead of always the
+                            // same ones. Expansions append to this same list
+                            // afterwards, so the order stays stable while
+                            // browsing deeper.
+                            val rotated = if (filteredList.list.size >= 4) {
+                                val offset = (1 until filteredList.list.size).random()
+                                filteredList.list.drop(offset) +
+                                    filteredList.list.take(offset)
+                            } else {
+                                filteredList.list
+                            }
                             expandable[list.name] =
                                 ExpandableHomepageList(
                                     filteredList.copy(
-                                        list = CopyOnWriteArrayList(
-                                            filteredList.list
-                                        )
+                                        list = CopyOnWriteArrayList(rotated)
                                     ), 1, home.hasNext
                                 )
                         }
@@ -359,6 +370,11 @@ class HomeViewModel : ViewModel() {
 
                     val items = data.value.mapNotNull { it?.items }.flatten()
 
+
+                    // Phase 8.16: remember which poster opens the hero,
+                    // so a refresh never deals the same opener twice in a
+                    // row (the list itself is reshuffled on every load).
+                    val previousPreviewFirstUrl = previewResponses.firstOrNull()?.url
 
                     previewResponses.clear()
                     previewResponsesAdded.clear()
@@ -385,6 +401,14 @@ class HomeViewModel : ViewModel() {
                             _randomItems.postValue(randomItems)
                             currentShuffledList = randomItems
                         }
+                    }
+                    // Phase 8.16: if the fresh shuffle still opens on the
+                    // same poster as last time, rotate it to the back — the
+                    // hero visibly re-deals on every refresh.
+                    if (previousPreviewFirstUrl != null && previewResponses.size > 1 &&
+                        previewResponses.firstOrNull()?.url == previousPreviewFirstUrl
+                    ) {
+                        previewResponses.add(previewResponses.removeAt(0))
                     }
                     if (previewResponses.isEmpty()) {
                         _preview.postValue(
