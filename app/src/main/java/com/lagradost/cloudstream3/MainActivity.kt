@@ -1888,6 +1888,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             // Register the user's Stremio addons as providers (they join
             // apis through addPluginMapping inside sync).
             com.lagradost.cloudstream3.stremio.StremioProviders.sync(this@MainActivity)
+            // Same for the Nuvio provider (TMDB catalogue + JS scrapers);
+            // it only registers when a TMDB key and a scraper exist.
+            com.lagradost.cloudstream3.nuvio.NuvioProviders.sync(this@MainActivity)
         }
 
         //  val navView: BottomNavigationView = findViewById(R.id.nav_view)

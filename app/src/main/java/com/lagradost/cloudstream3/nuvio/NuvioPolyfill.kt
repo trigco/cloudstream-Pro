@@ -42,10 +42,10 @@ object NuvioPolyfill {
   G.SETTINGS = SETTINGS;
   G.settings = SETTINGS;
   var TMDBK = __NUVIO_TMDB_KEY__;
-  G.TMDB_API_KEY = <redacted>
+  G.TMDB_API_KEY = TMDBK
   G.TMDB_KEY = TMDBK;
   G.process = {
-    env: { TMDB_API_KEY: <redacted>, NODE_ENV: 'production' },
+    env: { TMDB_API_KEY: TMDBK, NODE_ENV: 'production' },
     platform: 'android',
     version: '',
     nextTick: function (fn) { Promise.resolve().then(fn); }
@@ -1246,7 +1246,7 @@ object NuvioPolyfill {
   // ------------------------------------------------------------- require + misc globals
   G.require = function (name) {
     name = String(name);
-    if (name === 'cheerio') return cheerioModule;
+    if (name === 'cheerio' || name === 'cheerio-without-node-native') return cheerioModule;
     if (name === 'crypto-js') return CryptoJS;
     if (name === 'axios') return axiosModule;
     if (name === 'node-fetch') return G.fetch;

@@ -252,4 +252,24 @@ object NuvioRepository {
 
     private fun scraperKey(repoUrl: String, scraperId: String): String =
         repoUrl + "|" + scraperId
+
+    // ---- collapsed repo groups on the Nuvio Plugins page (8.66) ----
+
+    private const val KEY_COLLAPSED = "nuvio_collapsed_v1"
+
+    fun collapsedRepos(ctx: Context): Set<String> = runCatching {
+        val raw = prefs(ctx).getString(KEY_COLLAPSED, null) ?: return emptySet()
+        val arr = JSONArray(raw)
+        (0 until arr.length()).mapNotNull { arr.optString(it) }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }.getOrElse { emptySet() }
+
+    fun setRepoCollapsed(ctx: Context, repoUrl: String, collapsed: Boolean) {
+        val current = collapsedRepos(ctx).toMutableSet()
+        if (collapsed) current += repoUrl else current -= repoUrl
+        val arr = JSONArray()
+        current.forEach { arr.put(it) }
+        prefs(ctx).edit().putString(KEY_COLLAPSED, arr.toString()).apply()
+    }
 }

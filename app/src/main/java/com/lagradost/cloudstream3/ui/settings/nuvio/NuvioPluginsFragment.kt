@@ -25,16 +25,19 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.nuvio.NuvioEngine
 import com.lagradost.cloudstream3.nuvio.NuvioParse
+import com.lagradost.cloudstream3.nuvio.NuvioProviders
 import com.lagradost.cloudstream3.nuvio.NuvioRepository
 import com.lagradost.cloudstream3.nuvio.NuvioScraperInfo
 import com.lagradost.cloudstream3.nuvio.NuvioSettingsField
 import com.lagradost.cloudstream3.nuvio.NuvioTmdb
 import com.lagradost.cloudstream3.nuvio.StoredNuvioRepo
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import com.lagradost.cloudstream3.utils.getImageFromDrawable
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -83,6 +86,13 @@ class NuvioPluginsFragment : Fragment() {
             onRefreshRepo = { repo -> fetchAndStoreRepo(repo.manifestUrl) },
             onRemoveRepo = { repo -> confirmRemove(repo) },
             onSettings = { repo, scraper -> openScraperSettings(repo, scraper) },
+            onToggleCollapse = { repo ->
+                val ctx = requireContext()
+                val collapsed = NuvioRepository.collapsedRepos(ctx)
+                    .contains(repo.manifestUrl)
+                NuvioRepository.setRepoCollapsed(ctx, repo.manifestUrl, !collapsed)
+                refresh()
+            },
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
@@ -91,9 +101,13 @@ class NuvioPluginsFragment : Fragment() {
 
     private fun refresh() {
         if (!::adapter.isInitialized) return
-        val repos = NuvioRepository.getRepos(requireContext())
-        adapter.submit(repos)
+        val ctx = requireContext()
+        val repos = NuvioRepository.getRepos(ctx)
+        adapter.submit(repos, NuvioRepository.collapsedRepos(ctx))
         emptyView.visibility = if (repos.isEmpty()) View.VISIBLE else View.GONE
+        // Keep the browsable Nuvio provider registered exactly while
+        // it can work (TMDB key set + at least one scraper enabled).
+        NuvioProviders.sync(ctx)
     }
 
     private fun toast(message: Int) {
@@ -377,7 +391,11 @@ class NuvioPluginsFragment : Fragment() {
 // ---- list (repo headers + scraper rows in one RecyclerView) ----
 
 private sealed interface NuvioRow {
-    data class RepoHeader(val repo: StoredNuvioRepo, val name: String) : NuvioRow
+    data class RepoHeader(
+        val repo: StoredNuvioRepo,
+        val name: String,
+        val collapsed: Boolean,
+    ) : NuvioRow
     data class ScraperRow(
         val repo: StoredNuvioRepo,
         val scraper: NuvioScraperInfo,
@@ -390,17 +408,25 @@ private class NuvioRepoAdapter(
     private val onRefreshRepo: (StoredNuvioRepo) -> Unit,
     private val onRemoveRepo: (StoredNuvioRepo) -> Unit,
     private val onSettings: (StoredNuvioRepo, NuvioScraperInfo) -> Unit,
+    private val onToggleCollapse: (StoredNuvioRepo) -> Unit,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var rows: List<NuvioRow> = emptyList()
 
-    fun submit(repos: List<StoredNuvioRepo>) {
+    fun submit(repos: List<StoredNuvioRepo>, collapsed: Set<String> = emptySet()) {
         val out = mutableListOf<NuvioRow>()
         for (repo in repos) {
             val manifest = repo.manifest()
-            out += NuvioRow.RepoHeader(repo, manifest?.name ?: repo.manifestUrl)
-            manifest?.scrapers?.forEach { scraper ->
-                out += NuvioRow.ScraperRow(repo, scraper, repo.isScraperEnabled(scraper))
+            val isCollapsed = collapsed.contains(repo.manifestUrl)
+            out += NuvioRow.RepoHeader(
+                repo, manifest?.name ?: repo.manifestUrl, isCollapsed
+            )
+            if (!isCollapsed) {
+                manifest?.scrapers?.forEach { scraper ->
+                    out += NuvioRow.ScraperRow(
+                        repo, scraper, repo.isScraperEnabled(scraper)
+                    )
+                }
             }
         }
         rows = out
@@ -429,6 +455,8 @@ private class NuvioRepoAdapter(
                 val h = holder as RepoHolder
                 h.name.text = row.name
                 h.url.text = row.repo.manifestUrl
+                h.expand.rotation = if (row.collapsed) -90f else 0f
+                h.itemView.setOnClickListener { onToggleCollapse(row.repo) }
                 h.refresh.setOnClickListener { onRefreshRepo(row.repo) }
                 h.remove.setOnClickListener { onRemoveRepo(row.repo) }
             }
@@ -442,10 +470,20 @@ private class NuvioRepoAdapter(
                 h.desc.text = listOf(scraper.description, version)
                     .filter { it.isNotBlank() }
                     .joinToString(" • ")
+                // Circle-masked logos, same treatment as the main
+                // Extensions list (PluginAdapter, phase 8.9).
                 val logo = scraper.logo
                 if (!logo.isNullOrBlank()) {
                     h.logo.visibility = View.VISIBLE
-                    h.logo.loadImage(logo)
+                    h.logo.loadImage(logo) {
+                        transformations(CircleCropTransformation())
+                        error(
+                            getImageFromDrawable(
+                                h.itemView.context,
+                                R.drawable.ic_baseline_extension_24,
+                            )
+                        )
+                    }
                 } else {
                     h.logo.visibility = View.GONE
                 }
@@ -461,6 +499,7 @@ private class NuvioRepoAdapter(
     }
 
     private class RepoHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val expand: ImageView = view.findViewById(R.id.item_repo_expand)
         val name: TextView = view.findViewById(R.id.item_repo_name)
         val url: TextView = view.findViewById(R.id.item_repo_url)
         val refresh: ImageButton = view.findViewById(R.id.item_repo_refresh)
