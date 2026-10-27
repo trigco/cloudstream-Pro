@@ -19,6 +19,7 @@ import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.DataStoreHelper.currentAccount
+import com.lagradost.cloudstream3.utils.FamilyMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,7 +69,13 @@ class SearchViewModel : ViewModel() {
     private var onGoingSearch: Job? = null
 
     fun reloadRepos() {
-        repos = apis.withLock { apis.map { APIRepository(it) } }
+        // Phase 8.50: Family Mode excludes adult providers
+        // from search entirely.
+        val familyOn = FamilyMode.isEnabled()
+        repos = apis.withLock {
+            apis.filter { !familyOn || !FamilyMode.isAdultApi(it) }
+                .map { APIRepository(it) }
+        }
     }
 
     fun searchAndCancel(
@@ -147,7 +154,15 @@ class SearchViewModel : ViewModel() {
 
                     // just to be sure we are not adding the same shit for some reason
                     // Avoids weird behavior in the recyclerview by recreating the list
-                    this.list = (this.list + nextValue.items).distinctBy { it.url }
+                    // Phase 8.50: Family Mode drops NSFW results here too.
+                    val nextItems = if (FamilyMode.isEnabled()) {
+                        nextValue.items.filterNot {
+                            FamilyMode.isAdultItem(it)
+                        }
+                    } else {
+                        nextValue.items
+                    }
+                    this.list = (this.list + nextItems).distinctBy { it.url }
                 } ?: debugWarning {
                     "Expanded an item not in search load named $name, current list is ${expandableSearches.keys}"
                 }
@@ -236,8 +251,16 @@ class SearchViewModel : ViewModel() {
                     if (currentSearchIndex != currentIndex) return@amap
                     if (search is Resource.Success) {
                         val searchValue = search.value
+                        // Phase 8.50: Family Mode drops NSFW results.
+                        val items = if (FamilyMode.isEnabled()) {
+                            searchValue.items.filterNot {
+                                FamilyMode.isAdultItem(it)
+                            }
+                        } else {
+                            searchValue.items
+                        }
                         expandableSearches[a.name] =
-                            ExpandableSearchList(searchValue.items, 1, searchValue.hasNext)
+                            ExpandableSearchList(items, 1, searchValue.hasNext)
                     }
 
                     _currentSearch.postValue(expandableSearches)

@@ -13,13 +13,26 @@ import android.os.Build.VERSION.SDK_INT
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.DrawableRes
+import androidx.annotation.OptIn
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
 import androidx.preference.PreferenceManager
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
+import com.lagradost.cloudstream3.AnimeLoadResponse
+import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.LiveStreamLoadResponse
+import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.amap
+import com.lagradost.cloudstream3.mvvm.Resource
+import com.lagradost.cloudstream3.ui.APIRepository
+import com.lagradost.cloudstream3.ui.result.buildResultEpisode
+import com.lagradost.cloudstream3.ui.result.getId
 import com.lagradost.cloudstream3.BuildConfig
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CommonActivity.showToast
@@ -86,6 +99,8 @@ import com.lagradost.cloudstream3.utils.downloader.DownloadUtils.join
 import com.lagradost.cloudstream3.utils.txt
 import com.lagradost.safefile.SafeFile
 import com.lagradost.safefile.closeQuietly
+import java.io.File
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,10 +109,24 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.Clock
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.transformer.DefaultDecoderFactory
+import androidx.media3.transformer.ExoPlayerAssetLoader
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -110,6 +139,7 @@ const val DOWNLOAD_CHANNEL_ID = "cloudstream3.general"
 const val DOWNLOAD_CHANNEL_NAME = "Downloads"
 const val DOWNLOAD_CHANNEL_DESCRIPT = "The download notification channel"
 
+@OptIn(UnstableApi::class)
 object VideoDownloadManager {
     fun maxConcurrentDownloads(context: Context): Int =
         PreferenceManager.getDefaultSharedPreferences(context)
@@ -208,6 +238,11 @@ object VideoDownloadManager {
     val downloadDeleteEvent = Event<Int>()
     val downloadEvent = Event<Pair<Int, DownloadActionType>>()
     val downloadProgressEvent = Event<Triple<Int, Long, Long>>()
+
+    /** Phase 8.42: why a download failed, per episode id -- the
+     * queue rows show it, so a failure explains itself instead
+     * of only saying "Download Failed". */
+    val downloadFailureReasons = HashMap<Int, String>()
 //    val downloadQueue = LinkedList<DownloadResumePackage>()
 
     private var hasCreatedNotChannel = false
@@ -461,7 +496,8 @@ object VideoDownloadManager {
             notificationCallback(ep.id, notification)
             with(NotificationManagerCompat.from(context)) {
                 // notificationId is a unique int for each notification that you must define
-                if (ActivityCompat.checkSelfPermission(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ActivityCompat.checkSelfPermission(
                         context,
                         Manifest.permission.POST_NOTIFICATIONS
                     ) != PackageManager.PERMISSION_GRANTED
@@ -1471,6 +1507,216 @@ object VideoDownloadManager {
         return "$name.$extension"
     }
 
+    /**
+     * Phase 8.40: DASH download support for the shared downloader.
+     * A DASH stream cannot be saved as-is (the .mpd is a manifest,
+     * not a video), so it is exported to a real MP4 with media3
+     * Transformer — the same engine family that plays it — using
+     * the link's own headers, then copied into the download
+     * destination. This is what makes "it plays" imply "it
+     * downloads" for DASH-only sources, in the main downloader
+     * and everywhere else this path is used.
+     * Pause/resume are not supported for exports: Stop cancels.
+     */
+    private suspend fun downloadDash(
+        context: Context,
+        link: ExtractorLink,
+        name: String,
+        folder: String,
+        parentId: Int?,
+        notificationCallback: (CreateNotificationMetadata) -> Unit,
+    ): DownloadStatus = withContext(Dispatchers.IO) {
+        val (baseFile, basePath) = context.getBasePath()
+        if (baseFile == null) return@withContext DOWNLOAD_BAD_CONFIG
+
+        val displayName = getDisplayName(name, "mp4")
+        val metadata = DownloadMetaData(
+            totalBytes = 0,
+            bytesDownloaded = 0,
+            createNotificationCallback = notificationCallback,
+            id = parentId,
+            linkHash = link.url.hashCode(),
+            isHLS = false
+        )
+        val tempFile = File(
+            context.cacheDir,
+            "dash_export_" + (parentId ?: link.url.hashCode()) + ".mp4"
+        )
+        var stream: StreamData? = null
+        var fileStream: OutputStream? = null
+        try {
+            stream = setupStream(baseFile, name, folder, "mp4", false)
+            // Phase 8.57: was IsPending for the whole export, so
+            // the queue row read "Queued" while bytes flowed —
+            // downloadThing/downloadHLS set IsDownloading at start.
+            metadata.type = DownloadType.IsDownloading
+            val fileInfoTemplate = DownloadedFileInfo(
+                totalBytes = 0,
+                relativePath = folder,
+                displayName = displayName,
+                basePath = basePath
+            )
+            metadata.setDownloadFileInfoTemplate(fileInfoTemplate)
+
+            val pollJob = launch {
+                var last = 0L
+                while (true) {
+                    val len = if (tempFile.exists()) tempFile.length() else 0L
+                    val delta = len - last
+                    if (delta > 0) {
+                        metadata.addBytes(delta)
+                        metadata.addBytesWritten(delta)
+                        last = len
+                    }
+                    delay(700)
+                }
+            }
+            val exportError = try {
+                exportDashToFile(context, link, tempFile, metadata)
+            } finally {
+                pollJob.cancel()
+            }
+            val exported = exportError == null
+
+            if (metadata.type == DownloadType.IsStopped) {
+                metadata.onDelete()
+                stream.delete()
+                return@withContext DOWNLOAD_STOPPED
+            }
+            if (!exported || !tempFile.exists() || tempFile.length() <= 0L) {
+                if (exportError != null) {
+                    parentId?.let {
+                        downloadFailureReasons[it] =
+                            ("DASH " + exportError).take(140)
+                    }
+                }
+                metadata.onDelete()
+                stream.delete()
+                return@withContext metadata.failedStatus()
+            }
+
+            fileStream = stream.open()
+            tempFile.inputStream().use { input -> input.copyTo(fileStream) }
+            fileStream.flush()
+            val size = tempFile.length()
+            if (metadata.bytesDownloaded < size) {
+                metadata.addBytes(size - metadata.bytesDownloaded)
+                metadata.addBytesWritten(size - metadata.bytesWritten)
+            }
+            // Phase 8.47: persist the FINAL size into the
+            // saved file info. DownloadMetaData.close() only
+            // re-saves file info for HLS / unknown totals, so
+            // without this the info stayed totalBytes = 0 and
+            // the Downloads page filtered the finished download
+            // out entirely (his report: Download Done
+            // notification arrived, Downloads page stayed empty).
+            metadata.setDownloadFileInfoTemplate(
+                fileInfoTemplate.copy(totalBytes = size)
+            )
+            metadata.totalBytes = size
+            metadata.type = DownloadType.IsDone
+            DOWNLOAD_SUCCESS
+        } catch (t: Throwable) {
+            if (t is CancellationException) {
+                try {
+                    metadata.onDelete()
+                    stream?.delete()
+                } catch (_: Throwable) {
+                }
+                return@withContext DOWNLOAD_STOPPED
+            }
+            logError(t)
+            metadata.failedStatus()
+        } finally {
+            fileStream?.closeQuietly()
+            metadata.close()
+            tempFile.delete()
+        }
+    }
+
+    /**
+     * Runs one Transformer export of a DASH link into [tempFile]
+     * on the main thread (Transformer requires a Looper thread).
+     * Returns null on success, or the failure reason (Phase 8.42:
+     * the reason is surfaced in the download queue, so a failed
+     * DASH download says WHY instead of failing silently).
+     */
+    private suspend fun exportDashToFile(
+        context: Context,
+        link: ExtractorLink,
+        tempFile: File,
+        metadata: DownloadMetaData,
+    ): String? {
+        tempFile.delete()
+        return withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                try {
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(link.url)
+                        .setMimeType(MimeTypes.APPLICATION_MPD)
+                        .build()
+                    val edited = EditedMediaItem.Builder(mediaItem).build()
+                    // Phase 8.41: route the export through the app's
+                    // own HTTP stack with the link's headers — the
+                    // platform default data source gets 403s from
+                    // several provider CDNs, which killed downloads
+                    // of titles that play perfectly.
+                    val dataSourceFactory = OkHttpDataSource.Factory(app.baseClient)
+                        .setUserAgent(USER_AGENT)
+                        .setDefaultRequestProperties(link.getAllHeaders())
+                    val transformer = Transformer.Builder(context)
+                        .setAssetLoaderFactory(
+                            ExoPlayerAssetLoader.Factory(
+                                context,
+                                DefaultDecoderFactory(context),
+                                Clock.DEFAULT,
+                                DefaultMediaSourceFactory(dataSourceFactory)
+                            )
+                        )
+                        .addListener(object : Transformer.Listener {
+                            override fun onCompleted(
+                                composition: Composition,
+                                exportResult: ExportResult
+                            ) {
+                                if (cont.isActive) cont.resume(null)
+                            }
+
+                            override fun onError(
+                                composition: Composition,
+                                exportResult: ExportResult,
+                                exportException: ExportException
+                            ) {
+                                logError(exportException)
+                                if (cont.isActive) cont.resume(
+                                    "export " + exportException.errorCode +
+                                        ": " + (exportException.message ?: "failed")
+                                )
+                            }
+                        })
+                        .build()
+                    metadata.setOnStop {
+                        try {
+                            transformer.cancel()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    cont.invokeOnCancellation {
+                        try {
+                            transformer.cancel()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    transformer.start(edited, tempFile.absolutePath)
+                } catch (t: Throwable) {
+                    logError(t)
+                    if (cont.isActive) cont.resume(
+                        "export: " + (t.message ?: t.javaClass.simpleName)
+                    )
+                }
+            }
+        }
+    }
+
     private suspend fun downloadSingleEpisode(
         context: Context,
         source: String?,
@@ -1481,7 +1727,7 @@ object VideoDownloadManager {
         tryResume: Boolean = false,
     ): DownloadStatus {
         // no support for these file formats
-        if (link.type == ExtractorLinkType.MAGNET || link.type == ExtractorLinkType.TORRENT || link.type == ExtractorLinkType.DASH) {
+        if (link.type == ExtractorLinkType.MAGNET || link.type == ExtractorLinkType.TORRENT) {
             return DOWNLOAD_INVALID_INPUT
         }
 
@@ -1514,6 +1760,17 @@ object VideoDownloadManager {
 
         try {
             when (link.type) {
+                ExtractorLinkType.DASH -> {
+                    return downloadDash(
+                        context,
+                        link,
+                        name,
+                        folder ?: "",
+                        ep.id,
+                        callback
+                    )
+                }
+
                 ExtractorLinkType.M3U8 -> {
                     val startIndex = if (tryResume) {
                         context.getKey<DownloadedFileInfo>(
@@ -1755,7 +2012,8 @@ object VideoDownloadManager {
         companion object {
             private fun displayNotification(context: Context, id: Int, notification: Notification) {
                 safe {
-                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED
                     ) return@safe
 
@@ -1763,6 +2021,255 @@ object VideoDownloadManager {
                         .notify(DOWNLOAD_NOTIFICATION_TAG, id, notification)
                 }
             }
+        }
+
+        /** Phase 8.42: runs the link loop of downloadFromResume
+         * over one link set. Returns true on success. */
+        private suspend fun attemptLinks(
+            item: DownloadItem,
+            links: List<ExtractorLink>,
+            resumeIndex: Int?,
+            notificationCallback: (Int, Notification) -> Unit,
+            persistResume: Boolean
+        ): Boolean {
+            for (index in (resumeIndex ?: 0) until links.size) {
+                val link = links[index]
+                val resume = resumeIndex == index
+
+                if (persistResume) {
+                    setKey(
+                        KEY_RESUME_PACKAGES,
+                        item.ep.id.toString(),
+                        DownloadResumePackage(item, index)
+                    )
+                }
+
+                var connectionResult =
+                    downloadSingleEpisode(
+                        context,
+                        item.source,
+                        item.folder,
+                        item.ep,
+                        link,
+                        notificationCallback,
+                        resume
+                    )
+
+                if (connectionResult.retrySame) {
+                    connectionResult = downloadSingleEpisode(
+                        context,
+                        item.source,
+                        item.folder,
+                        item.ep,
+                        link,
+                        notificationCallback,
+                        true
+                    )
+                }
+
+                if (connectionResult.success) { // SUCCESS
+                    isCompleted = true
+                    return true
+                } else if (!connectionResult.tryNext || index >= links.lastIndex) {
+                    return false
+                }
+            }
+            return false
+        }
+
+        private fun downloadTitlesMatch(candidate: String, wanted: String): Boolean {
+            fun norm(s: String): String =
+                s.lowercase().replace(Regex("[^a-z0-9]+"), "")
+            val a = norm(candidate)
+            val b = norm(wanted)
+            if (a.isEmpty() || b.isEmpty()) return false
+            return a == b || (b.length >= 3 && a.contains(b)) ||
+                (a.length >= 3 && b.contains(a))
+        }
+
+        /** Phase 8.42: the same episode of the same title on
+         * another provider, as a ResultEpisode to extract from. */
+        private fun fallbackEpisodeFor(
+            page: LoadResponse,
+            season: Int?,
+            episode: Int
+        ): ResultEpisode? {
+            val mainId = page.getId()
+            return when (page) {
+                is MovieLoadResponse -> buildResultEpisode(
+                    page.name, page.name, null, 0, null, null,
+                    page.dataUrl, page.apiName, mainId, 0,
+                    null, null, null, page.type, mainId, null
+                )
+
+                is LiveStreamLoadResponse -> buildResultEpisode(
+                    page.name, page.name, null, 0, null, null,
+                    page.dataUrl, page.apiName, mainId, 0,
+                    null, null, null, page.type, mainId, null
+                )
+
+                is TvSeriesLoadResponse -> {
+                    val sorted = page.episodes.sortedBy {
+                        (it.season?.times(10_000) ?: 0) + (it.episode ?: 0)
+                    }
+                    val target = sorted.firstOrNull {
+                        (season == null || it.season == season) &&
+                            (it.episode ?: 0) == episode
+                    } ?: sorted.firstOrNull() ?: return null
+                    val episodeIndex = target.episode ?: (sorted.indexOf(target) + 1)
+                    val id = mainId + (target.season?.times(100_000) ?: 0) +
+                        episodeIndex + 1
+                    buildResultEpisode(
+                        page.name, target.name, target.posterUrl, episodeIndex,
+                        target.season, target.season, target.data, page.apiName,
+                        id, sorted.indexOf(target),
+                        target.score, target.description, null, page.type,
+                        mainId, null,
+                        airDate = target.date, runTime = target.runTime
+                    )
+                }
+
+                is AnimeLoadResponse -> {
+                    val dub = if (page.episodes.containsKey(DubStatus.Subbed)) {
+                        DubStatus.Subbed
+                    } else {
+                        page.episodes.keys.firstOrNull()
+                    } ?: return null
+                    val list = page.episodes[dub].orEmpty()
+                    val target = list.firstOrNull {
+                        (it.episode ?: 0) == episode
+                    } ?: list.firstOrNull() ?: return null
+                    val episodeIndex = target.episode ?: (list.indexOf(target) + 1)
+                    val id = mainId + episodeIndex + dub.id * 1_000_000 +
+                        (target.season?.times(10_000) ?: 0)
+                    buildResultEpisode(
+                        page.name, target.name, target.posterUrl, episodeIndex,
+                        target.season, target.season, target.data, page.apiName,
+                        id, list.indexOf(target),
+                        target.score, target.description, null, page.type,
+                        mainId, null,
+                        airDate = target.date, runTime = target.runTime
+                    )
+                }
+
+                else -> null
+            }
+        }
+
+        /** Phase 8.42: fresh links for this download from another
+         * provider carrying the same title. The file still lands
+         * under the chosen title's name and folder. */
+        // Phase 8.43: the fallback ranks by what the user
+        // actually picked — same language first, then the
+        // closest quality (his report: asked for 1080p Hindi,
+        // the fallback delivered 720p English). The signature
+        // comes from the first primary link: the feed queues
+        // the selected link first, and the details flow tries
+        // its links in order.
+        private val fallbackLanguages = listOf(
+            "hindi", "english", "bengali", "bangla", "tamil",
+            "telugu", "malayalam", "kannada", "punjabi", "marathi",
+            "gujarati", "urdu", "korean", "japanese", "chinese",
+            "spanish", "arabic", "odia", "assamese"
+        )
+
+        private fun languageToken(text: String?): String? {
+            val t = text?.lowercase() ?: return null
+            return fallbackLanguages.firstOrNull { t.contains(it) }
+        }
+
+        private fun rankFallbackLinks(
+            links: List<ExtractorLink>,
+            item: DownloadItem
+        ): List<ExtractorLink> {
+            val chosen = item.links.firstOrNull()
+            val wantedQuality = chosen?.quality ?: 0
+            val wantedLang = chosen?.let {
+                languageToken(it.name) ?: languageToken(it.source)
+            }
+            return links.distinctBy { it.url }.sortedWith(
+                compareByDescending<ExtractorLink> {
+                    if (wantedLang == null) 0
+                    else {
+                        val token = languageToken(it.name)
+                            ?: languageToken(it.source)
+                        if (token == wantedLang) 1 else 0
+                    }
+                }.thenBy {
+                    kotlin.math.abs(it.quality - wantedQuality)
+                }.thenByDescending { it.quality }
+            )
+        }
+
+        private suspend fun findDownloadFallbackLinks(
+            item: DownloadItem
+        ): List<ExtractorLink>? {
+            val wrapperItem = downloadQueueWrapper.downloadItem ?: return null
+            val title = item.ep.mainName.takeIf { it.isNotBlank() }
+                ?: wrapperItem.resultName
+            if (title.isBlank()) return null
+            val others = APIHolder.apis.filter {
+                it.name != item.ep.sourceApiName && it.name != "None"
+            }
+            if (others.isEmpty()) return null
+            val candidates = others.amap { api ->
+                try {
+                    when (
+                        val r = withContext(Dispatchers.IO) {
+                            APIRepository(api).search(title, 1)
+                        }
+                    ) {
+                        is Resource.Success -> r.value.items.firstOrNull {
+                            downloadTitlesMatch(it.name, title)
+                        }?.let { hit -> hit to api }
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }.filterNotNull()
+            for ((hit, api) in candidates.take(2)) {
+                try {
+                    val page = when (
+                        val res = withContext(Dispatchers.IO) {
+                            APIRepository(api).load(hit.url)
+                        }
+                    ) {
+                        is Resource.Success -> res.value
+                        else -> continue
+                    }
+                    val ep = fallbackEpisodeFor(
+                        page, item.ep.season, item.ep.episode ?: 0
+                    ) ?: continue
+                    val collected = mutableListOf<ExtractorLink>()
+                    withContext(Dispatchers.IO) {
+                        RepoLinkGenerator(listOf(ep), page = page).generateLinks(
+                            clearCache = false,
+                            sourceTypes = LOADTYPE_INAPP_DOWNLOAD,
+                            callback = { pair ->
+                                pair.first?.let {
+                                    synchronized(collected) { collected.add(it) }
+                                }
+                            },
+                            subtitleCallback = { },
+                            offset = 0,
+                            isCasting = false
+                        )
+                    }
+                    val playable = collected.filter {
+                        it.type == ExtractorLinkType.VIDEO ||
+                            it.type == ExtractorLinkType.M3U8 ||
+                            it.type == ExtractorLinkType.DASH
+                    }
+                    if (playable.isNotEmpty()) {
+                        downloadFailureReasons.remove(item.ep.id)
+                        return rankFallbackLinks(playable, item)
+                    }
+                } catch (e: Exception) {
+                    continue
+                }
+            }
+            return null
         }
 
         private suspend fun downloadFromResume(
@@ -1781,49 +2288,36 @@ object VideoDownloadManager {
             }
 
             try {
-                for (index in (downloadResumePackage.linkIndex ?: 0) until item.links.size) {
-                    val link = item.links[index]
-                    val resume = downloadResumePackage.linkIndex == index
-
-                    setKey(
-                        KEY_RESUME_PACKAGES,
-                        id.toString(),
-                        DownloadResumePackage(item, index)
-                    )
-
-                    var connectionResult =
-                        downloadSingleEpisode(
-                            context,
-                            item.source,
-                            item.folder,
-                            item.ep,
-                            link,
+                var done = attemptLinks(
+                    item,
+                    item.links,
+                    downloadResumePackage.linkIndex,
+                    notificationCallback,
+                    persistResume = true
+                )
+                if (!done && !isCancelled && !isCompleted) {
+                    // Phase 8.42: every server of the chosen
+                    // provider failed (or its links died) -- try
+                    // the same title on another provider before
+                    // giving up, the way playback falls over.
+                    val fallbackLinks = findDownloadFallbackLinks(item)
+                    if (!fallbackLinks.isNullOrEmpty()) {
+                        done = attemptLinks(
+                            item,
+                            fallbackLinks,
+                            null,
                             notificationCallback,
-                            resume
-                        )
-
-                    if (connectionResult.retrySame) {
-                        connectionResult = downloadSingleEpisode(
-                            context,
-                            item.source,
-                            item.folder,
-                            item.ep,
-                            link,
-                            notificationCallback,
-                            true
+                            persistResume = false
                         )
                     }
-
-                    if (connectionResult.success) { // SUCCESS
-                        isCompleted = true
-                        break
-                    } else if (!connectionResult.tryNext || index >= item.links.lastIndex) {
-                        isFailed = true
-                        break
-                    }
+                }
+                if (!done && !isCompleted) {
+                    isFailed = true
                 }
             } catch (e: Exception) {
                 isFailed = true
+                downloadFailureReasons[id] =
+                    (e.message ?: e.javaClass.simpleName).take(140)
                 logError(e)
             } finally {
                 isFailed = !isCompleted
@@ -1872,6 +2366,7 @@ object VideoDownloadManager {
         }
 
         fun startDownload() {
+            downloadFailureReasons.remove(downloadQueueWrapper.id)
             Log.d(TAG, "Starting download ${downloadQueueWrapper.id}")
             setKey(KEY_RESUME_IN_QUEUE, downloadQueueWrapper.id.toString(), downloadQueueWrapper)
 
@@ -2057,6 +2552,8 @@ object VideoDownloadManager {
                 isCancelled = true
                 return
             } else if (currentLinks.isEmpty()) {
+                downloadFailureReasons[downloadItem.episode.id] =
+                    "No downloadable links on this provider"
                 main {
                     showToast(
                         R.string.no_links_found_toast,

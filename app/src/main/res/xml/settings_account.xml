@@ -40,6 +40,22 @@
 
     </PreferenceCategory>
 
+    <!-- Phase 8.56: universal ratings — the user's own TMDB /
+         IMDb (OMDb) keys live here, in the Account section. -->
+    <PreferenceCategory android:title="@string/pref_category_metadata">
+
+        <Preference
+            android:icon="@drawable/ic_baseline_star_24"
+            android:key="tmdb_api_key"
+            android:title="@string/tmdb_key_title" />
+
+        <Preference
+            android:icon="@drawable/ic_baseline_star_border_24"
+            android:key="omdb_api_key"
+            android:title="@string/omdb_key_title" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory
         android:title="@string/pref_category_security"
         app:key="@string/pref_category_security_key">

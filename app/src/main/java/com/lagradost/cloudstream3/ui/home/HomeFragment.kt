@@ -19,6 +19,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.navigation.fragment.findNavController
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.net.toUri
@@ -30,6 +31,7 @@ import androidx.preference.PreferenceManager
 import android.os.Handler
 import android.os.Looper
 import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Collections
 import com.lagradost.cloudstream3.plugins.PluginManager
@@ -60,6 +62,8 @@ import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
+import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
 import com.lagradost.cloudstream3.ui.search.SEARCH_ACTION_LOAD
@@ -87,6 +91,7 @@ import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.attachBackPres
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.detachBackPressedCallback
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.EmptyEvent
 import com.lagradost.cloudstream3.utils.SubtitleHelper.getFlagFromIso
 import com.lagradost.cloudstream3.utils.TvChannelUtils
@@ -391,7 +396,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             }
         }
 
-        fun Context.selectHomepage(selectedApiName: String?, callback: (String) -> Unit) {
+        fun Context.selectHomepage(
+            selectedApiName: String?,
+            onCustomSelect: ((HomeCustomLists.CustomList) -> Unit)? = null,
+            callback: (String) -> Unit
+        ) {
             val validAPIs = filterProviderByPreferredMedia().toMutableList()
 
             validAPIs.add(0, randomApi)
@@ -409,6 +418,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             )
 
             builder.setContentView(binding.root)
+            // Phase 8.47: his custom lists are appended to this
+            // same picker (his request) so providers and custom
+            // lists are managed in one place.
+            val customLists = HomeCustomLists.getLists(this)
             builder.show()
             builder.let { dialog ->
                 val isMultiLang = getApiProviderLangSettings().let { set ->
@@ -490,12 +503,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                             )
                         }
 
-                        val providerApi = currentValidApis[position]
+                        val providerApi =
+                            currentValidApis.getOrNull(position)
                         val isPinned =
-                            pinnedphashset.contains(providerApi.name)
+                            providerApi != null &&
+                                pinnedphashset.contains(providerApi.name)
                         pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
 
-                        val pluginInstance = providerApi.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
+                        val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
                         val isDownloadedPluginWithSettings = pluginInstance?.openSettings != null && !isLayout(TV)
 
                         settingsIcon.visibility = if (isDownloadedPluginWithSettings) View.VISIBLE else View.GONE
@@ -517,11 +532,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 listView?.choiceMode = AbsListView.CHOICE_MODE_SINGLE
 
                 listView?.setOnItemClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty()) {
+                    if (i in currentValidApis.indices) {
                         currentApiName = currentValidApis[i].name
                         //to switch to apply simply remove this
                         currentApiName.let(callback)
                         dialog.dismissSafe()
+                    } else if (onCustomSelect != null) {
+                        val list = customLists.getOrNull(
+                            i - currentValidApis.size
+                        )
+                        if (list != null) {
+                            onCustomSelect(list)
+                            dialog.dismissSafe()
+                        }
                     }
                 }
 
@@ -561,18 +584,40 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         addAll(remainingApis)
                     }
 
+                    // Phase 8.50: Family Mode hides adult providers
+                    // from the picker entirely.
+                    if (FamilyMode.isEnabled()) {
+                        currentValidApis.removeAll {
+                            FamilyMode.isAdultApi(it)
+                        }
+                    }
+
                     val names = currentValidApis.map {
                         val displayName = getDisplayName(it.name)
                         if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
                     }
-                    val index = currentValidApis.map { it.name }.indexOf(currentApiName)
+                    val customNames = customLists.map { "\u2605 " + it.name }
+                    var index = currentValidApis.map { it.name }
+                        .indexOf(currentApiName)
+                    val activeCustomPos =
+                        HomeCustomLists.activeList(this@selectHomepage)
+                            ?.let { active ->
+                                customLists.indexOfFirst {
+                                    it.id == active.id
+                                }
+                            } ?: -1
+                    if (activeCustomPos >= 0) {
+                        index = currentValidApis.size + activeCustomPos
+                    }
                     listView?.setItemChecked(index, true)
-                    arrayAdapter.addAll(names)
+                    arrayAdapter.addAll(names + customNames)
                     arrayAdapter.notifyDataSetChanged()
                 }
                 // pin provider on hold
                 listView?.setOnItemLongClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty() && i > 1) {
+                    if (currentValidApis.isNotEmpty() && i > 1 &&
+                        i in currentValidApis.indices
+                    ) {
                         val pinnedp = DataStoreHelper.pinnedProviders.toMutableList()
                         val thisapi = currentValidApis[i].name
                         if (pinnedp.contains(thisapi)) {
@@ -651,16 +696,53 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     override fun pickLayout(): Int? =
         if (isLayout(PHONE)) R.layout.fragment_home else R.layout.fragment_home_tv
 
+    /** Phase 8.33: a background-resolved title refreshes the rows.
+     *  Phase 8.34: DEBOUNCED — titles resolve in bursts while
+     *  scrolling, and a full rebind per title made home scroll
+     *  shake (কাপাকাপি). One rebind after a quiet gap is enough. */
+    private val titleNotifyRunnable = object : Runnable {
+        override fun run() {
+            // Phase 8.41: a full rebind mid-scroll still shudders
+            // (posters reload + crossfade) -- wait for the list to
+            // come to rest, then refresh once.
+            val recycler = binding?.homeMasterRecycler
+            if (recycler != null &&
+                recycler.scrollState != RecyclerView.SCROLL_STATE_IDLE
+            ) {
+                homeAutoRotateHandler.postDelayed(this, 600L)
+                return
+            }
+            homeMasterAdapter?.notifyDataSetChanged()
+        }
+    }
+
+    private val titleResolveListener: (String, String) -> Unit = { _, _ ->
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        homeAutoRotateHandler.postDelayed(titleNotifyRunnable, 1_200L)
+    }
+
+    /** Phase 8.56: a universal rating landing deserves the same
+     *  debounced, idle-only rebind as a resolved title. */
+    private val metadataResolveListener: (String, String) -> Unit = { _, _ ->
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        homeAutoRotateHandler.postDelayed(titleNotifyRunnable, 1_200L)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         bottomSheetDialog?.ownShow()
+        TitleResolver.addListener(titleResolveListener)
+        MetadataResolver.addListener(metadataResolveListener)
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
     override fun onDestroyView() {
+        TitleResolver.removeListener(titleResolveListener)
+        MetadataResolver.removeListener(metadataResolveListener)
+        homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
         // Phase 8.17: the auto-rotation timer must not outlive the view.
@@ -671,7 +753,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private val apiChangeClickListener = View.OnClickListener { view ->
-        view.context.selectHomepage(currentApiName) { api ->
+        // Phase 8.46: back to the plain provider picker (his
+        // correction — custom lists live in Settings → Content →
+        // Categories and show on Home when active, not here).
+        view.context.selectHomepage(
+            currentApiName,
+            onCustomSelect = { list ->
+                homeViewModel.activateCustomList(list)
+            }
+        ) { api ->
+            // Picking a provider leaves custom mode (the custom
+            // list itself is managed in Settings, not here).
+            homeViewModel.exitCustomMode()
             homeViewModel.loadAndCancel(api, forceReload = true, fromUI = true)
         }
         /*val validAPIs = view.context?.filterProviderByPreferredMedia()?.toMutableList() ?: mutableListOf()
@@ -696,6 +789,101 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     private var homeCategoryItems: MutableList<HomeViewModel.ExpandableHomepageList> =
         mutableListOf()
     private val homeCategoryOrderKey = "home_category_order"
+
+    // Phase 8.35: categories the viewer hid (e.g. adult shelves).
+    // Hidden names persist; lastHomeCopies keeps the unfiltered
+    // list so hide/unhide re-applies instantly, with no reload.
+    private val homeHiddenCategoriesKey = "home_hidden_categories"
+    private var lastHomeCopies: List<HomeViewModel.ExpandableHomepageList> = emptyList()
+    private var categoryDragSwapped = false
+
+    private fun hiddenCategoryNames(): Set<String> {
+        val ctx = context ?: return emptySet()
+        val raw = PreferenceManager.getDefaultSharedPreferences(ctx)
+            .getString(homeHiddenCategoriesKey, null) ?: return emptySet()
+        return raw.split('\u001F').filter { it.isNotEmpty() }.toSet()
+    }
+
+    private fun saveHiddenCategoryNames(names: Set<String>) {
+        val ctx = context ?: return
+        PreferenceManager.getDefaultSharedPreferences(ctx).edit()
+            .putString(homeHiddenCategoriesKey, names.joinToString("\u001F"))
+            .apply()
+    }
+
+    private fun applyHomeCategories() {
+        // Phase 8.44: hidden-category rules belong to the
+        // per-provider home; a custom list shows what it holds.
+        val visible = if (homeViewModel.isCustomActive) {
+            lastHomeCopies
+        } else {
+            val hidden = hiddenCategoryNames()
+            lastHomeCopies.filterNot { it.list.name in hidden }
+        }
+        // Phase 8.50: Family Mode strips NSFW items from every
+        // row (rows left empty disappear) on all home variants.
+        // Phase 8.51: adult-labelled shelves go entirely, and
+        // items are judged by title as well as declared type —
+        // mixed providers file porn under plain "Movie".
+        val visibleFiltered = if (FamilyMode.isEnabled()) {
+            visible
+                .filterNot { FamilyMode.isAdultSection(it.list.name) }
+                .mapNotNull { row ->
+                    val items = row.list.list.filterNot {
+                        FamilyMode.isAdultItem(it)
+                    }
+                    if (items.isEmpty()) null
+                    else row.copy(list = row.list.copy(list = items))
+                }
+        } else {
+            visible
+        }
+        homeCategoryItems = visibleFiltered.toMutableList()
+        (binding?.homeMasterRecycler?.adapter as? ParentItemAdapter)
+            ?.submitList(visibleFiltered)
+    }
+
+    private fun showCategoryMenu(item: HomeViewModel.ExpandableHomepageList) {
+        val act = activity ?: return
+        val name = item.list.name
+        val options = mutableListOf(getString(R.string.home_hide_category))
+        if (hiddenCategoryNames().isNotEmpty()) {
+            options.add(getString(R.string.home_unhide_categories))
+        }
+        AlertDialog.Builder(act)
+            .setTitle(name)
+            .setItems(options.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    saveHiddenCategoryNames(hiddenCategoryNames() + name)
+                    applyHomeCategories()
+                    showToast(R.string.home_category_hidden, Toast.LENGTH_SHORT)
+                } else {
+                    showUnhideCategoriesDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun showUnhideCategoriesDialog() {
+        val act = activity ?: return
+        val hidden = hiddenCategoryNames().sorted()
+        if (hidden.isEmpty()) return
+        val checked = BooleanArray(hidden.size)
+        AlertDialog.Builder(act)
+            .setTitle(R.string.home_unhide_categories)
+            .setMultiChoiceItems(hidden.toTypedArray(), checked) { _, index, isChecked ->
+                checked[index] = isChecked
+            }
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val restore = hidden.filterIndexed { index, _ -> checked[index] }
+                if (restore.isNotEmpty()) {
+                    saveHiddenCategoryNames(hiddenCategoryNames() - restore.toSet())
+                    applyHomeCategories()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
     private val homeAutoRotateHandler = Handler(Looper.getMainLooper())
     private val homeAutoRotateRunnable = object : Runnable {
         override fun run() {
@@ -727,27 +915,44 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     /**
-     * Phase 8.17: one auto-rotation step — every category row currently on
-     * screen drops its first poster to the back of the row, animated by
-     * the row's own item animator. Skipped while anything is scrolling or
-     * being dragged, and while the fragment is paused (e.g. a details page
-     * is open above the home screen).
+     * Phase 8.17: one auto-rotation step — every category row
+     * drops its first poster to the back of the row, so coming
+     * back to a row feels fresh.
+     * Phase 8.56: rotate only rows that are NOT on screen. The
+     * 8.17 version rotated the visible rows themselves, animated
+     * by the row's item animator — on an idle screen the whole
+     * page visibly shuffled every 20 seconds (his কাপাকাপি
+     * report). Off-screen rows now rotate silently through the
+     * parent adapter; visible rows keep still.
      */
     private fun rotateVisibleHomeRows() {
         if (!isResumed) return
         val recycler = binding?.homeMasterRecycler ?: return
         if (recycler.scrollState != RecyclerView.SCROLL_STATE_IDLE) return
-        for (i in 0 until recycler.childCount) {
-            val child = recycler.getChildAt(i)
-            if (recycler.getChildAdapterPosition(child) <= 0) continue
-            val row = child.findViewById<RecyclerView>(R.id.home_child_recyclerview)
-                ?: continue
-            if (row.scrollState != RecyclerView.SCROLL_STATE_IDLE) continue
-            val adapter = row.adapter as? HomeChildItemAdapter ?: continue
-            val current = adapter.immutableCurrentList
-            if (current.size < 4) continue
-            adapter.submitList(current.drop(1) + current.first())
+        val adapter = homeMasterAdapter ?: return
+        val lm = recycler.layoutManager as? LinearLayoutManager ?: return
+        // Adapter position 0 is the hero header; data index i sits
+        // at layout position i + 1.
+        val firstVisibleRow = lm.findFirstVisibleItemPosition() - 1
+        val lastVisibleRow = lm.findLastVisibleItemPosition() - 1
+        val items = adapter.immutableCurrentList
+        var changed = false
+        val rotated = items.mapIndexed { index, row ->
+            val posters = row.list.list
+            if (index in firstVisibleRow..lastVisibleRow || posters.size < 4) {
+                row
+            } else {
+                changed = true
+                row.copy(
+                    list = com.lagradost.cloudstream3.HomePageList(
+                        row.list.name,
+                        posters.drop(1) + posters.first(),
+                        row.list.isHorizontalImages
+                    )
+                )
+            }
         }
+        if (changed) adapter.submitList(rotated)
     }
 
     var lastSavedHomepage: String? = null
@@ -880,6 +1085,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     @SuppressLint("SetTextI18n")
+    // Phase 8.50: returning from Settings re-applies the row
+    // filters, so a Family Mode toggle takes effect at once.
+    override fun onResume() {
+        super.onResume()
+        if (lastHomeCopies.isNotEmpty()) {
+            applyHomeCategories()
+        }
+    }
+
     override fun onBindingCreated(binding: FragmentHomeBinding) {
         context?.let { HomeChildItemAdapter.updatePosterSize(it) }
         (activity as? ComponentActivity)?.attachBackPressedCallback("HomeFragment_BackPress") {
@@ -905,6 +1119,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             )
             homeMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             homeMasterRecycler.adapter = homeMasterAdapter
+            // Phase 8.56: no item animator on the master list —
+            // change animations on rebinds (title/rating refresh,
+            // rotation) are a visible shudder (কাপাকাপি) source.
+            homeMasterRecycler.itemAnimator = null
 
             // Phase 8.10 (phone only): provider sections glide in as they
             // scroll into view instead of popping, and the hero shrinks /
@@ -951,6 +1169,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         Collections.swap(homeCategoryItems, fromIndex, toIndex)
                         (recyclerView.adapter as? ParentItemAdapter)
                             ?.notifyItemMoved(from, to)
+                        categoryDragSwapped = true
                         return true
                     }
 
@@ -965,6 +1184,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     ) {
                         super.onSelectedChanged(viewHolder, actionState)
                         if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                            categoryDragSwapped = false
                             viewHolder?.itemView?.hapticTick()
                         }
                     }
@@ -975,6 +1195,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     ) {
                         super.clearView(recyclerView, viewHolder)
                         saveCategoryOrder()
+                        // Phase 8.35: a hold that never became a drag
+                        // (press, no move, release) opens the category
+                        // menu instead — the reorder gesture itself
+                        // is exactly as before.
+                        if (!categoryDragSwapped) {
+                            val pos = viewHolder.bindingAdapterPosition
+                            if (pos > 0) {
+                                homeCategoryItems.getOrNull(pos - 1)?.let {
+                                    showCategoryMenu(it)
+                                }
+                            }
+                        }
                     }
                 }).attachToRecyclerView(homeMasterRecycler)
 
@@ -1168,14 +1400,24 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         // Phase 8.17: re-apply the viewer's saved category
                         // order; categories the save does not know keep
                         // their load order after the known ones.
-                        val orderedCopies = d.values.map {
+                        val copies = d.values.map {
                             it.copy(
                                 list = it.list.copy(list = it.list.list.toMutableList())
                             )
-                        }.sortedBy { savedCategoryOrderIndex(it.list.name) }
-                        homeCategoryItems = orderedCopies.toMutableList()
-                        (homeMasterRecycler.adapter as? ParentItemAdapter)
-                            ?.submitList(orderedCopies)
+                        }
+                        // Phase 8.44: a custom list keeps ITS
+                        // order — the saved-order sort belongs to
+                        // the per-provider home.
+                        val orderedCopies =
+                            if (homeViewModel.isCustomActive) {
+                                copies
+                            } else {
+                                copies.sortedBy {
+                                    savedCategoryOrderIndex(it.list.name)
+                                }
+                            }
+                        lastHomeCopies = orderedCopies
+                        applyHomeCategories()
 
                         saveHomepageToTV(d)
 

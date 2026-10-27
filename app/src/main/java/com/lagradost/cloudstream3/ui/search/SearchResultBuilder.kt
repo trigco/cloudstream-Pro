@@ -44,11 +44,37 @@ object SearchResultBuilder {
      * so search matching and the details page keep the full name. If
      * cleaning would leave nothing, the raw name is used as-is.
      */
+    private val TITLE_LANGUAGES = listOf(
+        "Hindi", "Bengali", "Bangla", "Tamil", "Telugu", "Malayalam",
+        "Kannada", "Punjabi", "English", "Korean", "Japanese",
+        "Chinese", "Arabic", "Urdu", "Marathi", "Gujarati", "Spanish",
+        "French", "German", "Russian", "Turkish", "Thai",
+        "Vietnamese", "Indonesian"
+    )
+
+    /**
+     * Phase 8.51: some providers trail the real title with a
+     * release-spec block ("Alaap Bengali Hoichoi – 480P | 720P |
+     * 1080P – x264 – 250MB | 1.8GB ESub – Download"). Everything
+     * from the first quality/size/codec token on is junk; cut it
+     * there and let the normal cleanup finish. A token at the
+     * very start is part of the name and is kept.
+     */
+    private val RELEASE_JUNK = Regex(
+        """(?i)\b(240p|360p|480p|720p|1080p|1440p|2160p|4320p|x264|x265|h\.?264|h\.?265|hevc|10bit|8bit|\d+(?:\.\d+)?\s?(?:mb|gb))\b"""
+    )
+
+    private fun truncateReleaseJunk(raw: String): String {
+        val match = RELEASE_JUNK.find(raw) ?: return raw
+        if (match.range.first <= 0) return raw
+        return raw.substring(0, match.range.first)
+    }
+
     fun cleanPosterTitle(raw: String): String {
         val season = Regex("""(?i)\bS(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
             ?: Regex("""(?i)\bSeason\s*(\d{1,2})\b""").find(raw)?.groupValues?.get(1)
 
-        var title = raw
+        var title = truncateReleaseJunk(raw)
             .replace(Regex("""\[[^\]]*\]"""), " ")
             .replace(Regex("""\(\s*(19|20)\d{2}\s*\)"""), " ")
             .replace(Regex("""(?i)\bS\d{1,2}\b"""), " ")
@@ -132,6 +158,8 @@ object SearchResultBuilder {
         playImg?.isVisible = false
         textIsDub?.isVisible = false
         textIsSub?.isVisible = false
+        textIsDub?.text = null
+        textIsSub?.text = null
         textFlag?.isVisible = false
         rating?.isVisible = false
         episodeText?.isVisible = false
@@ -150,7 +178,18 @@ object SearchResultBuilder {
                 rating?.text = ratingText
             }
         } else if (showRatingView) {
+            // Phase 8.56: universal rating — a provider without a
+            // score falls back to the TMDB/IMDb cache; a miss kicks
+            // off background resolution (needs a key in Settings →
+            // Account) and the rebind listener fills it in later.
             val ratingText = card.score?.toStringNull(0.1, 10, 1)
+                ?: rating?.context?.let { ctx ->
+                    MetadataResolver.cached(
+                        ctx, card.name, MetadataResolver.yearOf(card)
+                    ).also { hit ->
+                        if (hit == null) MetadataResolver.resolve(ctx, card)
+                    }
+                }
             val showRating = !ratingText.isNullOrBlank()
             rating?.isVisible = showRating
             if (showRating) {
@@ -185,8 +224,17 @@ object SearchResultBuilder {
             textQuality?.isVisible = false
         }
 
-        cardText?.text = cleanPosterTitle(card.name)
+        // Phase 8.33: a resolved real title (TitleResolver) beats
+        // the raw name, which for some provider families is blank
+        // or an "Id <number>" placeholder.
+        val resolvedTitle = TitleResolver.cached(cardText?.context, card.url)
+        cardText?.text = resolvedTitle ?: cleanPosterTitle(card.name)
         cardText?.isVisible = showTitle
+        if (resolvedTitle == null && TitleResolver.isIdLike(card.name)) {
+            cardText?.context?.let { ctx ->
+                TitleResolver.resolve(ctx, card.apiName, card.url, card.name)
+            }
+        }
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {
             cardView.loadImage(card.posterUrl, card.posterHeaders) {
@@ -356,6 +404,24 @@ object SearchResultBuilder {
                         subText
                     }
                 }
+            }
+        }
+
+        // Phase 8.33: dub/sub badges used to be anime-only. Other
+        // providers carry the language in the title's brackets
+        // ("[Hindi Dub]", "(Hindi)") — surface it as the badge
+        // instead of letting the title cleaner strip it silently.
+        if (card !is AnimeSearchResponse && textIsDub?.text.isNullOrBlank()) {
+            val langLabel = Regex("""[\[\(]([^\]\)]{3,24})[\)\]]""")
+                .findAll(card.name)
+                .map { it.groupValues[1].trim() }
+                .firstOrNull { g ->
+                    g.contains("dub", true) || g.contains("sub", true) ||
+                        TITLE_LANGUAGES.any { g.equals(it, true) }
+                }
+            if (langLabel != null) {
+                textIsDub?.text = langLabel
+                textIsDub?.isVisible = showDub
             }
         }
 

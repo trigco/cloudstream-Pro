@@ -9,6 +9,10 @@
             android:icon="@drawable/search_icon"
             android:title="@string/title_search" />
         <item
+            android:id="@+id/navigation_feed"
+            android:icon="@drawable/ic_baseline_ondemand_video_24"
+            android:title="@string/title_feed" />
+        <item
             android:id="@+id/navigation_library"
             android:icon="@drawable/library_icon_selector"
             android:title="@string/library" />

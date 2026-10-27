@@ -73,6 +73,7 @@ import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.seconds
 import com.lagradost.cloudstream3.syncproviders.SyncAPI
 import com.lagradost.cloudstream3.syncproviders.providers.Kitsu
 import com.lagradost.cloudstream3.ui.APIRepository
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.player.GeneratorPlayer
 import com.lagradost.cloudstream3.ui.player.LOADTYPE_ALL
@@ -90,6 +91,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.CastHelper.startCast
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.Coroutines.ioWork
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.Coroutines.ioWorkSafe
 import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE
@@ -230,6 +232,20 @@ fun txt(status: DubStatus?): UiText? {
     )
 }
 
+/** Phase 8.56: universal rating for the details header when the
+ *  provider ships no score — a cache hit shows now; a miss kicks
+ *  off background resolution for the next visit. */
+private fun universalRatingText(name: String, year: Int?, type: TvType): String? {
+    val ctx = context ?: return null
+    MetadataResolver.cached(ctx, name, year)?.let { return it }
+    MetadataResolver.resolve(
+        ctx, name, year,
+        type == TvType.TvSeries || type == TvType.AsianDrama ||
+            type == TvType.Anime || type == TvType.OVA
+    )
+    return null
+}
+
 fun LoadResponse.toResultData(repo: APIRepository): ResultData {
     debugAssert({ repo.name != apiName }) {
         "Api returned wrong apiName"
@@ -290,9 +306,25 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         ),
         nextAiringDate = nextAiringDate,
         nextAiringEpisode = nextAiringEpisode,
-        posterImage = posterUrl ?: backgroundPosterUrl,
+        // Phase 8.50: Family Mode shows no art for NSFW titles
+        // (the details page falls back to the placeholder).
+        // Phase 8.51: the title is a signal too (mixed providers
+        // file adult titles under the plain Movie type).
+        posterImage = if (FamilyMode.isEnabled() &&
+            (FamilyMode.isAdultItem(type) || FamilyMode.isAdultTitle(name))
+        ) {
+            null
+        } else {
+            posterUrl ?: backgroundPosterUrl
+        },
         posterHeaders = posterHeaders,
-        posterBackgroundImage = backgroundPosterUrl ?: posterUrl,
+        posterBackgroundImage = if (FamilyMode.isEnabled() &&
+            (FamilyMode.isAdultItem(type) || FamilyMode.isAdultTitle(name))
+        ) {
+            null
+        } else {
+            backgroundPosterUrl ?: posterUrl
+        },
         titleText = txt(name),
         url = url,
         tags = tags ?: emptyList(),
@@ -338,7 +370,8 @@ fun LoadResponse.toResultData(repo: APIRepository): ResultData {
         ),
         yearText = txt(year?.toString()),
         apiName = txt(apiName),
-        ratingText = score?.toStringNull(0.1, 10, 1, false, '.')
+        ratingText = (score?.toStringNull(0.1, 10, 1, false, '.')
+            ?: universalRatingText(name, year, type))
             ?.let { txt(R.string.rating_format, it) },
         contentRatingText = txt(contentRating),
         vpnText = txt(

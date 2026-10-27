@@ -15,6 +15,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import com.lagradost.api.setContext
 import com.lagradost.cloudstream3.BuildConfig
+import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.mvvm.safeAsync
 import com.lagradost.cloudstream3.plugins.PluginManager
@@ -22,9 +23,12 @@ import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.openBrowser
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
+import com.lagradost.cloudstream3.utils.BackupUtils
 import com.lagradost.cloudstream3.utils.AppDebug
 import com.lagradost.cloudstream3.utils.Coroutines.runOnMainThread
 import com.lagradost.cloudstream3.utils.DataStore.getKey
+import com.lagradost.cloudstream3.utils.DataStore.getSharedPrefs
 import com.lagradost.cloudstream3.utils.DataStore.getKeys
 import com.lagradost.cloudstream3.utils.DataStore.removeKey
 import com.lagradost.cloudstream3.utils.DataStore.removeKeys
@@ -72,6 +76,7 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        applyDefaultBackupOnce()
         // If we want to initialize Coil as early as possible, maybe when
         // loading an image or GIF in a splash screen activity.
         // buildImageLoader(applicationContext)
@@ -103,6 +108,50 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
         AppDebug.isDebug = BuildConfig.DEBUG
     }
 
+    /**
+     * Phase 8.48 (his request): the app ships a default backup
+     * (assets/pro_default_backup.json — settings, repositories
+     * and customization only; personal watch/download data was
+     * stripped) and restores it automatically ONCE on a fresh
+     * install, so nobody has to download a txt file and restore
+     * it by hand for the settings to work properly. Existing
+     * installs keep their own data untouched.
+     */
+    private fun applyDefaultBackupOnce() {
+        try {
+            val marker = PreferenceManager
+                .getDefaultSharedPreferences(this)
+            if (marker.getBoolean(DEFAULT_BACKUP_MARKER, false)) {
+                return
+            }
+            // Fresh install only: an existing install already
+            // has datastore content of its own — never
+            // overwrite it with the defaults.
+            if (getSharedPrefs().all.isEmpty()) {
+                val text = assets.open(DEFAULT_BACKUP_ASSET)
+                    .bufferedReader().readText()
+                val backup = parseJson<BackupUtils.BackupFile>(text)
+                BackupUtils.restore(
+                    this,
+                    backup,
+                    restoreSettings = true,
+                    restoreDataStore = true
+                )
+                // The backup format carries no plugin list, so
+                // the bundled default plugins are downloaded
+                // separately by MainActivity on first launch.
+                marker.edit()
+                    .putBoolean(DEFAULT_PLUGINS_PENDING, true)
+                    .apply()
+            }
+            marker.edit()
+                .putBoolean(DEFAULT_BACKUP_MARKER, true)
+                .apply()
+        } catch (t: Throwable) {
+            logError(t)
+        }
+    }
+
     override fun attachBaseContext(base: Context?) {
         super.attachBaseContext(base)
         context = base
@@ -114,6 +163,13 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
     }
 
     companion object {
+        const val DEFAULT_BACKUP_MARKER =
+            "pro_default_backup_applied_v1"
+        const val DEFAULT_BACKUP_ASSET = "pro_default_backup.json"
+        const val DEFAULT_PLUGINS_PENDING =
+            "pro_default_plugins_pending_v1"
+        const val DEFAULT_PLUGINS_ASSET = "pro_default_plugins.json"
+
         var exceptionHandler: ExceptionHandler? = null
 
         /** Use to get Activity from Context. */

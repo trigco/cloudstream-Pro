@@ -1,0 +1,585 @@
+package com.lagradost.cloudstream3.ui.feed
+
+import android.animation.ValueAnimator
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
+import androidx.core.view.isVisible
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.databinding.FragmentFeedBinding
+import com.lagradost.cloudstream3.mvvm.Resource
+import com.lagradost.cloudstream3.mvvm.observe
+import com.lagradost.cloudstream3.ui.BaseFragment
+import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
+import com.lagradost.cloudstream3.ui.search.TitleResolver
+import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.TV
+import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
+import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
+import com.lagradost.cloudstream3.utils.UIHelper.navigate
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+/**
+ * Implemented by the Feed tab so MainActivity can ask it to scroll
+ * back to the top without referencing the fragment class itself
+ * (the class is @UnstableApi-marked because of the player engine).
+ */
+interface FeedScrollTop {
+    fun scrollToTop()
+}
+
+/**
+ * Phase 8.18–8.20 — the Feed tab: every provider's content in one
+ * category-free 2-column grid under a collapsible header (search +
+ * genre chips that hide on scroll). Cards play directly in the shared
+ * [FeedPlayer]; when a video is minimised it keeps playing in the mini
+ * player floating over this grid.
+ */
+@UnstableApi
+class FeedFragment : BaseFragment<FragmentFeedBinding>(
+    BindingCreator.Inflate(FragmentFeedBinding::inflate)
+), FeedScrollTop {
+    private val viewModel: FeedViewModel by viewModels()
+    private val adapter = FeedAdapter(
+        onPlay = { entry -> openWatch(entry) },
+        onHide = { entry -> confirmHide(entry) },
+        onTitleNeeded = { entry ->
+            context?.let { ctx ->
+                TitleResolver.resolve(ctx, entry.apiName, entry.response.url, entry.response.name)
+            }
+        }
+    )
+
+    /** A resolved real title lands here and swaps into its card. */
+    private val titleListener: (String, String) -> Unit = { url, title ->
+        // Phase 8.56: titles resolve in bursts while scrolling and
+        // a rebind per title shakes the grid — queue them and
+        // apply once the list comes to rest (same cure as Home).
+        pendingTitleOverrides[url] = title
+        searchHandler.removeCallbacks(titleApplyRunnable)
+        searchHandler.postDelayed(titleApplyRunnable, 900L)
+    }
+
+    private val pendingTitleOverrides = mutableMapOf<String, String>()
+
+    private val titleApplyRunnable = object : Runnable {
+        override fun run() {
+            val rv = binding?.feedRecycler
+            if (rv != null &&
+                rv.scrollState != RecyclerView.SCROLL_STATE_IDLE
+            ) {
+                searchHandler.postDelayed(this, 600L)
+                return
+            }
+            val pending = pendingTitleOverrides.toMap()
+            pendingTitleOverrides.clear()
+            pending.forEach { (url, title) ->
+                adapter.setTitleOverride(url, title)
+            }
+        }
+    }
+
+    /** Phase 8.56: universal ratings land here as they resolve. */
+    private val ratingListener: (String, String) -> Unit = { key, rating ->
+        adapter.setRatingOverride(key, rating)
+    }
+
+    /** Set by a pull-to-refresh: the next feed value starts at the top. */
+    private var scrollTopOnNextFeed = false
+
+    /** RecyclerView position, kept across watch-page trips. */
+    private var listState: android.os.Parcelable? = null
+
+    private var pool: List<FeedEntry> = emptyList()
+    private var searchJob: Job? = null
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var pendingSearch: Runnable? = null
+
+    private var headerFullHeight = 0
+    private var headerShown = true
+    private var headerAnimator: ValueAnimator? = null
+    private var selectedChip: TextView? = null
+
+    private val miniListener: () -> Unit = { updateMiniBar() }
+
+    override fun fixLayout(view: View) {
+        fixSystemBarsPadding(
+            view,
+            padBottom = isLandscape(),
+            padLeft = isLayout(TV or EMULATOR)
+        )
+    }
+
+    override fun onBindingCreated(binding: FragmentFeedBinding) {
+        binding.feedRecycler.layoutManager = GridLayoutManager(context, 2)
+        binding.feedRecycler.adapter = adapter
+        // Fixed size + no change animations: the grid must never
+        // relayout or flash mid-scroll (Phase 8.23 jitter fix).
+        binding.feedRecycler.setHasFixedSize(true)
+        binding.feedRecycler.itemAnimator = null
+        buildChips(binding)
+        binding.feedEmptyReset.setOnClickListener {
+            // Back to the unfiltered feed: clear the search text
+            // (its watcher re-runs the pool filter) and reselect
+            // the All chip.
+            if (binding.feedSearchInput.text.toString().isNotEmpty()) {
+                binding.feedSearchInput.setText("")
+            }
+            (binding.feedChips.getChildAt(0) as? TextView)?.let { first ->
+                selectChip(binding, first, "All")
+            }
+        }
+        setupHeaderCollapse(binding)
+        setupMiniBar(binding)
+
+        TitleResolver.addListener(titleListener)
+        MetadataResolver.addListener(ratingListener)
+
+        // Phase 8.37: the refresh ring used to hide behind the
+        // floating header — rest it below the search bar + chips.
+        binding.feedSwipeRefresh.setProgressViewOffset(
+            false, 0, (132 * resources.displayMetrics.density).toInt()
+        )
+        binding.feedSwipeRefresh.setOnRefreshListener {
+            // A refresh means "show me something else": drop any active
+            // search and load the providers' next homepage page — it
+            // lands at the TOP of the feed (FeedViewModel.refresh).
+            if (binding.feedSearchInput.text.isNotEmpty()) {
+                binding.feedSearchInput.text.clear()
+            }
+            scrollTopOnNextFeed = true
+            viewModel.refresh()
+        }
+
+        binding.feedSearchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString()?.trim().orEmpty()
+                binding.feedSearchClear.isVisible = query.isNotEmpty()
+                applySearch(query)
+            }
+        })
+        binding.feedSearchClear.setOnClickListener {
+            binding.feedSearchInput.text.clear()
+        }
+
+        observe(viewModel.feed) { resource ->
+            when (resource) {
+                is Resource.Success -> {
+                    // Phase 8.35: the spinner belongs to the build
+                    // chain, not to whichever build finishes first —
+                    // a queued pull-refresh keeps it spinning until
+                    // ITS build lands.
+                    binding.feedSwipeRefresh.isRefreshing = viewModel.isBuilding
+                    binding.feedLoading.isVisible = false
+                    hideSkeleton(binding)
+                    // Hidden items stay hidden even in a replayed value.
+                    val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
+                    pool = resource.value.filterNot { it.response.url in hidden }
+                    val query = binding.feedSearchInput.text.toString().trim()
+                    if (query.isEmpty()) {
+                        binding.setFeedEmpty( pool.isEmpty() )
+                        // Phase 8.43: scroll to the top AFTER the
+                        // prepended list commits. Scrolling before
+                        // submitList let the layout manager anchor
+                        // to the old first item, which the prepend
+                        // pushed far down — a refresh flung the
+                        // list toward the end (his report).
+                        val goTop = scrollTopOnNextFeed &&
+                            viewModel.lastBuildWasPrepend
+                        if (goTop) {
+                            scrollTopOnNextFeed = false
+                            listState = null
+                        }
+                        adapter.submitList(pool) {
+                            if (goTop) {
+                                binding.feedRecycler.scrollToPosition(0)
+                            } else {
+                                listState?.let { state ->
+                                    binding.feedRecycler.layoutManager
+                                        ?.onRestoreInstanceState(state)
+                                    listState = null
+                                }
+                            }
+                        }
+                    } else {
+                        applySearch(query)
+                    }
+                }
+
+                is Resource.Failure -> {
+                    binding.feedSwipeRefresh.isRefreshing = false
+                    binding.feedLoading.isVisible = false
+                    hideSkeleton(binding)
+                    binding.setFeedEmpty( true )
+                }
+
+                is Resource.Loading -> {
+                    if (adapter.itemCount == 0 && pool.isEmpty()) {
+                        showSkeleton(binding)
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+
+        FeedPlayer.warmUp(requireContext())
+        FeedPlayer.addListener(miniListener)
+        updateMiniBar()
+        viewModel.loadIfNeeded()
+    }
+
+    override fun onDestroyView() {
+        // Remember where the list was scrolled to — opening a video and
+        // coming back must not throw the viewer back to the top.
+        listState = binding?.feedRecycler?.layoutManager?.onSaveInstanceState()
+        pendingSearch?.let { searchHandler.removeCallbacks(it) }
+        searchHandler.removeCallbacks(titleApplyRunnable)
+        searchJob?.cancel()
+        headerAnimator?.cancel()
+        FeedPlayer.removeListener(miniListener)
+        TitleResolver.removeListener(titleListener)
+        MetadataResolver.removeListener(ratingListener)
+        super.onDestroyView()
+    }
+
+    /** Phase 8.22: long-press a card → offer to hide it for good. */
+    private fun confirmHide(entry: FeedEntry) {
+        val context = context ?: return
+        androidx.appcompat.app.AlertDialog.Builder(context)
+            .setTitle(FeedAdapter.displayTitle(entry.response.name, entry.response.url))
+            .setMessage(R.string.feed_hide_message)
+            .setPositiveButton(R.string.feed_hide) { _, _ ->
+                FeedHidden.hide(context, entry.response.url)
+                FeedPool.hide(entry.response.url)
+                pool = pool.filterNot { it.response.url == entry.response.url }
+                val query = binding?.feedSearchInput?.text?.toString()?.trim().orEmpty()
+                if (query.isEmpty()) {
+                    binding?.setFeedEmpty( pool.isEmpty() )
+                    adapter.submitList(pool)
+                } else {
+                    applySearch(query)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Called by MainActivity when the Feed nav item is re-tapped. */
+    override fun scrollToTop() {
+        val binding = binding ?: return
+        binding.feedRecycler.smoothScrollToPosition(0)
+        animateHeader(binding, show = true)
+    }
+
+    // ---------- header: chips + collapse on scroll ----------
+
+    /** Phase 8.36: the empty state is a designed box (art +
+     *  message + a Show-all exit), not a lone grey line. */
+    private fun FragmentFeedBinding.setFeedEmpty(visible: Boolean) {
+        feedEmptyBox.isVisible = visible
+    }
+
+    /** Phase 8.36: genre chips with zero matches in the current
+     *  pool render dimmed, so an empty tag is visible before it
+     *  is tapped (provider search can still find more). */
+    private fun refreshChipAlphas(binding: FragmentFeedBinding) {
+        for (i in 0 until binding.feedChips.childCount) {
+            val chip = binding.feedChips.getChildAt(i) as? TextView ?: continue
+            val tag = chip.tag as? String ?: continue
+            if (tag == "All") {
+                chip.alpha = 1f
+                continue
+            }
+            val any = pool.any {
+                it.response.name.contains(tag, ignoreCase = true)
+            }
+            chip.alpha = if (any) 1f else 0.45f
+        }
+    }
+
+    private fun buildChips(binding: FragmentFeedBinding) {
+        val tags = listOf(
+            "All", "Horror", "Comedy", "Romance", "Thriller",
+            "Action", "Drama", "Family", "Sci-Fi", "Animation"
+        )
+        val context = binding.feedChips.context
+        tags.forEachIndexed { index, tag ->
+            val chip = TextView(context).apply {
+                text = tag
+                textSize = 13f
+                setPadding(30, 14, 30, 14)
+                layoutParams = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = 20 }
+                setOnClickListener { selectChip(binding, this, tag) }
+            }
+            chip.tag = tag
+            styleChip(chip, selected = index == 0)
+            if (index == 0) selectedChip = chip
+            binding.feedChips.addView(chip)
+        }
+    }
+
+    private fun styleChip(chip: TextView, selected: Boolean) {
+        val context = chip.context
+        if (selected) {
+            chip.setBackgroundResource(R.drawable.feed_chip_selected)
+            chip.setTextColor(ContextCompat.getColor(context, android.R.color.black))
+        } else {
+            chip.setBackgroundResource(R.drawable.feed_search_bg)
+            chip.setTextColor(ContextCompat.getColor(context, android.R.color.white))
+        }
+    }
+
+    private fun selectChip(binding: FragmentFeedBinding, chip: TextView, tag: String) {
+        selectedChip?.let { styleChip(it, selected = false) }
+        selectedChip = chip
+        styleChip(chip, selected = true)
+        // Driving the search through the input keeps one code path:
+        // pool filter first, provider search for 3+ characters.
+        val target = if (tag == "All") "" else tag
+        if (binding.feedSearchInput.text.toString() != target) {
+            binding.feedSearchInput.setText(target)
+            binding.feedSearchInput.setSelection(target.length)
+        }
+    }
+
+    private fun setupHeaderCollapse(binding: FragmentFeedBinding) {
+        binding.feedHeader.post {
+            headerFullHeight = binding.feedHeader.height
+            // The header floats over the grid now: push the content
+            // down by its height so the first row starts below it.
+            val extra = (6 * resources.displayMetrics.density).toInt()
+            binding.feedRecycler.setPadding(
+                binding.feedRecycler.paddingLeft, headerFullHeight + extra,
+                binding.feedRecycler.paddingRight, binding.feedRecycler.paddingBottom
+            )
+            binding.feedSkeleton.setPadding(
+                binding.feedSkeleton.paddingLeft, headerFullHeight + extra,
+                binding.feedSkeleton.paddingRight, binding.feedSkeleton.paddingBottom
+            )
+        }
+        binding.feedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dy > 12) {
+                    animateHeader(binding, show = false)
+                } else if (dy < -12) {
+                    animateHeader(binding, show = true)
+                }
+                // Phase 8.32: endless scroll — near the end, pull
+                // the providers' next homepage page into the pool.
+                if (dy > 0) {
+                    val lm = recyclerView.layoutManager as? GridLayoutManager
+                    val total = recyclerView.adapter?.itemCount ?: 0
+                    if (lm != null && total > 0 &&
+                        lm.findLastVisibleItemPosition() >= total - 8
+                    ) {
+                        viewModel.loadMore()
+                    }
+                }
+            }
+        })
+    }
+
+    private fun animateHeader(binding: FragmentFeedBinding, show: Boolean) {
+        // Phase 8.56: the height was measured once in a post{} at
+        // setup; if that ran before layout it stayed 0 forever
+        // and auto-hide silently never worked (his report).
+        // Re-measure lazily whenever it is missing.
+        if (headerFullHeight <= 0) {
+            headerFullHeight = binding.feedHeader.height
+            if (headerFullHeight <= 0) return
+        }
+        if (show == headerShown) return
+        headerShown = show
+        val header = binding.feedHeader
+        // Slide, don't resize: animating the header's height forced a
+        // full relayout of the grid on every frame — the scroll
+        // jitter (কাপাকাপি) reported in Phase 8.23.
+        val from = header.translationY
+        val to = if (show) 0f else -headerFullHeight.toFloat()
+        headerAnimator?.cancel()
+        headerAnimator = ValueAnimator.ofFloat(from, to).apply {
+            duration = 180L
+            addUpdateListener { animator ->
+                header.translationY = animator.animatedValue as Float
+            }
+            start()
+        }
+    }
+
+    // ---------- skeleton ----------
+
+    private fun showSkeleton(binding: FragmentFeedBinding) {
+        binding.feedRecycler.isVisible = false
+        binding.feedSkeleton.isVisible = true
+        binding.feedSkeleton.startShimmer()
+    }
+
+    private fun hideSkeleton(binding: FragmentFeedBinding) {
+        binding.feedSkeleton.stopShimmer()
+        binding.feedSkeleton.isVisible = false
+        binding.feedRecycler.isVisible = true
+    }
+
+    // ---------- mini player ----------
+
+    private fun setupMiniBar(binding: FragmentFeedBinding) {
+        val mini = binding.feedMini
+        FeedPlayer.warmUp(requireContext())
+        mini.feedMiniPlayerView.player = FeedPlayer.exo
+        mini.feedMiniPlayPause.setOnClickListener { FeedPlayer.togglePlay() }
+        mini.feedMiniClose.setOnClickListener { FeedPlayer.stop() }
+
+        var downY = 0f
+        val miniTouch = View.OnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> downY = event.rawY
+                MotionEvent.ACTION_UP -> {
+                    val dy = event.rawY - downY
+                    when {
+                        dy < -70f -> expandMiniPlayer()
+                        dy > 70f -> FeedPlayer.stop()
+                        else -> expandMiniPlayer()
+                    }
+                }
+            }
+            true
+        }
+        mini.feedMiniRoot.setOnTouchListener(miniTouch)
+        // The video surface would otherwise swallow taps meant for the bar.
+        mini.feedMiniPlayerView.setOnTouchListener(miniTouch)
+    }
+
+    private fun expandMiniPlayer() {
+        val url = FeedPlayer.currentUrl ?: return
+        FeedPlayer.minimized = false
+        activity.navigate(
+            R.id.navigation_feed_watch,
+            Bundle().apply {
+                putString("url", url)
+                putString("apiName", FeedPlayer.currentApiName)
+                putString("name", FeedPlayer.currentName)
+                putString("posterUrl", FeedPlayer.currentPoster)
+            }
+        )
+        updateMiniBar()
+    }
+
+    private fun updateMiniBar() {
+        val binding = binding ?: return
+        val mini = binding.feedMini
+        val show = FeedPlayer.hasActiveItem && FeedPlayer.minimized
+        mini.feedMiniRoot.isVisible = show
+        if (show) {
+            if (mini.feedMiniPlayerView.player == null) {
+                mini.feedMiniPlayerView.player = FeedPlayer.exo
+            }
+            mini.feedMiniTitle.text =
+                cleanPosterTitle(FeedPlayer.currentName ?: "")
+            mini.feedMiniPlayPause.setImageResource(
+                if (FeedPlayer.isPlaying) R.drawable.netflix_pause else R.drawable.netflix_play
+            )
+        }
+    }
+
+    // ---------- search ----------
+
+    /**
+     * Instant part: filter the loaded pool by title. Deep part (3+
+     * chars, debounced): search all providers and merge new hits in.
+     */
+    private fun applySearch(query: String) {
+        val binding = binding ?: return
+        refreshChipAlphas(binding)
+        pendingSearch?.let { searchHandler.removeCallbacks(it) }
+        searchJob?.cancel()
+        if (query.isEmpty()) {
+            // Back to the full pool — also reset the chips to "All".
+            binding.feedLoading.isVisible = false
+            selectedChip?.let { styleChip(it, selected = false) }
+            val first = binding.feedChips.getChildAt(0) as? TextView
+            selectedChip = first
+            first?.let { styleChip(it, selected = true) }
+            binding.setFeedEmpty( pool.isEmpty() )
+            adapter.submitList(pool)
+            return
+        }
+        val local = pool.filter {
+            it.response.name.contains(query, ignoreCase = true)
+        }
+        // Phase 8.56: the empty page used to appear the moment
+        // LOCAL hits were zero — over the still-loading skeleton —
+        // while the provider search was still running (his
+        // screenshot). Empty is only true once every source has
+        // answered; while a remote search is pending, the spinner
+        // shows instead.
+        if (local.isNotEmpty()) {
+            binding.feedLoading.isVisible = false
+            binding.setFeedEmpty( false )
+            adapter.submitList(local)
+        } else if (query.length >= 3) {
+            binding.setFeedEmpty( false )
+            binding.feedLoading.isVisible = true
+            adapter.submitList(local)
+        } else {
+            binding.feedLoading.isVisible = false
+            binding.setFeedEmpty( !viewModel.isBuilding )
+            adapter.submitList(local)
+            return
+        }
+        if (query.length < 3) return
+
+        val task = Runnable {
+            searchJob = viewLifecycleOwner.lifecycleScope.launch {
+                val remote = viewModel.searchAll(query)
+                // Drop stale results if the query moved on meanwhile.
+                if (binding.feedSearchInput.text.toString().trim() != query) {
+                    return@launch
+                }
+                val seen = local.map { it.response.url }.toMutableSet()
+                val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
+                val merged = local + remote.filter {
+                    it.response.url !in hidden && seen.add(it.response.url)
+                }
+                binding.feedLoading.isVisible = false
+                binding.setFeedEmpty( merged.isEmpty() )
+                adapter.submitList(merged)
+            }
+        }
+        pendingSearch = task
+        searchHandler.postDelayed(task, 600L)
+    }
+
+    private fun openWatch(entry: FeedEntry) {
+        activity.navigate(
+            R.id.navigation_feed_watch,
+            Bundle().apply {
+                putString("url", entry.response.url)
+                putString("apiName", entry.apiName)
+                putString("name", entry.response.name)
+                putString("posterUrl", entry.response.posterUrl)
+            }
+        )
+    }
+}

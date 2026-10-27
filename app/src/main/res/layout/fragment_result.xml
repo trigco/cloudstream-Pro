@@ -485,7 +485,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginBottom="5dp"
-                                android:gravity="center"
+                                android:gravity="start"
                                 android:maxLines="2"
                                 android:textColor="?attr/textColor"
                                 android:textSize="20sp"
@@ -498,7 +498,7 @@
                             <com.lagradost.cloudstream3.widget.FlowLayout
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_gravity="center_horizontal"
+                                android:layout_gravity="start"
                                 app:itemSpacing="10dp">
 
                                 <com.google.android.material.button.MaterialButton
@@ -538,6 +538,8 @@
                                     style="@style/ResultInfoText"
                                     tools:text="121min" />
                             </com.lagradost.cloudstream3.widget.FlowLayout>
+
+                            
 
                             <!--
                             This has half margin and half padding to make TV focus on description look better.

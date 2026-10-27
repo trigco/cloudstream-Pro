@@ -36,7 +36,9 @@ import com.lagradost.cloudstream3.utils.DataStoreHelper.getLastWatched
 import com.lagradost.cloudstream3.utils.ResourceLiveData
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.deleteFilesAndUpdateSettings
+import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.downloadStatusEvent
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.downloadDeleteEvent
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager.getDownloadFileInfo
 import kotlinx.coroutines.Dispatchers
@@ -69,16 +71,53 @@ class DownloadViewModel : ViewModel() {
     private val _selectedItemIds = ConsistentLiveData<Set<Int>?>(null)
     val selectedItemIds: LiveData<Set<Int>?> = _selectedItemIds
 
+    // Phase 8.57: live per-download progress (id -> downloaded
+    // to total), so an in-progress download — above all a DASH
+    // export, whose destination file stays 0 bytes until the
+    // final copy — is visible on the Downloads page while it
+    // runs instead of appearing only when done.
+    private val liveProgress = mutableMapOf<Int, Pair<Long, Long>>()
+    private var lastProgressRefreshMs = 0L
+    private val progressListener = { event: Triple<Int, Long, Long> ->
+        liveProgress[event.first] = event.second to event.third
+        val now = System.currentTimeMillis()
+        if (now - lastProgressRefreshMs >= 1000L) {
+            lastProgressRefreshMs = now
+            val context = CloudStreamApp.context
+            if (context != null) updateHeaderList(context)
+        }
+    }
+
     init {
         // Keep the Downloads list in sync when a download is deleted/cancelled from
         // anywhere in the app (result page button, queue, notification, etc.). See
         // onDownloadDeleted for the rationale (issue #1227).
         downloadDeleteEvent += ::onDownloadDeleted
+        // Phase 8.47: refresh live when a download completes,
+        // so it appears on the Downloads page without leaving
+        // and re-entering the screen.
+        downloadStatusEvent += ::onDownloadStatusChanged
+        VideoDownloadManager.downloadProgressEvent += progressListener
     }
 
     override fun onCleared() {
         downloadDeleteEvent -= ::onDownloadDeleted
+        downloadStatusEvent -= ::onDownloadStatusChanged
+        VideoDownloadManager.downloadProgressEvent -= progressListener
         super.onCleared()
+    }
+
+    private fun onDownloadStatusChanged(
+        event: Pair<Int, VideoDownloadManager.DownloadType>
+    ) {
+        // Phase 8.57: also refresh when a download STARTS, so
+        // it appears on the page right away.
+        if (event.second == VideoDownloadManager.DownloadType.IsDone ||
+            event.second == VideoDownloadManager.DownloadType.IsDownloading
+        ) {
+            val context = CloudStreamApp.context ?: return
+            updateHeaderList(context)
+        }
     }
 
     fun cancelSelection() {
@@ -306,10 +345,18 @@ class DownloadViewModel : ViewModel() {
                 }
                 return@forEach
             }
-            if (childFile.fileLength <= 1) return@forEach
+            // Phase 8.57: an ACTIVE download counts even when
+            // its destination file is still empty (DASH exports
+            // write to a temp file until the final copy) — use
+            // the live progress figures so the header is not
+            // dropped by the bytes > 0 filter below.
+            val live = liveProgress[child.id]
+            val isActive = live != null ||
+                VideoDownloadManager.currentDownloads.value.contains(child.id)
+            if (childFile.fileLength <= 1 && !isActive) return@forEach
 
-            val len = childFile.totalBytes
-            val flen = childFile.fileLength
+            val len = maxOf(childFile.totalBytes, live?.second ?: 0L, 1L)
+            val flen = maxOf(childFile.fileLength, live?.first ?: 0L)
 
             totalBytesUsedByChild.merge(child.parentId, len, Long::plus)
             currentBytesUsedByChild.merge(child.parentId, flen, Long::plus)

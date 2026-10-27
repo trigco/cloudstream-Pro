@@ -42,6 +42,7 @@ import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE
 import com.lagradost.cloudstream3.utils.DOWNLOAD_HEADER_CACHE_BACKUP
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.utils.FamilyMode
 import com.lagradost.cloudstream3.utils.DataStoreHelper.deleteAllResumeStateIds
 import com.lagradost.cloudstream3.utils.DataStoreHelper.getAllResumeStateIds
 import com.lagradost.cloudstream3.utils.DataStoreHelper.getAllWatchStateIds
@@ -231,9 +232,61 @@ class HomeViewModel : ViewModel() {
 
     val lock: MutableSet<String> = mutableSetOf()
 
+    // Phase 8.44: custom home lists — rows served by several
+    // providers. customRoutes maps a row's unique display name to
+    // (provider repo, main-page index, real page name).
+    data class CustomRoute(
+        val repo: APIRepository,
+        val pageIndex: Int?,
+        val pageName: String,
+        val dynamic: Boolean
+    )
+
+    val customRoutes = mutableMapOf<String, CustomRoute>()
+
+    @Volatile
+    var loadedCustomSignature: String? = null
+        private set
+
+    val isCustomActive: Boolean get() = customRoutes.isNotEmpty()
+
     suspend fun expandAndReturn(name: String): ExpandableHomepageList? {
         if (lock.contains(name)) return null
         lock += name
+
+        // Phase 8.44: a custom-list row expands through its OWN
+        // provider, not the single home repo.
+        val customRoute = customRoutes[name]
+        if (customRoute != null) {
+            val repoX = customRoute.repo
+            val pageIndex = customRoute.pageIndex
+            val pageName = customRoute.pageName
+            expandable[name]?.let { current ->
+                if (current.hasNext) {
+                    val nextPage = current.currentPage + 1
+                    val next = repoX.getMainPage(nextPage, pageIndex)
+                    if (next is Resource.Success) {
+                        next.value.filterNotNull().forEach { main ->
+                            val match = main.items.firstOrNull {
+                                it.name == pageName
+                            } ?: main.items.singleOrNull()
+                            if (match != null) {
+                                current.list.list =
+                                    (current.list.list + match.list)
+                                        .distinctBy { it.url }
+                            }
+                            current.hasNext = main.hasNext
+                            current.currentPage = nextPage
+                        }
+                    } else {
+                        current.hasNext = false
+                    }
+                }
+            }
+            _page.postValue(Resource.Success(expandable))
+            lock -= name
+            return expandable[name]
+        }
 
         repo?.apply {
             waitForHomeDelay()
@@ -381,10 +434,17 @@ class HomeViewModel : ViewModel() {
 
                     //val home = data.value
                     if (items.isNotEmpty()) {
+                        // Phase 8.50: Family Mode keeps NSFW items
+                        // out of the hero pool and random strip.
+                        val familyOn = FamilyMode.isEnabled()
                         val currentList =
                             items.shuffled().filter { it.list.isNotEmpty() }
                                 .flatMap { it.list }
-                                .distinctBy { it.url }.toList()
+                                .distinctBy { it.url }
+                                .filterNot {
+                                    familyOn && FamilyMode.isAdultItem(it)
+                                }
+                                .toList()
 
                         if (currentList.isNotEmpty()) {
                             val randomItems =
@@ -437,6 +497,159 @@ class HomeViewModel : ViewModel() {
             else -> Unit
         }
         isCurrentlyLoadingName = null
+    }
+
+    // ---------- Phase 8.44: custom home lists ----------
+
+    private fun customSignature(list: HomeCustomLists.CustomList): String =
+        list.id + "|" + list.entries.joinToString(",") {
+            it.apiName + ":" + it.pageName + ":" + it.dynamic
+        }
+
+    fun activateCustomList(list: HomeCustomLists.CustomList) {
+        context?.let { HomeCustomLists.setActiveId(it, list.id) }
+        loadCustomList(list)
+    }
+
+    fun exitCustomMode() {
+        context?.let { HomeCustomLists.setActiveId(it, null) }
+        customRoutes.clear()
+        loadedCustomSignature = null
+    }
+
+    fun loadCustomList(list: HomeCustomLists.CustomList) {
+        onGoingLoad?.cancel()
+        isCurrentlyLoadingName = "custom:" + list.id
+        onGoingLoad = ioSafe {
+            _page.postValue(Resource.Loading())
+            _preview.postValue(Resource.Loading())
+            customRoutes.clear()
+            val nameCounts =
+                list.entries.groupingBy { it.pageName }.eachCount()
+            val built =
+                LinkedHashMap<String, ExpandableHomepageList>()
+            for (entry in list.entries) {
+                try {
+                    val api = getApiFromNameNull(entry.apiName)
+                        ?: continue
+                    val repoX = APIRepository(api)
+                    if (!repoX.hasMainPage) continue
+                    // Phase 8.46: dynamic entries (provider
+                    // declares no mainPage) load the whole
+                    // homepage and pick their category by name;
+                    // declared entries load by page index.
+                    val idx = if (entry.dynamic) {
+                        -1
+                    } else {
+                        api.mainPage.indexOfFirst {
+                            it.name == entry.pageName
+                        }
+                    }
+                    if (!entry.dynamic && idx < 0) continue
+                    val res = if (entry.dynamic) {
+                        repoX.getMainPage(1, null)
+                    } else {
+                        repoX.getMainPage(1, idx)
+                    }
+                    if (res !is Resource.Success) continue
+                    res.value.filterNotNull().forEach { home ->
+                        home.items.filter { it.name == entry.pageName }
+                            .forEach { hl ->
+                                val filtered =
+                                    context?.filterHomePageListByFilmQuality(hl)
+                                        ?: hl
+                                val display =
+                                    if ((nameCounts[entry.pageName] ?: 0) > 1) {
+                                        "${entry.pageName} • ${entry.apiName}"
+                                    } else {
+                                        entry.pageName
+                                    }
+                                built[display] = ExpandableHomepageList(
+                                    filtered.copy(
+                                        name = display,
+                                        list = CopyOnWriteArrayList(filtered.list)
+                                    ),
+                                    1,
+                                    home.hasNext
+                                )
+                                customRoutes[display] = CustomRoute(
+                                    repoX,
+                                    if (entry.dynamic) null else idx,
+                                    entry.pageName,
+                                    entry.dynamic
+                                )
+                            }
+                    }
+                } catch (e: Exception) {
+                    logError(e)
+                }
+            }
+            expandable.clear()
+            expandable.putAll(built)
+            if (built.isEmpty()) {
+                // Providers may still be loading; stay in Loading
+                // so a later load call rebuilds instead of pinning
+                // an empty home.
+                _page.postValue(Resource.Loading())
+                return@ioSafe
+            }
+            loadedCustomSignature = customSignature(list)
+            _page.postValue(Resource.Success(expandable))
+
+            // Phase 8.47: the hero used to wait for up to 3
+            // full page loads before posting anything — on
+            // slow providers it sat empty for ages (his
+            // report). Rows and the hero strip post NOW; the
+            // enrichment runs in its own job and re-posts the
+            // preview after EACH successful load, so the hero
+            // appears with the first backdrop that is ready.
+            val flat = built.values.flatMap { it.list.list }
+                .distinctBy { it.url }
+                .filterNot {
+                    FamilyMode.isEnabled() && FamilyMode.isAdultItem(it)
+                }
+                .shuffled()
+            currentShuffledList = flat
+            _randomItems.postValue(flat)
+            _preview.postValue(Resource.Loading())
+            ioSafe {
+                previewResponses.clear()
+                previewResponsesAdded.clear()
+                // Phase 8.56: these detail loads used to run one
+                // after another — with a slow provider first, the
+                // hero sat empty for the sum of every load (his
+                // "hero loads late" report). Fetch the candidates
+                // in parallel, take the first three successes.
+                val loaded = flat.take(10).amap { sr ->
+                    val apiX = getApiFromNameNull(sr.apiName)
+                        ?: return@amap null
+                    when (val r = APIRepository(apiX).load(sr.url)) {
+                        is Resource.Success -> sr.url to r.value
+                        else -> null
+                    }
+                }.filterNotNull()
+                for ((url, response) in loaded) {
+                    if (previewResponses.size >= 3) break
+                    previewResponses.add(response)
+                    previewResponsesAdded.add(url)
+                }
+                if (previewResponses.isEmpty()) {
+                    _preview.postValue(
+                        Resource.Failure(
+                            false, "No homepage responses"
+                        )
+                    )
+                } else {
+                    _preview.postValue(
+                        Resource.Success(
+                            (previewResponsesAdded.size <
+                                flat.size) to previewResponses
+                        )
+                    )
+                }
+            }
+            isCurrentlyLoadingName = null
+        }
     }
 
     fun click(callback: SearchClickCallback) {
@@ -528,6 +741,34 @@ class HomeViewModel : ViewModel() {
         fromUI: Boolean = false
     ) =
         ioSafe {
+            // Phase 8.44: while a custom list is active, every home
+            // load routes to it. Leaving custom mode happens only
+            // via exitCustomMode() (the provider switcher).
+            val activeCustom =
+                context?.let { HomeCustomLists.activeList(it) }
+            // Phase 8.46: the list was deactivated in Settings —
+            // drop the stale custom rows and force a normal load.
+            // (No recursive call here: this function has an
+            // inferred return type, and a self-call makes the
+            // type checker loop — CI caught exactly that.)
+            var effectiveForce = forceReload
+            if (activeCustom == null && customRoutes.isNotEmpty()) {
+                customRoutes.clear()
+                loadedCustomSignature = null
+                effectiveForce = true
+            }
+            if (activeCustom != null) {
+                if (!forceReload &&
+                    loadedCustomSignature ==
+                    customSignature(activeCustom) &&
+                    page.value is Resource.Success
+                ) {
+                    return@ioSafe
+                }
+                loadCustomList(activeCustom)
+                reloadAccount()
+                return@ioSafe
+            }
             //println("trying to load $preferredApiName")
             // Since plugins are loaded in stages this function can get called multiple times.
             // The issue with this is that the homepage may be fetched multiple times while the first request is loading
@@ -536,7 +777,7 @@ class HomeViewModel : ViewModel() {
 
             // if we don't need to reload and we have a valid homepage or currently loading the same thing then return
             val currentLoading = isCurrentlyLoadingName
-            if (!forceReload && (currentPage is Resource.Success && currentPage.value.isNotEmpty() || (currentLoading != null && currentLoading == preferredApiName))) {
+            if (!effectiveForce && (currentPage is Resource.Success && currentPage.value.isNotEmpty() || (currentLoading != null && currentLoading == preferredApiName))) {
                 return@ioSafe
             }
 

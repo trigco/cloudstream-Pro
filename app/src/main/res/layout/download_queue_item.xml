@@ -13,7 +13,7 @@
         tools:visibility="visible"
         android:id="@+id/download_child_episode_holder"
         android:layout_width="match_parent"
-        android:layout_height="50dp"
+        android:layout_height="68dp"
         android:focusable="true"
         android:foreground="@drawable/outline_drawable"
         android:nextFocusLeft="@id/nav_rail_view"
@@ -26,6 +26,16 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:foreground="?android:attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:id="@+id/download_child_episode_poster"
+                android:layout_width="46dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
 
             <ImageView
                 android:id="@+id/download_child_episode_play"
@@ -56,6 +66,21 @@
                     android:singleLine="true"
                     android:textColor="?attr/textColor"
                     tools:text="Episode 1 Episode 1 Episode 1 Episode 1 Episode 1 Episode 1 Episode 1" />
+
+                <TextView
+                    android:id="@+id/download_child_episode_details"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:ellipsize="end"
+                    android:gravity="center_vertical"
+                    android:singleLine="true"
+                    android:textColor="?attr/grayTextColor"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    tools:text="45.2 MB of 182.0 MB" />
 
                 <TextView
                     android:id="@+id/download_child_episode_text_extra"

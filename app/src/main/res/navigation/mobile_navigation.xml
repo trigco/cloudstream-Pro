@@ -335,6 +335,54 @@
     </fragment>
 
     <fragment
+        android:id="@+id/navigation_feed"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed">
+        <action
+            android:id="@+id/action_navigation_feed_to_navigation_feed_watch"
+            app:destination="@id/navigation_feed_watch"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_feed_watch"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedWatchFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed_watch">
+        <argument
+            android:name="url"
+            app:argType="string" />
+        <argument
+            android:name="apiName"
+            app:argType="string" />
+        <argument
+            android:name="name"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_feed_download"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedBatchDownloadFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed_download" />
+
+    <fragment
         android:id="@+id/navigation_search"
         android:name="com.lagradost.cloudstream3.ui.search.SearchFragment"
         android:label="@string/title_search"
@@ -738,4 +786,33 @@
         android:name="com.lagradost.cloudstream3.ui.EasterEggMonkeFragment"
         android:label="EasterEggMonkeFragment"
         tools:layout="@layout/fragment_easter_egg_monke" />
+    <fragment
+        android:id="@+id/navigation_home_custom_lists"
+        android:name="com.lagradost.cloudstream3.ui.home.HomeCustomListsFragment"
+        android:label="@string/home_custom_lists_title"
+        tools:layout="@layout/fragment_home_custom_lists">
+        <action
+            android:id="@+id/action_home_custom_lists_to_edit"
+            app:destination="@id/navigation_home_custom_list_edit"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_home_custom_list_edit"
+        android:name="com.lagradost.cloudstream3.ui.home.HomeCustomListEditFragment"
+        android:label="@string/home_custom_lists_title"
+        tools:layout="@layout/fragment_home_custom_list_edit">
+        <argument
+            android:name="listId"
+            android:defaultValue="@null"
+            app:argType="string" />
+    </fragment>
+
+    <action
+        android:id="@+id/global_to_navigation_home_custom_lists"
+        app:destination="@id/navigation_home_custom_lists" />
+
 </navigation>

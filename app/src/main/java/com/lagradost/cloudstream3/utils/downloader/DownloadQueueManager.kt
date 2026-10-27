@@ -59,7 +59,10 @@ object DownloadQueueManager {
 
         ioSafe startQueue@{
             // Do not automatically start the queue if safe mode is activated.
-            if (PluginManager.isSafeMode()) {
+            // Phase 8.57: file-only gate, matching the service
+            // (8.46) — isSafeMode() also trips on a latched crash
+            // record, which froze restored queues for a session.
+            if (PluginManager.checkSafeModeFile()) {
                 // Prevent misleading UI
                 VideoDownloadManager.cancelAllDownloadNotifications(context)
                 return@startQueue

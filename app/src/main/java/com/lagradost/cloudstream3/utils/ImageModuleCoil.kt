@@ -45,7 +45,10 @@ object ImageLoader {
             .networkCachePolicy(CachePolicy.ENABLED)
             .memoryCache {
                 MemoryCache.Builder().maxSizePercent(context, 0.1)//10 % of heap for mem-cache
-                    .strongReferencesEnabled(false)
+                    // Phase 8.34: strong refs keep the current session's
+                    // posters alive, so scrolling back is instant
+                    // instead of a re-decode (disk cache already on).
+                    .strongReferencesEnabled(true)
                     .build()
             }
             .diskCache {

@@ -13,7 +13,13 @@ val LOADTYPE_INAPP = setOf(
 
 val LOADTYPE_INAPP_DOWNLOAD = setOf(
     ExtractorLinkType.VIDEO,
-    ExtractorLinkType.M3U8
+    ExtractorLinkType.M3U8,
+    // Phase 8.42: DASH was missing here, so details-page
+    // downloads of DASH-only providers (Prime/Netflix/Disney
+    // families) extracted ZERO usable links and always failed
+    // while the same title played fine. The downloader handles
+    // DASH since 8.40.
+    ExtractorLinkType.DASH
 )
 
 val LOADTYPE_CHROMECAST = setOf(

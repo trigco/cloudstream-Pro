@@ -7,6 +7,7 @@ import android.os.CountDownTimer
 import android.view.View
 import android.view.View.FOCUS_DOWN
 import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.TextView
 import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
@@ -409,6 +410,74 @@ class SettingsAccount : BasePreferenceFragmentCompat(), BiometricCallback {
         }
     }
 
+    /** Phase 8.56: one API-key row — summary shows whether a key
+     *  is saved; tapping opens a small editor dialog. An empty
+     *  save removes the key. */
+    private fun setupApiKeyPreference(prefKey: String) {
+        val preference = findPreference<androidx.preference.Preference>(prefKey)
+            ?: return
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        fun refreshSummary() {
+            preference.summary = getString(
+                if (prefs.getString(prefKey, null).isNullOrBlank()) {
+                    R.string.api_key_not_set
+                } else {
+                    R.string.api_key_set
+                }
+            )
+        }
+        refreshSummary()
+        preference.setOnPreferenceClickListener {
+            val ctx = context ?: return@setOnPreferenceClickListener false
+            val input = EditText(ctx).apply {
+                setText(prefs.getString(prefKey, ""))
+                hint = getString(R.string.api_key_hint)
+                setSingleLine(true)
+                setSelection(text.length)
+            }
+            AlertDialog.Builder(ctx)
+                .setTitle(preference.title)
+                .setView(input)
+                .setPositiveButton(R.string.save) { _, _ ->
+                    val value = input.text.toString().trim()
+                    prefs.edit {
+                        if (value.isEmpty()) remove(prefKey) else putString(prefKey, value)
+                    }
+                    refreshSummary()
+                    showToast(getString(R.string.api_key_saved))
+                    // Phase 8.57: verify the key live, so a
+                    // saved-but-rejected key is visible at once
+                    // instead of silently fetching nothing.
+                    if (value.isNotEmpty()) {
+                        showToast(getString(R.string.api_key_testing))
+                        ioSafe {
+                            val ok = if (
+                                prefKey == com.lagradost.cloudstream3
+                                    .ui.search.MetadataResolver.TMDB_KEY_PREF
+                            ) {
+                                com.lagradost.cloudstream3.ui.search
+                                    .MetadataResolver.testTmdbKey(value) == 200
+                            } else {
+                                com.lagradost.cloudstream3.ui.search
+                                    .MetadataResolver.testOmdbKey(value)
+                            }
+                            activity?.runOnUiThread {
+                                showToast(
+                                    getString(
+                                        if (ok) R.string.api_key_valid
+                                        else R.string.api_key_invalid
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+            true
+        }
+    }
+
     private fun updateAuthPreference(enabled: Boolean) {
         val biometricKey = getString(R.string.biometric_key)
 
@@ -466,6 +535,16 @@ class SettingsAccount : BasePreferenceFragmentCompat(), BiometricCallback {
 
             false
         }
+
+        // Phase 8.56: universal-rating API keys (TMDB / IMDb via
+        // OMDb) — entered by the user here, stored only on the
+        // device, read by MetadataResolver.
+        setupApiKeyPreference(
+            com.lagradost.cloudstream3.ui.search.MetadataResolver.TMDB_KEY_PREF
+        )
+        setupApiKeyPreference(
+            com.lagradost.cloudstream3.ui.search.MetadataResolver.OMDB_KEY_PREF
+        )
 
         val syncApis =
             listOf(

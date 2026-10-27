@@ -31,9 +31,9 @@
             android:orientation="vertical"
             android:paddingTop="40dp"
             app:shimmer_auto_start="true"
-            app:shimmer_base_alpha="0.2"
-            app:shimmer_duration="@integer/loading_time"
-            app:shimmer_highlight_alpha="0.3">
+            app:shimmer_base_alpha="0.3"
+            app:shimmer_duration="1400"
+            app:shimmer_highlight_alpha="0.85">
 
             <LinearLayout
                 android:layout_width="match_parent"

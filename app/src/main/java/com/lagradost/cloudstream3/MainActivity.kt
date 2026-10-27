@@ -106,6 +106,7 @@ import com.lagradost.cloudstream3.ui.SyncWatchType
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.download.DOWNLOAD_NAVIGATE_TO
+import com.lagradost.cloudstream3.ui.feed.FeedScrollTop
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.ui.library.LibraryViewModel
 import com.lagradost.cloudstream3.ui.player.BasicLink
@@ -503,6 +504,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         val isNavVisible = listOf(
             R.id.navigation_home,
+            R.id.navigation_feed,
             R.id.navigation_search,
             R.id.navigation_library,
             R.id.navigation_downloads,
@@ -1356,6 +1358,53 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }
     }
 
+    /**
+     * Phase 8.49: after a fresh install applied the bundled
+     * default backup (CloudStreamApp), download ONLY the
+     * bundled default plugins (assets/pro_default_plugins.json)
+     * instead of every plugin in every restored repository.
+     * Runs in the background; retries on the next launch while
+     * any of the files is still missing (e.g. offline install).
+     */
+    private fun downloadDefaultPluginsIfPending() {
+        try {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            if (!prefs.getBoolean(CloudStreamApp.DEFAULT_PLUGINS_PENDING, false)) {
+                return
+            }
+            ioSafe {
+                val text = assets.open(CloudStreamApp.DEFAULT_PLUGINS_ASSET)
+                    .bufferedReader().readText()
+                val entries = org.json.JSONArray(text)
+                var allPresent = true
+                for (i in 0 until entries.length()) {
+                    val entry = entries.getJSONObject(i)
+                    val url = entry.optString("url")
+                    val name = entry.optString("internalName")
+                    val repo = entry.optString("repositoryUrl")
+                    if (url.isBlank() || name.isBlank() || repo.isBlank()) {
+                        continue
+                    }
+                    val file = PluginManager.getPluginPath(
+                        this@MainActivity, name, repo
+                    )
+                    if (file.exists()) continue
+                    val ok = PluginManager.downloadPlugin(
+                        this@MainActivity, url, null, name, repo, true
+                    )
+                    if (!ok && !file.exists()) allPresent = false
+                }
+                if (allPresent) {
+                    prefs.edit()
+                        .putBoolean(CloudStreamApp.DEFAULT_PLUGINS_PENDING, false)
+                        .apply()
+                }
+            }
+        } catch (t: Throwable) {
+            logError(t)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         app.initClient(this, ignoreSSL = false)
         @OptIn(UnsafeSSL::class)
@@ -1405,6 +1454,8 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 }
             }
         }
+
+        downloadDefaultPluginsIfPending()
 
         // just in case, MAIN SHOULD *NEVER* BOOT LOOP CRASH
         binding = try {
@@ -1896,6 +1947,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 setupNavScrub(this)
             }
 
+            // Phase 8.20: re-tapping the Feed tab scrolls the feed to top.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
+                        ?.scrollToTop()
+                }
+            }
+
         }
 
         binding?.navRailView?.apply {
@@ -1925,6 +1987,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 // Phase 8.16: same haptic tick as the bottom bar.
                 if (handled) hapticTick()
                 handled
+            }
+
+            // Phase 8.20: same re-tap behaviour as the bottom bar.
+            setOnItemReselectedListener { item ->
+                if (item.itemId == R.id.navigation_feed) {
+                    val host = supportFragmentManager
+                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+                    (host?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
+                        ?.scrollToTop()
+                }
             }
 
 
@@ -2214,6 +2287,14 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 // If no plugins bring up extensions screen
             } else if (PluginManager.getPluginsOnline().isEmpty()
                 && PluginManager.getPluginsLocal().isEmpty()
+                // Phase 8.50: on a fresh install the bundled
+                // default plugins are still downloading in the
+                // background — landing a new user on the raw
+                // repository page first is confusing; Home opens
+                // instead and the providers arrive on their own.
+                && !settingsManager.getBoolean(
+                    CloudStreamApp.DEFAULT_PLUGINS_PENDING, false
+                )
 //                && PREBUILT_REPOSITORIES.isNotEmpty()
             ) {
                 navController.navigate(
