@@ -53,6 +53,7 @@ class NuvioPluginsFragment : Fragment() {
     private lateinit var adapter: NuvioRepoAdapter
     private lateinit var recycler: RecyclerView
     private lateinit var emptyView: TextView
+    private lateinit var diagView: TextView
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -78,6 +79,7 @@ class NuvioPluginsFragment : Fragment() {
         }
         recycler = view.findViewById(R.id.nuvio_recycler)
         emptyView = view.findViewById(R.id.nuvio_empty)
+        diagView = view.findViewById(R.id.nuvio_diagnostics)
         adapter = NuvioRepoAdapter(
             onToggle = { repo, scraper, enabled ->
                 NuvioRepository.setScraperEnabled(
@@ -103,10 +105,9 @@ class NuvioPluginsFragment : Fragment() {
 
     private fun refresh() {
         val diag = NuvioDiagnostics.lastSummary
-        binding.nuvioDiagnostics.visibility =
-            if (diag.isNullOrBlank()) View.GONE else View.VISIBLE
+        diagView.visibility = if (diag.isNullOrBlank()) View.GONE else View.VISIBLE
         if (!diag.isNullOrBlank()) {
-            binding.nuvioDiagnostics.text = "Last stream check · $diag"
+            diagView.text = "Last stream check · $diag"
         }
         if (!::adapter.isInitialized) return
         val ctx = requireContext()
