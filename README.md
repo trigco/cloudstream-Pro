@@ -1,3 +1,31 @@
+# CloudStream Pro
+
+**CloudStream Pro** is an Android app for streaming and downloading movies & TV shows — a redesigned edition of [CloudStream](https://github.com/recloudstream/cloudstream) with a reels-style **Feed**, a modern player, DASH downloads, custom home lists and universal TMDB/IMDb ratings.
+
+[![Download CloudStream Pro](https://img.shields.io/badge/Download-v1.2.0-red?style=for-the-badge&logo=github)](https://github.com/trigco/cloudstream-Pro/releases/latest)
+
+## ✨ Highlights
+
+- **Feed** — an endless wall of posters from all your providers mixed together; tap to play instantly in the portrait player, like what you love, download episodes or whole seasons
+- **Player** — solid play button, YouTube-style seekbar, resume shared between the feed player and the main player
+- **Downloads** — DASH sources download as real MP4, cross-provider fallback finds the same title in your language and quality, live queue with progress notifications
+- **Custom Home Lists** — build your own home screens mixing categories from different providers
+- **Universal ratings** — bring your own TMDB / IMDb (OMDb) key and get ratings on every card, even when a provider ships none
+- **Family Mode** — keeps adult providers and titles out of Home, Feed and Search
+- **Design** — one accent with intent: Play is red `#E50914`, everything else monochrome
+
+## 📥 Install
+
+1. Download the latest APK from the [**Releases**](https://github.com/trigco/cloudstream-Pro/releases/latest) page
+2. Install it (Android 6.0+; tested on Android 8.1 and 12+)
+3. Add extension repositories inside the app — by default the app ships without video sources
+
+## ℹ️ About this fork
+
+CloudStream Pro is a fork of the open-source [CloudStream](https://github.com/recloudstream/cloudstream) project, restyled and extended by [Mominul Islam](https://github.com/trigco). All credit for the original app goes to its authors and contributors — see below.
+
+---
+
 # CloudStream
 
 **⚠️ Warning: By default, this app doesn't provide any video sources; you have to install extensions to add functionality to the app.**
