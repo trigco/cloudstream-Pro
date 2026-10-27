@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.62: translucent disc for the double-tap seek wedge;
+     half of it sits off-screen so only a curved wedge shows. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#2BFFFFFF" />
+</shape>

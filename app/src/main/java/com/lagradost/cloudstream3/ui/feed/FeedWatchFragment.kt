@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
 import androidx.media3.common.C.TRACK_TYPE_VIDEO
@@ -34,6 +35,10 @@ import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.mvvm.logError
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.lagradost.cloudstream3.utils.AppContextUtils.isCastApiAvailable
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.ui.WatchType
@@ -343,6 +348,27 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         // Phase 8.34: quick actions beside the title — source/dub,
         // episodes, download — the Premium Details pill row idea.
+        // Phase 8.62: TV cast option in the feed - the same
+        // MediaRouteButton wiring as the details page. The button
+        // starts gone and only appears when the Cast API is
+        // available and the CastContext initialises.
+        binding.feedWatchCast.let { castBtn ->
+            activity?.let { act ->
+                if (act.isCastApiAvailable()) {
+                    try {
+                        CastButtonFactory.setUpMediaRouteButton(act, castBtn)
+                        CastContext.getSharedInstance(act.applicationContext) {
+                            it.run()
+                        }.addOnCompleteListener {
+                            castBtn.isGone = !it.isSuccessful
+                        }
+                    } catch (e: Exception) {
+                        logError(e)
+                        castBtn.isGone = true
+                    }
+                }
+            }
+        }
         binding.feedWatchSourceBtn.setOnClickListener { view ->
             view.hapticTick()
             showQuality()

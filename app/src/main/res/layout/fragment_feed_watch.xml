@@ -144,6 +144,15 @@
                 android:orientation="horizontal"
                 android:padding="4dp">
 
+                <androidx.mediarouter.app.MediaRouteButton
+                    android:id="@+id/feed_watch_cast"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/feed_center_button_bg"
+                    android:mediaRouteTypes="user"
+                    android:visibility="gone"
+                    app:mediaRouteButtonTint="?attr/textColor" />
+
                 <ImageButton
                     android:id="@+id/feed_watch_audio"
                     android:layout_width="40dp"
