@@ -1885,6 +1885,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             initAll()
             // No duplicates (which can happen by registerMainAPI)
             apis = allProviders.distinctBy { it }
+            // Register the user's Stremio addons as providers (they join
+            // apis through addPluginMapping inside sync).
+            com.lagradost.cloudstream3.stremio.StremioProviders.sync(this@MainActivity)
         }
 
         //  val navView: BottomNavigationView = findViewById(R.id.nav_view)

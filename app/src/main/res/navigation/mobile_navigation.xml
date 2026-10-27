@@ -253,6 +253,15 @@
     </fragment>
 
     <fragment
+        android:id="@+id/navigation_settings_stremio"
+        android:name="com.lagradost.cloudstream3.ui.settings.stremio.StremioAddonsFragment"
+        android:label="@string/stremio_addons_title"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right"
+        tools:layout="@layout/fragment_stremio_addons" />
+    <fragment
         android:id="@+id/navigation_settings_plugins"
         android:name="com.lagradost.cloudstream3.ui.settings.extensions.PluginsFragment"
         android:label="@string/title_settings"
@@ -484,6 +493,13 @@
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_extensions"
         app:destination="@id/navigation_settings_extensions"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
+    <action
+        android:id="@+id/action_navigation_global_to_navigation_settings_stremio"
+        app:destination="@id/navigation_settings_stremio"
         app:enterAnim="@anim/feel_slide_in_right"
         app:exitAnim="@anim/feel_slide_out_left"
         app:popEnterAnim="@anim/feel_slide_in_left"
