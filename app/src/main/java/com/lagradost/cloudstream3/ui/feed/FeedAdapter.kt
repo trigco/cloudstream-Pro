@@ -6,6 +6,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.lagradost.cloudstream3.AnimeSearchResponse
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
@@ -93,12 +94,14 @@ class FeedAdapter(
             if (rating == null && response.score == null) {
                 MetadataResolver.resolve(context, response)
             }
+            // dubStatus is declared on AnimeSearchResponse only.
+            val declaredDub = (response as? AnimeSearchResponse)?.dubStatus
             val dubSub = when {
-                response.dubStatus.isNullOrEmpty() -> null
-                response.dubStatus!!.contains(DubStatus.Dubbed) &&
-                    response.dubStatus!!.contains(DubStatus.Subbed) -> "DUB+SUB"
-                response.dubStatus!!.contains(DubStatus.Dubbed) -> "DUB"
-                response.dubStatus!!.contains(DubStatus.Subbed) -> "SUB"
+                declaredDub.isNullOrEmpty() -> null
+                declaredDub!!.contains(DubStatus.Dubbed) &&
+                    declaredDub.contains(DubStatus.Subbed) -> "DUB+SUB"
+                declaredDub.contains(DubStatus.Dubbed) -> "DUB"
+                declaredDub.contains(DubStatus.Subbed) -> "SUB"
                 else -> null
             }
             binding.feedCardMeta.text = buildString {

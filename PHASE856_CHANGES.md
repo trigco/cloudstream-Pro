@@ -18,9 +18,9 @@
   fallback; rating_format is now "★ %s/10").
 
 ## Dub/Sub label
-- Feed card meta appends DUB / SUB / DUB+SUB from the
-  response's declared dubStatus. (Home/search cards already
-  had their dub/sub views.)
+- Feed card meta appends DUB / SUB / DUB+SUB when the item
+  declares a dub status (AnimeSearchResponse carries it).
+  (Home/search cards already had their dub/sub views.)
 
 ## Details title bar (his MovieBox reference)
 - Title and meta line left-aligned (were centered).
