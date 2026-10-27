@@ -403,10 +403,23 @@ class PlayerView @JvmOverloads constructor(
                 val cs3 = player as? CS3IPlayer ?: return
                 cs3.cacheSize =
                     settingsManager.getInt(context.getString(R.string.video_buffer_size_key), 0) * 1024L * 1024L
+                // Phase 8.59: disk cache gets a 512 MB floor when the
+                // user never set one (0 used to mean "evict instantly",
+                // so nothing ever persisted between sessions).
+                val diskMb =
+                    settingsManager.getInt(context.getString(R.string.video_buffer_disk_key), 0)
                 cs3.simpleCacheSize =
-                    settingsManager.getInt(context.getString(R.string.video_buffer_disk_key), 0) * 1024L * 1024L
+                    (if (diskMb > 0) diskMb else 512) * 1024L * 1024L
+                // Phase 8.59: read-ahead defaults to the Preload buffer
+                // setting (5 min) instead of ExoPlayer's 50 s; an explicit
+                // buffer-length value still wins.
+                val lengthSec =
+                    settingsManager.getInt(context.getString(R.string.video_buffer_length_key), 0)
+                val preloadMin =
+                    settingsManager.getString(context.getString(R.string.player_preload_buffer_key), "5")
+                        ?.toIntOrNull() ?: 5
                 cs3.videoBufferMs =
-                    settingsManager.getInt(context.getString(R.string.video_buffer_length_key), 0) * 1000L
+                    if (lengthSec > 0) lengthSec * 1000L else preloadMin * 60_000L
             } catch (e: Exception) {
                 logError(e)
             }

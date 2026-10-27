@@ -141,6 +141,10 @@ object FeedPlayer {
     // this provider has no playable links for the title, try the
     // same title on other providers before showing the error page.
     private var fallbackAllowed = false
+
+    // Phase 8.59: one cross-provider attempt per play() session
+    // when playback itself (not just extraction) fails.
+    private var playbackFallbackTried = false
         private set
 
     // Phase 8.42: pre-fetched backup — the same title on another
@@ -183,14 +187,15 @@ object FeedPlayer {
                 it.name != fromApi && it.name != "None"
             }
             if (others.isEmpty()) return@launch
+            val query = fallbackQuery(title)
             val candidates = others.amap { api ->
                 try {
                     when (
                         val r = withContext(Dispatchers.IO) {
-                            APIRepository(api).search(title, 1)
+                            APIRepository(api).search(query, 1)
                         }
                     ) {
-                        is Resource.Success -> r.value.items.firstOrNull {
+                        is Resource.Success -> r.value.items.take(8).firstOrNull {
                             titlesMatch(it, title)
                         }?.let { hit -> hit to api }
                         else -> null
@@ -365,14 +370,19 @@ object FeedPlayer {
         // The main player's buffering, unchanged: the lighter preview
         // load control from the fast-start experiment is gone — with
         // multi-source providers, parity beats shaving a second.
+        // Phase 8.59: mpv-style read-ahead for the feed too —
+        // buffer up to 2 minutes ahead (96 MB byte cap) so a
+        // network drop does not stop playback instantly.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                120_000,
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
             )
-            .setBackBuffer(30_000, true)
+            .setTargetBufferBytes(96 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(60_000, true)
             .build()
         val player = ExoPlayer.Builder(appContext)
             .setRenderersFactory(renderersFactory)
@@ -475,6 +485,7 @@ object FeedPlayer {
         extracting = true
         pendingRetry = false
         fallbackAllowed = true
+        playbackFallbackTried = false
         clearBackup()
         links = emptyList()
         subs = emptyList()
@@ -611,11 +622,41 @@ object FeedPlayer {
         return true
     }
 
+    private val LANGUAGE_TOKENS = setOf(
+        "bangla", "bengali", "hindi", "english", "tamil", "telugu",
+        "malayalam", "kannada", "punjabi", "urdu", "korean", "japanese",
+        "chinese", "spanish", "french", "german", "russian", "arabic",
+        "dubbed", "dub", "sub", "subbed"
+    )
+
+    /**
+     * Phase 8.59: language tags must not decide identity —
+     * "OMG 2 (Bangla)" and "OMG 2" are the same movie, but the
+     * 8.57 strict comparison kept "(Bangla)" (cleanPosterTitle
+     * only strips year parentheses), so the names could NEVER be
+     * equal and cross-provider fallback silently never fired for
+     * any title carrying a language tag. Strip language tokens
+     * from BOTH sides here; the kind and year checks in
+     * titlesMatch still guard against wrong-title takeovers.
+     */
     private fun normalizedTitle(raw: String): String =
         raw.lowercase()
             .replace(Regex("[^a-z0-9]+"), " ")
+            .split(" ")
+            .filter { it.isNotBlank() && it !in LANGUAGE_TOKENS }
+            .joinToString(" ")
+
+    /** Search text for the fallback hunt: the cleaned title with
+     * parenthesised tags removed, so providers whose search does
+     * not tolerate "(Bangla)" still return the plain title. */
+    private fun fallbackQuery(rawTitle: String): String {
+        val cleaned = com.lagradost.cloudstream3.ui.search
+            .SearchResultBuilder.cleanPosterTitle(rawTitle)
+            .replace(Regex("""\([^)]*\)"""), " ")
             .replace(Regex("""\s+"""), " ")
             .trim()
+        return cleaned.ifBlank { rawTitle }
+    }
 
     /**
      * Phase 8.57: takeover matching is STRICT — his report:
@@ -677,11 +718,12 @@ object FeedPlayer {
             it.name != currentApiName && it.name != "None"
         }
         if (others.isEmpty()) return false
-        dbg("cross-provider search: " + title.take(40))
+        val query = fallbackQuery(title)
+        dbg("cross-provider search: " + query.take(40))
         val candidates = others.amap { api ->
             try {
-                when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title, 1) }) {
-                    is Resource.Success -> r.value.items.firstOrNull {
+                when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(query, 1) }) {
+                    is Resource.Success -> r.value.items.take(8).firstOrNull {
                         titlesMatch(it, title)
                     }?.let { hit -> hit to api }
                     else -> null
@@ -918,6 +960,34 @@ object FeedPlayer {
     }
 
     /**
+     * Phase 8.59: last resort before the error screen — run the
+     * cross-provider hunt for a PLAYBACK failure too (the load-side
+     * call sites only cover load/extraction failures). One attempt
+     * per play() session; if the hunt finds nothing, settle into
+     * the same terminal error state failOver would have shown.
+     */
+    private fun tryPlaybackFallback(): Boolean {
+        if (playbackFallbackTried) return false
+        playbackFallbackTried = true
+        val gen = generation
+        val ep = currentEpisode
+        status = Status.LOADING
+        scope.launch {
+            val ok = tryCrossProviderFallback(gen, ep)
+            if (!ok && gen == generation) {
+                try {
+                    exo?.stop()
+                } catch (e: Exception) {
+                    // player already gone
+                }
+                status = Status.ERROR
+                notifyListeners()
+            }
+        }
+        return true
+    }
+
+    /**
      * Moves to the next untried link — other links of the chosen
      * resolution first, then anything. While extraction is still
      * running in the background this waits instead of failing: the
@@ -951,6 +1021,11 @@ object FeedPlayer {
             // Phase 8.42: the pre-fetched copy on another
             // provider takes over instead of the error screen.
             dbg("failover -> backup")
+        } else if (tryPlaybackFallback()) {
+            // Phase 8.59: links extracted fine but every one died
+            // at playback time — until now this path never searched
+            // other providers at all and went straight to ERROR.
+            dbg("failover -> cross-provider")
         } else {
             // Truly giving up: silence the player so sound never
             // plays behind the error screen.

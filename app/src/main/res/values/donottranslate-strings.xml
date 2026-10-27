@@ -171,4 +171,5 @@
     <string name="player_show_episode_pills_key">player_show_episode_pills_key</string>
     <string name="player_show_center_episode_key">player_show_center_episode_key</string>
     <string name="player_show_top_clock_key">player_show_top_clock_key</string>
+    <string name="player_preload_buffer_key">player_preload_buffer_key</string>
 </resources>

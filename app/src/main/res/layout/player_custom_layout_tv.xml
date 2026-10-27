@@ -1201,7 +1201,8 @@
         <LinearLayout
             android:id="@+id/player_title_pill"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
         <TextClock
             android:id="@+id/player_top_clock"
@@ -1211,7 +1212,8 @@
         <LinearLayout
             android:id="@+id/player_mpv_mid_row"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/player_prev_episode_pill"
@@ -1221,7 +1223,8 @@
             <LinearLayout
                 android:id="@+id/player_info_pill"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
                 <TextClock
                     android:id="@+id/player_info_clock"
@@ -1253,7 +1256,8 @@
         <LinearLayout
             android:id="@+id/player_controls_row"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/player_screenshot_btt"
@@ -1273,7 +1277,8 @@
             <LinearLayout
                 android:id="@+id/player_controls_right"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
         </LinearLayout>
     </LinearLayout>
 

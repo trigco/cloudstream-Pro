@@ -913,4 +913,6 @@
     <string name="ab_repeat_on">A-B repeat on</string>
     <string name="ab_repeat_off">A-B repeat off</string>
     <string name="ab_point_b_invalid">End point must be after the A point</string>
+    <string name="player_preload_buffer">Preload buffer</string>
+    <string name="player_preload_buffer_des">How much video to download ahead while watching online, so playback survives network drops</string>
 </resources>
