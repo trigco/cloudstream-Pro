@@ -169,16 +169,17 @@ class StremioAddonProvider(private val stored: StoredAddon) : MainAPI() {
                 )
                 .map { video ->
                     newEpisode(
-                        payloadJson(manifestUrl, type, video.id),
+                        url = payloadJson(manifestUrl, type, video.id),
                         fix = false,
-                    ) {
-                        this.name = video.title
-                        this.season = video.season
-                        this.episode = video.episode
-                        this.posterUrl = video.thumbnail
-                        this.description = video.overview
-                        addDate(video.released)
-                    }
+                        initializer = {
+                            this.name = video.title
+                            this.season = video.season
+                            this.episode = video.episode
+                            this.posterUrl = video.thumbnail
+                            this.description = video.overview
+                            addDate(video.released)
+                        },
+                    )
                 }
             newTvSeriesLoadResponse(
                 resolved.name, selfPayload, tvTypeOf(type) ?: TvType.TvSeries, episodes
