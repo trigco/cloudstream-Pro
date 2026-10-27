@@ -163,13 +163,5 @@
         <item quantity="one">@string/episode</item>
         <item quantity="other">@string/episodes</item>
     </plurals>
-    <string name="mpv_player_ui_key">mpv_player_ui_key</string>
-    <string name="player_controls_placement_key">player_controls_placement_key</string>
-    <string name="player_show_screenshot_key">player_show_screenshot_key</string>
-    <string name="player_show_ab_repeat_key">player_show_ab_repeat_key</string>
-    <string name="player_show_info_pill_key">player_show_info_pill_key</string>
-    <string name="player_show_episode_pills_key">player_show_episode_pills_key</string>
-    <string name="player_show_center_episode_key">player_show_center_episode_key</string>
-    <string name="player_show_top_clock_key">player_show_top_clock_key</string>
     <string name="player_preload_buffer_key">player_preload_buffer_key</string>
 </resources>

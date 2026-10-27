@@ -42,52 +42,6 @@
             android:title="@string/hide_player_control_names" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/pref_category_player_controls">
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_baseline_tune_24"
-            android:summary="@string/mpv_player_ui_des"
-            android:title="@string/mpv_player_ui"
-            app:key="@string/mpv_player_ui_key" />
-        <ListPreference
-            android:defaultValue="scroll"
-            android:entries="@array/player_controls_placement_entries"
-            android:entryValues="@array/player_controls_placement_values"
-            android:icon="@drawable/baseline_grid_view_24"
-            android:title="@string/player_controls_placement"
-            app:key="@string/player_controls_placement_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_player_screenshot"
-            android:title="@string/show_screenshot_btt"
-            app:key="@string/player_show_screenshot_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_player_ab_repeat"
-            android:title="@string/show_ab_repeat_btt"
-            app:key="@string/player_show_ab_repeat_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_baseline_text_format_24"
-            android:title="@string/show_info_pill"
-            app:key="@string/player_show_info_pill_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/baseline_skip_previous_24"
-            android:title="@string/show_episode_pills"
-            app:key="@string/player_show_episode_pills_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_baseline_skip_next_24"
-            android:title="@string/show_center_episode_btt"
-            app:key="@string/player_show_center_episode_key" />
-        <SwitchPreference
-            android:defaultValue="true"
-            android:icon="@drawable/ic_baseline_text_format_24"
-            android:title="@string/show_top_clock"
-            app:key="@string/player_show_top_clock_key" />
-    </PreferenceCategory>
-
     <PreferenceCategory android:title="@string/pref_category_subtitles">
         <Preference
             android:icon="@drawable/ic_outline_subtitles_24"
@@ -194,7 +148,7 @@
             android:icon="@drawable/ic_baseline_touch_app_24"
             android:summary="@string/double_tap_to_seek_settings_des"
             android:title="@string/double_tap_to_seek_settings"
-            app:defaultValue="false"
+            app:defaultValue="true"
             app:key="@string/double_tap_enabled_key" />
         <SwitchPreference
             android:icon="@drawable/netflix_pause"

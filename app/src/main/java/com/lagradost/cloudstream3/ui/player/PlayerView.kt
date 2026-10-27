@@ -189,6 +189,11 @@ class PlayerView @JvmOverloads constructor(
     internal var playerFfwd: View? = null
     internal var exoRewText: TextView? = null
     internal var exoFfwdText: TextView? = null
+    internal var seekFxLeft: View? = null
+    internal var seekFxRight: View? = null
+    internal var seekFxLeftText: TextView? = null
+    internal var seekFxRightText: TextView? = null
+    private var seekFxToken = 0
     internal var playerCenterMenu: View? = null
     internal var playerRewHolder: View? = null
     internal var playerFfwdHolder: View? = null
@@ -224,6 +229,33 @@ class PlayerView @JvmOverloads constructor(
     // Kept so SubtitlesFragment can unsubscribe the exact same reference.
     private val subStyleListener: (SaveCaptionStyle) -> Unit = ::onSubStyleChanged
 
+    /**
+     * Phase 8.60: YouTube-style double-tap seek feedback — a soft disc
+     * with chevrons and the seek amount blooms on the tapped side,
+     * independent of the control bars.
+     */
+    fun showSeekFx(forward: Boolean, seconds: Long) {
+        val fx = (if (forward) seekFxRight else seekFxLeft) ?: return
+        val label = if (forward) seekFxRightText else seekFxLeftText
+        label?.text = context.getString(R.string.seek_fx_seconds_format, seconds)
+        val token = ++seekFxToken
+        fx.animate().cancel()
+        fx.visibility = View.VISIBLE
+        fx.alpha = 0f
+        fx.scaleX = 0.85f
+        fx.scaleY = 0.85f
+        fx.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(140).start()
+        fx.postDelayed({
+            if (token == seekFxToken) {
+                fx.animate().alpha(0f).setDuration(320)
+                    .withEndAction {
+                        if (token == seekFxToken) fx.visibility = View.GONE
+                    }
+                    .start()
+            }
+        }, 420)
+    }
+
     /** View discovery */
 
     /**
@@ -236,6 +268,10 @@ class PlayerView @JvmOverloads constructor(
         exoPlayerView = root.findViewById(R.id.player_view)
         exoPosition = root.findViewById(R.id.exo_position)
         exoRewText = root.findViewById(R.id.exo_rew_text)
+        seekFxLeft = root.findViewById(R.id.player_seek_fx_left)
+        seekFxRight = root.findViewById(R.id.player_seek_fx_right)
+        seekFxLeftText = root.findViewById(R.id.player_seek_fx_left_text)
+        seekFxRightText = root.findViewById(R.id.player_seek_fx_right_text)
         piphide = root.findViewById(R.id.piphide)
         playerBuffering = root.findViewById(R.id.player_buffering)
         playerCenterMenu = root.findViewById(R.id.player_center_menu)

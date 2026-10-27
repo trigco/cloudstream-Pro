@@ -10,19 +10,8 @@ import android.content.pm.ActivityInfo
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
-import android.content.Intent
-import android.content.IntentFilter
-import android.graphics.Bitmap
-import android.media.MediaScannerConnection
-import android.net.TrafficStats
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
-import android.view.SurfaceView
 import android.text.Editable
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -49,13 +38,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.SimpleItemAnimator
 import com.google.android.material.button.MaterialButton
-import java.io.File
-import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.lagradost.cloudstream3.CommonActivity.keyEventListener
-import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.FragmentPlayerBinding
@@ -237,192 +220,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         }
     }
 
-    // ===== MPV-style player UI (8.58) =====
-    protected var mpvPlayerUi: Boolean = true
-    protected var mpvShowInfoPill: Boolean = true
-    protected var mpvShowEpisodePills: Boolean = true
-    protected var mpvShowCenterEpisode: Boolean = true
-    protected var mpvShowTopClock: Boolean = true
-    private var mpvPlacement: String = "scroll"
-    private var showScreenshotBtt: Boolean = true
-    private var showAbRepeatBtt: Boolean = true
-
-    private var abPointA: Long? = null
-    private var abPointB: Long? = null
-    private val abHandler = Handler(Looper.getMainLooper())
-    private val abLoopRunnable = object : Runnable {
-        override fun run() {
-            val a = abPointA
-            val b = abPointB
-            if (a != null && b != null) {
-                val pos = player.getPosition() ?: 0L
-                if (pos >= b) player.seekTo(a)
-                abHandler.postDelayed(this, 400)
-            }
-        }
-    }
-
-    private val infoHandler = Handler(Looper.getMainLooper())
-    private var lastRxBytes: Long = -1L
-    private var lastRxAtMs: Long = 0L
-    private val infoPillRunnable = object : Runnable {
-        override fun run() {
-            updateInfoPill()
-            infoHandler.postDelayed(this, 1000)
-        }
-    }
-
-    private fun mpvMidRowWanted(): Boolean =
-        mpvPlayerUi && (mpvShowInfoPill || (mpvShowEpisodePills && isThereEpisodes()))
-
-    private fun PlayerCustomLayoutBinding.applyMpvButtonStyle() {
-        fun styleRow(layout: ViewGroup) {
-            for (i in 0 until layout.childCount) {
-                val child = layout.getChildAt(i)
-                if (child is MaterialButton) {
-                    child.setBackgroundResource(R.drawable.player_glass_circle)
-                    child.textSize = 0f
-                    child.iconPadding = 0
-                    val pad = 11.toPx
-                    child.setPadding(pad, pad, pad, pad)
-                } else if (child is ViewGroup) {
-                    styleRow(child)
-                }
-            }
-        }
-        styleRow(playerControlsRow)
-    }
-
-    private fun PlayerCustomLayoutBinding.applyClustersPlacement() {
-        playerControlsRow.layoutParams = playerControlsRow.layoutParams.apply {
-            width = ViewGroup.LayoutParams.MATCH_PARENT
-        }
-        playerControlsSpacer.isVisible = true
-        playerControlsRight.isVisible = true
-        listOf(
-            playerSourcesBtt, playerTracksBtt, playerSkipOp,
-            playerScreenshotBtt, playerAbRepeatBtt, playerSkipEpisode
-        ).forEach { btt ->
-            (btt.parent as? ViewGroup)?.removeView(btt)
-            playerControlsRight.addView(btt)
-        }
-    }
-
-    private fun updateInfoPill() {
-        val binding = playerBinding ?: return
-        val ctx = context ?: return
-        if (!mpvShowInfoPill) return
-        val now = System.currentTimeMillis()
-        val rx = TrafficStats.getTotalRxBytes()
-        var speed = ""
-        if (lastRxBytes >= 0 && rx != TrafficStats.UNSUPPORTED.toLong() &&
-            rx >= lastRxBytes && now > lastRxAtMs
-        ) {
-            val kbps = (rx - lastRxBytes) * 1000.0 / (now - lastRxAtMs) / 1024.0
-            speed = if (kbps >= 1024) String.format(Locale.US, "%.1f MB/s", kbps / 1024.0)
-            else String.format(Locale.US, "%.0f KB/s", kbps)
-        }
-        if (rx != TrafficStats.UNSUPPORTED.toLong()) {
-            lastRxBytes = rx
-            lastRxAtMs = now
-        }
-        val batteryIntent =
-            ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-        val pct = if (level >= 0) level * 100 / scale.coerceAtLeast(1) else -1
-        val parts = mutableListOf<String>()
-        if (speed.isNotEmpty()) parts += speed
-        if (pct >= 0) parts += "$pct%"
-        binding.playerInfoText.text =
-            if (parts.isEmpty()) "" else "• " + parts.joinToString(" | ")
-    }
-
-    private fun cycleAbRepeat() {
-        val binding = playerBinding ?: return
-        val pos = player.getPosition() ?: return
-        val a = abPointA
-        when {
-            a == null -> {
-                abPointA = pos
-                showToast(R.string.ab_point_a_set)
-            }
-            abPointB == null -> {
-                if (pos > a + 1000) {
-                    abPointB = pos
-                    binding.playerAbRepeatBtt.iconTint =
-                        ColorStateList.valueOf(Color.rgb(229, 9, 20))
-                    abHandler.removeCallbacks(abLoopRunnable)
-                    abHandler.post(abLoopRunnable)
-                    showToast(R.string.ab_repeat_on)
-                } else {
-                    showToast(R.string.ab_point_b_invalid)
-                }
-            }
-            else -> {
-                clearAbRepeat()
-                showToast(R.string.ab_repeat_off)
-            }
-        }
-    }
-
-    private fun clearAbRepeat() {
-        abPointA = null
-        abPointB = null
-        abHandler.removeCallbacks(abLoopRunnable)
-        playerBinding?.playerAbRepeatBtt?.iconTint =
-            ColorStateList.valueOf(Color.WHITE)
-    }
-
-    private fun captureScreenshot() {
-        val surface = playerView?.videoSurfaceView as? SurfaceView
-        if (surface == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            showToast(R.string.screenshot_failed)
-            return
-        }
-        val bitmap = Bitmap.createBitmap(
-            surface.width.coerceAtLeast(1),
-            surface.height.coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888
-        )
-        try {
-            PixelCopy.request(surface, bitmap, { result ->
-                if (result == PixelCopy.SUCCESS) saveScreenshot(bitmap)
-                else showToast(R.string.screenshot_failed)
-            }, Handler(Looper.getMainLooper()))
-        } catch (e: Exception) {
-            logError(e)
-            showToast(R.string.screenshot_failed)
-        }
-    }
-
-    private fun saveScreenshot(bitmap: Bitmap) {
-        val ctx = context ?: return
-        try {
-            val dir = File(
-                ctx.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                "CloudStreamPro"
-            ).apply { mkdirs() }
-            val name = "Screenshot_" +
-                    SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".png"
-            val file = File(dir, name)
-            FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-            MediaScannerConnection.scanFile(
-                ctx, arrayOf(file.absolutePath), arrayOf("image/png"), null
-            )
-            showToast(ctx.getString(R.string.screenshot_saved, name))
-        } catch (e: Exception) {
-            logError(e)
-            showToast(R.string.screenshot_failed)
-        }
-    }
-    // ===== end MPV-style player UI =====
-
     override fun onDestroyView() {
-        infoHandler.removeCallbacks(infoPillRunnable)
-        abHandler.removeCallbacks(abLoopRunnable)
         playerHostView?.releaseOverlayLayoutListener()
         playerBinding = null
         super.onDestroyView()
@@ -510,7 +308,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 playerVideoInfo,
                 playerGoBackHolder,
                 playerVideoClock,
-                playerTopClock,
             ).forEach {
                 it.animateY(titleMove)
             }
@@ -519,7 +316,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
 
             val playerBarMove = if (isShowing) 0f else 50.toPx.toFloat()
             bottomPlayerBar.animateY(playerBarMove)
-            playerMpvMidRow.animateY(playerBarMove)
 
             if (isLayout(PHONE)) {
                 playerEpisodesButton.animateX(if (isShowing) 0f else 50.toPx.toFloat())
@@ -545,7 +341,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             }
 
             bottomPlayerBar.startAnimation(fadeAnimation)
-            playerMpvMidRow.startAnimation(fadeAnimation)
             playerOpenSource.startAnimation(fadeAnimation)
             playerTopHolder.startAnimation(fadeAnimation)
         }
@@ -999,8 +794,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             playerVideoTitleRez.isGone = isGone || playerVideoTitleRez.text.isBlank()
             playerEpisodeFiller.isGone = isGone
             playerCenterMenu.isGone = isGone
-            playerMpvMidRow.isGone = isGone || !mpvMidRowWanted()
-            playerTitlePill.isGone = isGone || togglePlayerTitleGone
             playerLock.isGone = !isShowing
             playerGoBackHolder.isGone = isGone
             playerSourcesBtt.isGone = isGone
@@ -1376,38 +1169,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                     ctx.getString(R.string.hide_player_control_names_key),
                     false
                 )
-                mpvPlayerUi = settingsManager.getBoolean(
-                    ctx.getString(R.string.mpv_player_ui_key),
-                    true
-                )
-                mpvPlacement = settingsManager.getString(
-                    ctx.getString(R.string.player_controls_placement_key),
-                    "scroll"
-                ) ?: "scroll"
-                showScreenshotBtt = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_screenshot_key),
-                    true
-                )
-                showAbRepeatBtt = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_ab_repeat_key),
-                    true
-                )
-                mpvShowInfoPill = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_info_pill_key),
-                    true
-                )
-                mpvShowEpisodePills = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_episode_pills_key),
-                    true
-                )
-                mpvShowCenterEpisode = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_center_episode_key),
-                    true
-                )
-                mpvShowTopClock = settingsManager.getBoolean(
-                    ctx.getString(R.string.player_show_top_clock_key),
-                    true
-                )
 
                 val profiles = QualityDataHelper.getProfiles()
                 val type = if (ctx.isUsingMobileData())
@@ -1426,16 +1187,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                     if (isLayout(TV or EMULATOR)) false else playerRotateEnabled
                 if (hideControlsNames) {
                     hideControlsNames()
-                }
-                playerScreenshotBtt.isVisible = showScreenshotBtt
-                playerAbRepeatBtt.isVisible = showAbRepeatBtt
-                playerTopClock.isVisible = mpvPlayerUi && mpvShowTopClock
-                playerInfoPill.isVisible = mpvPlayerUi && mpvShowInfoPill
-                if (mpvPlayerUi) {
-                    applyMpvButtonStyle()
-                }
-                if (mpvPlacement == "clusters") {
-                    applyClustersPlacement()
                 }
             }
         } catch (e: Exception) {
@@ -1533,36 +1284,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 showTracksDialogue()
             }
 
-            playerPrevEpisodeBtt.setOnClickListener {
-                autoHide()
-                player.handleEvent(CSPlayerEvent.PrevEpisode)
-            }
-
-            playerNextEpisodeBtt.setOnClickListener {
-                autoHide()
-                player.handleEvent(CSPlayerEvent.NextEpisode)
-            }
-
-            playerPrevEpisodePill.setOnClickListener {
-                autoHide()
-                player.handleEvent(CSPlayerEvent.PrevEpisode)
-            }
-
-            playerNextEpisodePill.setOnClickListener {
-                autoHide()
-                player.handleEvent(CSPlayerEvent.NextEpisode)
-            }
-
-            playerScreenshotBtt.setOnClickListener {
-                autoHide()
-                captureScreenshot()
-            }
-
-            playerAbRepeatBtt.setOnClickListener {
-                autoHide()
-                cycleAbRepeat()
-            }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 playerControlsScroll.setOnScrollChangeListener { _, _, _, _, _ ->
                     autoHide()
@@ -1595,10 +1316,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             uiReset()
         } catch (e: Exception) {
             logError(e)
-        }
-
-        if (mpvPlayerUi && mpvShowInfoPill) {
-            infoHandler.post(infoPillRunnable)
         }
     }
 
