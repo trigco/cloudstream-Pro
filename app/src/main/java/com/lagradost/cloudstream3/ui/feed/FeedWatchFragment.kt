@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.feed
 
 import android.animation.ValueAnimator
+import com.lagradost.cloudstream3.TvType
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.os.Handler
@@ -35,6 +36,9 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
+import com.lagradost.cloudstream3.ui.WatchType
+import com.lagradost.cloudstream3.ui.result.getId
+import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showBottomDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
@@ -347,6 +351,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             view.hapticTick()
             showEpisodePicker()
         }
+        // Phase 8.57: Add to list — his placement (feed player
+        // only, removed from details). Same watch-status dialog
+        // and storage as the details bookmark FAB.
+        binding.feedWatchListBtn.setOnClickListener { view ->
+            view.hapticTick()
+            showAddToListDialog()
+        }
         binding.feedWatchDownloadBtn.setOnClickListener { view ->
             view.hapticTick()
             if (FeedPlayer.episodes.size > 1) {
@@ -577,7 +588,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val ep = FeedPlayer.currentEpisode
         val apiName = FeedPlayer.currentApiName ?: ""
         val typeText = ep?.let { FeedAdapter.typeLabel(it.tvType) } ?: ""
-        val epText = if (ep != null && ep.episode > 0) {
+        // Phase 8.57: a movie's single "episode" is the film
+        // itself — never label it S1 E1.
+        val isMovieLike = ep?.tvType == TvType.Movie ||
+            ep?.tvType == TvType.AnimeMovie ||
+            FeedPlayer.currentPage?.type == TvType.Movie ||
+            FeedPlayer.currentPage?.type == TvType.AnimeMovie
+        val epText = if (ep != null && ep.episode > 0 && !isMovieLike) {
             " • S${ep.season ?: 1} E${ep.episode}"
         } else {
             ""
@@ -585,6 +602,19 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchMeta.text =
             listOf(FeedPlayer.currentApiName ?: apiName, typeText)
                 .filter { it.isNotBlank() }.joinToString(" • ") + epText
+        // Phase 8.57: Add-to-list label mirrors the details
+        // bookmark FAB — the watch status once one is set.
+        val page = FeedPlayer.currentPage
+        if (page != null) {
+            val watchType = DataStoreHelper.getResultWatchState(page.getId())
+            binding.feedWatchListLabel.setText(
+                if (watchType == WatchType.NONE) {
+                    R.string.add_to_list
+                } else {
+                    watchType.stringRes
+                }
+            )
+        }
         // Storyline (plot) of the loaded page, collapsed by
         // default; the "More" label only appears with a plot.
         val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
@@ -829,6 +859,54 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             if (done) R.drawable.ic_baseline_check_24
             else R.drawable.ic_feed_download
         )
+    }
+
+    /** Phase 8.57: the watch-status picker, same dialog and
+     *  DataStore writes as the details page bookmark FAB. */
+    private fun showAddToListDialog() {
+        val page = FeedPlayer.currentPage ?: return
+        val act = activity ?: return
+        val current = DataStoreHelper.getResultWatchState(page.getId())
+        act.showBottomDialog(
+            WatchType.entries.map { getString(it.stringRes) },
+            current.ordinal,
+            getString(R.string.action_add_to_bookmarks),
+            showApply = false,
+            {}
+        ) { index ->
+            applyWatchStatus(page, WatchType.entries[index])
+        }
+    }
+
+    private fun applyWatchStatus(
+        page: com.lagradost.cloudstream3.LoadResponse,
+        status: WatchType
+    ) {
+        val id = page.getId()
+        DataStoreHelper.setResultWatchState(id, status.internalId)
+        if (status != WatchType.NONE) {
+            val existing = DataStoreHelper.getBookmarkedData(id)
+            val now = System.currentTimeMillis()
+            DataStoreHelper.setBookmarkedData(
+                id,
+                DataStoreHelper.BookmarkedData(
+                    existing?.bookmarkedTime ?: now,
+                    id,
+                    now,
+                    page.name,
+                    page.url,
+                    page.apiName,
+                    page.type,
+                    page.posterUrl,
+                    page.year,
+                    page.syncData,
+                    plot = page.plot,
+                    tags = page.tags,
+                    score = page.score
+                )
+            )
+        }
+        updateHeader()
     }
 
     private fun showEpisodePicker() {

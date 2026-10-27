@@ -539,50 +539,7 @@
                                     tools:text="121min" />
                             </com.lagradost.cloudstream3.widget.FlowLayout>
 
-                            <!-- Phase 8.56: pill action row under the
-                                 title bar (his MovieBox reference):
-                                 Add to list / Share / Download. The
-                                 buttons delegate to the existing
-                                 bookmark FAB, share action and
-                                 download section. -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:orientation="horizontal">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_pill_list"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="8dp"
-                                    android:layout_weight="1"
-                                    android:text="@string/add_to_list"
-                                    app:cornerRadius="24dp"
-                                    app:icon="@drawable/ic_baseline_bookmark_24" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_pill_share"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="8dp"
-                                    android:layout_weight="1"
-                                    android:text="@string/share_label"
-                                    app:cornerRadius="24dp"
-                                    app:icon="@drawable/ic_outline_share_24" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_pill_download"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/download"
-                                    app:cornerRadius="24dp"
-                                    app:icon="@drawable/netflix_download" />
-                            </LinearLayout>
+                            
 
                             <!--
                             This has half margin and half padding to make TV focus on description look better.

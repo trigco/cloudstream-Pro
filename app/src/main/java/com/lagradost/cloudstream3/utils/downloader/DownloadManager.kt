@@ -1546,7 +1546,10 @@ object VideoDownloadManager {
         var fileStream: OutputStream? = null
         try {
             stream = setupStream(baseFile, name, folder, "mp4", false)
-            metadata.type = DownloadType.IsPending
+            // Phase 8.57: was IsPending for the whole export, so
+            // the queue row read "Queued" while bytes flowed —
+            // downloadThing/downloadHLS set IsDownloading at start.
+            metadata.type = DownloadType.IsDownloading
             val fileInfoTemplate = DownloadedFileInfo(
                 totalBytes = 0,
                 relativePath = folder,

@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.MovieSearchResponse
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvSeriesSearchResponse
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,8 +16,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -137,7 +136,7 @@ object MetadataResolver {
         }
     }
 
-    private fun lookup(context: Context, title: String, year: Int?, tv: Boolean): String? {
+    private suspend fun lookup(context: Context, title: String, year: Int?, tv: Boolean): String? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val tmdbKey = prefs.getString(TMDB_KEY_PREF, null)?.trim().orEmpty()
         if (tmdbKey.isNotEmpty()) {
@@ -150,19 +149,65 @@ object MetadataResolver {
         return null
     }
 
-    private fun getJson(url: String): JSONObject? {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 8_000
-        conn.readTimeout = 8_000
-        conn.setRequestProperty("Accept", "application/json")
+    /**
+     * Phase 8.57: fetches go through the app's own HTTP client
+     * (the same stack the providers use successfully) instead of
+     * a raw HttpURLConnection — his report: a valid key fetched
+     * nothing at all, and the raw connection path is the one
+     * thing that differs from every working request in the app.
+     * A TMDB "Read Access Token" (starts with eyJ) is sent as a
+     * Bearer header; a v3 API key goes in the query string.
+     */
+    private suspend fun getJson(url: String, bearer: String?): JSONObject? {
         return try {
-            if (conn.responseCode !in 200..299) return null
-            JSONObject(conn.inputStream.bufferedReader().readText())
+            val response = app.get(
+                url,
+                headers = if (bearer != null) {
+                    mapOf("Authorization" to "Bearer $bearer")
+                } else {
+                    emptyMap()
+                }
+            )
+            if (response.code !in 200..299) null else JSONObject(response.text)
         } catch (e: Exception) {
             null
-        } finally {
-            conn.disconnect()
         }
+    }
+
+    private fun tmdbAuth(key: String): Pair<String, String?> =
+        if (key.startsWith("eyJ")) "" to key else key to null
+
+    /** Settings key test: 200 = works, 401/403 = rejected,
+     *  anything else / -1 = could not verify. */
+    suspend fun testTmdbKey(key: String): Int {
+        val (apiKey, bearer) = tmdbAuth(key.trim())
+        val url = if (bearer != null) {
+            "https://api.themoviedb.org/3/configuration"
+        } else {
+            "https://api.themoviedb.org/3/configuration?api_key=$apiKey"
+        }
+        return try {
+            val response = app.get(
+                url,
+                headers = if (bearer != null) {
+                    mapOf("Authorization" to "Bearer $bearer")
+                } else {
+                    emptyMap()
+                }
+            )
+            response.code
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
+    /** Settings key test for OMDb: true = the key answers. */
+    suspend fun testOmdbKey(key: String): Boolean {
+        val json = getJson(
+            "https://www.omdbapi.com/?apikey=${key.trim()}&t=Inception",
+            null
+        ) ?: return false
+        return json.optString("Response") == "True"
     }
 
     private fun titlesMatch(candidate: String, wanted: String): Boolean {
@@ -172,7 +217,7 @@ object MetadataResolver {
         return a == b || a.contains(b) || b.contains(a)
     }
 
-    private fun tmdb(apiKey: String, title: String, year: Int?, tv: Boolean): String? {
+    private suspend fun tmdb(apiKey: String, title: String, year: Int?, tv: Boolean): String? {
         val kind = if (tv) "tv" else "movie"
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = when {
@@ -180,9 +225,12 @@ object MetadataResolver {
             tv -> "&first_air_date_year=$year"
             else -> "&year=$year"
         }
+        val (keyParam, bearer) = tmdbAuth(apiKey)
+        val authParam = if (bearer != null) "" else "api_key=$keyParam&"
         val json = getJson(
             "https://api.themoviedb.org/3/search/$kind" +
-                "?api_key=$apiKey&query=$query$yearParam"
+                "?$authParam" + "query=$query$yearParam",
+            bearer
         ) ?: return null
         val results = json.optJSONArray("results") ?: return null
         for (i in 0 until minOf(results.length(), 5)) {
@@ -207,11 +255,12 @@ object MetadataResolver {
         return null
     }
 
-    private fun omdb(apiKey: String, title: String, year: Int?): String? {
+    private suspend fun omdb(apiKey: String, title: String, year: Int?): String? {
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = if (year != null) "&y=$year" else ""
         val json = getJson(
-            "https://www.omdbapi.com/?apikey=$apiKey&t=$query$yearParam"
+            "https://www.omdbapi.com/?apikey=$apiKey&t=$query$yearParam",
+            null
         ) ?: return null
         if (json.optString("Response") != "True") return null
         val candidate = json.optString("Title")

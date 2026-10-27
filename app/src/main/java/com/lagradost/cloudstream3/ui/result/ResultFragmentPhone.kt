@@ -1174,29 +1174,6 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                                 logError(e)
                             }
                         }
-                        // Phase 8.56: title-bar pill row — each
-                        // pill delegates to the existing control,
-                        // so behaviour (bookmark FAB, share sheet)
-                        // stays exactly as before.
-                        resultPillList.setOnClickListener {
-                            resultBookmarkFab.performClick()
-                        }
-                        resultPillShare.setOnClickListener {
-                            resultShare.performClick()
-                        }
-                        resultPillDownload.setOnClickListener {
-                            val target = if (downloadButton.isVisible) {
-                                downloadButton
-                            } else {
-                                resultDataHolder
-                            }
-                            val rect = Rect()
-                            target.getDrawingRect(rect)
-                            resultScroll.offsetDescendantRectToMyCoords(
-                                target, rect
-                            )
-                            resultScroll.smoothScrollTo(0, rect.top)
-                        }
                         setUrl(d.url)
                         resultBookmarkFab.apply {
                             isVisible = true

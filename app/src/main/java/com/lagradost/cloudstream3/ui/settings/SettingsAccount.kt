@@ -445,6 +445,32 @@ class SettingsAccount : BasePreferenceFragmentCompat(), BiometricCallback {
                     }
                     refreshSummary()
                     showToast(getString(R.string.api_key_saved))
+                    // Phase 8.57: verify the key live, so a
+                    // saved-but-rejected key is visible at once
+                    // instead of silently fetching nothing.
+                    if (value.isNotEmpty()) {
+                        showToast(getString(R.string.api_key_testing))
+                        ioSafe {
+                            val ok = if (
+                                prefKey == com.lagradost.cloudstream3
+                                    .ui.search.MetadataResolver.TMDB_KEY_PREF
+                            ) {
+                                com.lagradost.cloudstream3.ui.search
+                                    .MetadataResolver.testTmdbKey(value) == 200
+                            } else {
+                                com.lagradost.cloudstream3.ui.search
+                                    .MetadataResolver.testOmdbKey(value)
+                            }
+                            activity?.runOnUiThread {
+                                showToast(
+                                    getString(
+                                        if (ok) R.string.api_key_valid
+                                        else R.string.api_key_invalid
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
                 .setNegativeButton(R.string.cancel, null)
                 .show()

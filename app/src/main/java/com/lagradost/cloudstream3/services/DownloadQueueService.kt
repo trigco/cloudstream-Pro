@@ -107,7 +107,11 @@ class DownloadQueueService : Service() {
 
 
     private fun updateNotification(context: Context, downloads: Int, queued: Int) {
-        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+        // Phase 8.57: POST_NOTIFICATIONS exists only on API 33+;
+        // ungated, this check returns DENIED forever on older
+        // Android and the counts never posted (his 0/0 shade).
+        if (SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
 
@@ -147,7 +151,10 @@ class DownloadQueueService : Service() {
     private fun updateProgressNotification(
         id: Int, downloaded: Long, total: Long
     ) {
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+        // Phase 8.57: same API-33 gate as updateNotification —
+        // ungated, the live progress never posted on API < 33.
+        if (SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
         val wrapper = downloadInstances.value

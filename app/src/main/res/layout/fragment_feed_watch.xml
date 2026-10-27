@@ -388,6 +388,37 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Phase 8.57: Add to list lives HERE (feed player),
+             not on the details page (his order). Label mirrors
+             the details bookmark FAB: the current watch status
+             once set. -->
+        <LinearLayout
+            android:id="@+id/feed_watch_list_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/feed_pill_bg"
+            android:foreground="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="6dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@string/add_to_list"
+                android:src="@drawable/ic_baseline_bookmark_24" />
+
+            <TextView
+                android:id="@+id/feed_watch_list_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/add_to_list"
+                android:textColor="@android:color/white"
+                android:textSize="13sp" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/feed_watch_upnext_label"
             android:layout_width="wrap_content"

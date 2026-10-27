@@ -164,6 +164,9 @@ class FeedAdapter(
          */
         fun displayTitle(name: String, url: String): String {
             val cleaned = cleanPosterTitle(name)
+                // Phase 8.57: providers ship names ending in a
+                // dangling separator ("Dear Boss ... -").
+                .replace(Regex("[-\\u2013\\u2014|\\u2022\\u00B7:\\s]+$"), "")
             if (cleaned.isNotBlank()) return cleaned
             val slug = url.substringBefore('?').trimEnd('/')
                 .substringAfterLast('/')

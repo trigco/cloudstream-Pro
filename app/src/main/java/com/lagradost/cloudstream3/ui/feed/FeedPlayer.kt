@@ -27,7 +27,9 @@ import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.LiveStreamLoadResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.isMovieType
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.Resource
@@ -189,7 +191,7 @@ object FeedPlayer {
                         }
                     ) {
                         is Resource.Success -> r.value.items.firstOrNull {
-                            titlesMatch(it.name, title)
+                            titlesMatch(it, title)
                         }?.let { hit -> hit to api }
                         else -> null
                     }
@@ -615,12 +617,47 @@ object FeedPlayer {
             .replace(Regex("""\s+"""), " ")
             .trim()
 
-    private fun titlesMatch(candidate: String, wanted: String): Boolean {
-        val a = normalizedTitle(candidate)
-        val b = normalizedTitle(wanted)
-        if (a.isEmpty() || b.isEmpty()) return false
-        return a == b || (b.length >= 3 && a.contains(b)) ||
-            (a.length >= 3 && b.contains(a))
+    /**
+     * Phase 8.57: takeover matching is STRICT — his report:
+     * when a provider's video failed, a DIFFERENT movie played.
+     * The old contains-match ("Hope" matching "Hopeless", a
+     * short title matching any longer one) let the backup and
+     * cross-provider paths adopt the wrong title. Now: exact
+     * cleaned-title equality, same movie/series kind, and year
+     * agreement when both years are known. No confident match →
+     * no takeover; the error state shows instead.
+     */
+    private fun titlesMatch(candidate: SearchResponse, wantedTitle: String): Boolean {
+        val a = normalizedTitle(
+            com.lagradost.cloudstream3.ui.search.SearchResultBuilder
+                .cleanPosterTitle(candidate.name)
+        )
+        val b = normalizedTitle(
+            com.lagradost.cloudstream3.ui.search.SearchResultBuilder
+                .cleanPosterTitle(wantedTitle)
+        )
+        if (a.isEmpty() || b.isEmpty() || a != b) return false
+        val wantedType = currentPage?.type
+        val candidateType = candidate.type
+        if (wantedType != null && candidateType != null &&
+            wantedType.isMovieType() != candidateType.isMovieType()
+        ) return false
+        val wantedYear = when (val page = currentPage) {
+            is MovieLoadResponse -> page.year
+            is TvSeriesLoadResponse -> page.year
+            is com.lagradost.cloudstream3.AnimeLoadResponse -> page.year
+            else -> null
+        }
+        val candidateYear = when (candidate) {
+            is com.lagradost.cloudstream3.MovieSearchResponse -> candidate.year
+            is com.lagradost.cloudstream3.TvSeriesSearchResponse -> candidate.year
+            is com.lagradost.cloudstream3.AnimeSearchResponse -> candidate.year
+            else -> null
+        }
+        if (wantedYear != null && candidateYear != null &&
+            kotlin.math.abs(wantedYear - candidateYear) > 1
+        ) return false
+        return true
     }
 
     /**
@@ -645,7 +682,7 @@ object FeedPlayer {
             try {
                 when (val r = withContext(Dispatchers.IO) { APIRepository(api).search(title, 1) }) {
                     is Resource.Success -> r.value.items.firstOrNull {
-                        titlesMatch(it.name, title)
+                        titlesMatch(it, title)
                     }?.let { hit -> hit to api }
                     else -> null
                 }

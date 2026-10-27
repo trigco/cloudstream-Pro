@@ -387,6 +387,9 @@
     <string name="api_key_not_set">Not set — tap to add your key</string>
     <string name="api_key_hint">Paste API key</string>
     <string name="api_key_saved">Saved</string>
+    <string name="api_key_testing">Testing key…</string>
+    <string name="api_key_valid">Key works ✓</string>
+    <string name="api_key_invalid">Key did not work — check the key and try again</string>
     <string name="save">Save</string>
     <string name="add_to_list">Add to list</string>
     <string name="share_label">Share</string>
