@@ -111,3 +111,13 @@ Run #201 (head 36b24f09) failed with 2 failure classes:
 This push also carries the 8.65 device-feedback fixes (status-bar
 inset on both settings pages, listing-page manifest resolver,
 /configure URL handling) so the test APK contains everything.
+
+## Fix round 2 (run #203 failed)
+
+Receiver fix worked (no unresolved refs, no native collision — the
+zipline removal held). New single cause: "Cannot inline bytecode
+built with JVM target 11 into bytecode that is being built with JVM
+target 1.8" at the quickJs builder + evaluate call sites. Dokar is
+compiled at JVM target 11; the project catalog had jvmTarget = "1.8".
+Raised the catalog value to "11" (app + library both read it;
+coreLibraryDesugaring is already enabled for old-Android safety).

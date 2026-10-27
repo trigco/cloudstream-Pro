@@ -58,7 +58,7 @@ video = "1.0.0"
 workRuntimeKtx = "2.11.2"
 zipline = "1.27.0"
 
-jvmTarget = "1.8"
+jvmTarget = "11" # Raised from 1.8 in 8.64: dokar quickjs-kt is built with JVM target 11 and its inline builder/evaluate cannot inline into 1.8 bytecode
 jdkToolchain = "17"
 minSdk = "23"
 compileSdk = "37"
