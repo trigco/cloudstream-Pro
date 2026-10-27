@@ -263,7 +263,7 @@ class StremioAddonProvider(private val stored: StoredAddon) : MainAPI() {
         val seenUrls = mutableSetOf<String>()
         val seenSubs = mutableSetOf<String>()
 
-        fun emitStream(sourceName: String, stream: StremioStream) {
+        suspend fun emitStream(sourceName: String, stream: StremioStream) {
             for (sub in stream.subtitles) {
                 if (seenSubs.add(sub.url)) {
                     subtitleCallback(newSubtitleFile(sub.lang, sub.url))

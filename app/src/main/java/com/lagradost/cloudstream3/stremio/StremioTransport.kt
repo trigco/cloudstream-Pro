@@ -29,10 +29,14 @@ object StremioTransport {
         val hash = url.indexOf('#')
         if (hash >= 0) url = url.substring(0, hash)
         val (path, query) = splitQuery(url)
+        val trimmedPath = path.removeSuffix("/")
         val fixedPath = when {
             path.endsWith("/manifest.json") -> path
             // Some addons serve the manifest itself at a custom .json path.
             path.endsWith(".json") -> path
+            // Users often copy the addon's /configure page URL instead.
+            trimmedPath.endsWith("/configure") ->
+                trimmedPath.removeSuffix("/configure") + "/manifest.json"
             path.endsWith("/") -> path + "manifest.json"
             else -> "$path/manifest.json"
         }

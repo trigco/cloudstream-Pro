@@ -312,22 +312,27 @@ object NuvioEngine {
     ): JSONObject {
         val bridge = NuvioHostBridge(context.applicationContext, repoUrl, scraper.id)
         val raw = withTimeoutOrNull(timeoutMs) {
-            quickJs(Dispatchers.Default) { qjs ->
-                qjs.defineBinding(
+            // dokar quickjs-kt builder: the block is a QuickJs receiver
+            // lambda (QuickJs.() -> T), NOT a (QuickJs) -> T parameter
+            // lambda — passing an explicit parameter fails overload
+            // resolution. The builder is inline, so the suspend
+            // evaluate/await calls below splice into this coroutine.
+            quickJs(Dispatchers.Default) {
+                defineBinding(
                     "nuvioCall",
                     object : FunctionBinding<String?> {
                         override fun invoke(args: Array<Any?>): String? =
                             bridge.callSync(args.firstOrNull() as? String ?: "{}")
                     }
                 )
-                qjs.defineBinding(
+                defineBinding(
                     "nuvioFetchAsync",
                     object : AsyncFunctionBinding<String> {
                         override suspend fun invoke(args: Array<Any?>): String =
                             bridge.fetchAsync(args.firstOrNull() as? String ?: "{}")
                     }
                 )
-                qjs.defineBinding(
+                defineBinding(
                     "nuvioSleepAsync",
                     object : AsyncFunctionBinding<Any?> {
                         override suspend fun invoke(args: Array<Any?>): Any? {
@@ -337,21 +342,21 @@ object NuvioEngine {
                         }
                     }
                 )
-                qjs.evaluate<Any?>(
+                evaluate<Any?>(
                     NuvioPolyfill.build(
                         settings.toString(),
                         tmdbKey?.let { JSONObject.quote(it) } ?: "null"
                     ),
                     "nuvio-polyfill.js"
                 )
-                qjs.evaluate<Any?>(wrapScraper(code), "scraper.js")
+                evaluate<Any?>(wrapScraper(code), "scraper.js")
                 val callScript = if (mode == Mode.SETTINGS) {
                     SETTINGS_CALL
                 } else {
                     streamsCall(tmdbId, mediaType, season, episode)
                 }
                 val fromEval = runCatching {
-                    qjs.evaluate<String>(callScript, "nuvio-call.js")
+                    evaluate<String>(callScript, "nuvio-call.js")
                 }.getOrNull()
                 when {
                     !fromEval.isNullOrBlank() -> fromEval

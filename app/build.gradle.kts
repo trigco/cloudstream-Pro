@@ -275,7 +275,10 @@ dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio) // NIO Flavor Needed for NewPipeExtractor
     implementation(libs.conscrypt.android) // To Fix SSL Fu*kery on Android 9
     implementation(libs.jackson.module.kotlin) // JSON Parser
-    implementation(libs.zipline)
+    // Zipline removed in 8.64: nothing in this tree references it, and
+    // its bundled libquickjs.so collides with quickjs-kt's (Nuvio host)
+    // in mergeNativeLibs. Restore this line if an extension ever needs
+    // app.cash.zipline classes at runtime.
 
     // Temp/deprecated; will be removed once extensions have time to migrate from using it
     implementation("com.google.code.gson:gson:2.11.0")

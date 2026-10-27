@@ -13,6 +13,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -49,6 +51,16 @@ class StremioAddonsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Status-bar inset (same fix as HomeCustomListsFragment 8.47):
+        // plain fragments get no automatic inset handling, so the
+        // header would slide under the status bar.
+        val baseTop = view.paddingTop
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            v.setPadding(v.paddingLeft, baseTop + top, v.paddingRight, v.paddingBottom)
+            insets
+        }
+        view.requestApplyInsets()
         view.findViewById<ImageButton>(R.id.stremio_back).setOnClickListener {
             findNavController().navigateUp()
         }
@@ -127,10 +139,29 @@ class StremioAddonsFragment : Fragment() {
         Toast.makeText(context, R.string.stremio_addon_checking, Toast.LENGTH_SHORT)
             .show()
         viewLifecycleOwner.lifecycleScope.launch {
-            val manifestUrl = StremioTransport.normalizeManifestUrl(rawUrl)
-            val json = StremioClient.fetchJson(manifestUrl, ttlMs = 0)
-            val manifest = json?.let {
+            var manifestUrl = StremioTransport.normalizeManifestUrl(rawUrl)
+            var json = StremioClient.fetchJson(manifestUrl, ttlMs = 0)
+            var manifest = json?.let {
                 runCatching { StremioParse.parseManifest(it) }.getOrNull()
+            }
+            if (manifest == null || manifest.name.isBlank()) {
+                // The pasted link may be a listing/info page (e.g. an
+                // addons catalog site) that links to the real manifest
+                // — dig the manifest URL out of the page and retry once.
+                val found = StremioClient.findManifestUrlOnPage(manifestUrl)
+                if (found != null && found != manifestUrl) {
+                    val retryJson = StremioClient.fetchJson(found, ttlMs = 0)
+                    val retryManifest = retryJson?.let {
+                        runCatching { StremioParse.parseManifest(it) }.getOrNull()
+                    }
+                    if (retryJson != null && retryManifest != null &&
+                        retryManifest.name.isNotBlank()
+                    ) {
+                        manifestUrl = found
+                        json = retryJson
+                        manifest = retryManifest
+                    }
+                }
             }
             if (json == null || manifest == null || manifest.name.isBlank()) {
                 Toast.makeText(

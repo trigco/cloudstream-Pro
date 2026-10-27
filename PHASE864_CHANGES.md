@@ -83,3 +83,31 @@ individually; failures are per-scraper and never break playback.
 - Torrent streams (infoHash) are not played yet.
 - Nuvio streams attach to bridge (Stremio addon) titles; regular
   provider titles are not routed through scrapers in this step.
+
+## Fix round (run #201 failed, fixed same day)
+
+Run #201 (head 36b24f09) failed with 2 failure classes:
+
+1. `mergePrereleaseDebugNativeLibs`: `libquickjs.so` collision —
+   `app.cash.zipline:zipline-android` bundles the same filename as
+   quickjs-kt. Nothing in this tree references zipline (repo-wide
+   grep: only the dependency line), so `implementation(libs.zipline)`
+   was removed from app/build.gradle.kts (catalog entry kept, with a
+   comment on how to restore it). Dokar loads `System.loadLibrary(
+   "quickjs")`, so the filename itself cannot be renamed away.
+2. Kotlin compile errors, all from the dokar builder call in
+   `NuvioEngine.run`: the `quickJs(dispatcher) {}` block is a
+   `QuickJs.() -> T` RECEIVER lambda — passing `{ qjs -> ... }`
+   matched neither overload, which cascaded into unresolved
+   defineBinding/evaluate references and suspend-context errors.
+   Verified against the dokar3/quickjs-kt v1.0.15 source (the builder
+   is inline, so suspend evaluate/await calls splice into the calling
+   coroutine). Block rewritten in receiver form.
+3. `StremioAddonProvider.loadLinks`: the 8.64 refactor extracted the
+   emit loop into a plain local `fun emitStream`, which can no longer
+   call the suspend builders `newSubtitleFile`/`newExtractorLink`.
+   Marked `suspend fun`.
+
+This push also carries the 8.65 device-feedback fixes (status-bar
+inset on both settings pages, listing-page manifest resolver,
+/configure URL handling) so the test APK contains everything.

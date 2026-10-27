@@ -72,6 +72,36 @@ object StremioClient {
         }
     }
 
+    /** Raw text fetch (no JSON parse, no cache) for resolver pages. */
+    suspend fun fetchText(
+        url: String,
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+    ): String? = withTimeoutOrNull(timeoutMs) {
+        runCatching {
+            val response = app.get(url)
+            if (response.code in 200..299) response.text else null
+        }.getOrNull()
+    }
+
+    private val MANIFEST_LINK =
+        Regex("""https?://[^\s"'<>]+?/manifest\.json""")
+
+    /**
+     * Some links users paste are listing pages (e.g. an addons-catalog
+     * site) that link to the real manifest. Extract the first manifest
+     * URL found on the page; "-dev" variants are deprioritised.
+     */
+    suspend fun findManifestUrlOnPage(pageUrl: String): String? {
+        val text = fetchText(pageUrl) ?: return null
+        val candidates = MANIFEST_LINK.findAll(text)
+            .map { it.value }
+            .distinct()
+            .toList()
+        if (candidates.isEmpty()) return null
+        return candidates.firstOrNull { !it.contains("-dev") }
+            ?: candidates.first()
+    }
+
     fun invalidate(url: String) {
         cache.remove(url)
     }
