@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.home
 
 import android.annotation.SuppressLint
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
@@ -11,6 +12,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.EdgeEffect
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -885,10 +887,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             .show()
     }
     private val homeAutoRotateHandler = Handler(Looper.getMainLooper())
+
+    // Phase 8.71: hero pull-grow state (see setupHeroScrollCollapse).
+    @Volatile
+    private var heroPullGrow: Float = 0f
+    private var heroPullAnimator: ValueAnimator? = null
     private val homeAutoRotateRunnable = object : Runnable {
         override fun run() {
             rotateVisibleHomeRows()
-            homeAutoRotateHandler.postDelayed(this, 20_000L)
+            homeAutoRotateHandler.postDelayed(this, 60_000L)
         }
     }
 
@@ -1055,10 +1062,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // into them, so the mapping stays exact in both directions.
             val scrolled = -(header.top + frame.top)
             val ratio = (scrolled.toFloat() / height).coerceIn(0f, 1f)
-            val scale = 1f - 0.08f * ratio
+            // Phase 8.71: stronger, clearly visible curve (his ask) —
+            // shrink to 85% with a gentler fade, anchored to the top
+            // edge; plus a pull-grow factor from the top edge effect
+            // (heroPullGrow) so dragging down at the very top swells
+            // the hero slightly before it springs back.
+            frame.pivotY = 0f
+            frame.pivotX = frame.width / 2f
+            val scale = (1f - 0.15f * ratio) * (1f + heroPullGrow)
             frame.scaleX = scale
             frame.scaleY = scale
-            frame.alpha = 1f - 0.75f * ratio
+            frame.alpha = 1f - 0.6f * ratio
             // Slight parallax lag: the frame drifts down against the
             // scroll by 20% of the scrolled distance while it dissolves.
             frame.translationY = scrolled * 0.2f
@@ -1069,6 +1083,71 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 applyHeroCollapse()
             }
         })
+        // Phase 8.71: pull-grow. The top edge effect reports overscroll
+        // pulls while the list is already at the top; each pull swells
+        // the hero a little (capped at +6%), and releasing springs it
+        // back over 250 ms. Pure transform state — the scroll mapping
+        // above remains the single writer via applyHeroCollapse().
+        runCatching {
+            recyclerView.edgeEffectFactory =
+                object : RecyclerView.EdgeEffectFactory() {
+                    override fun createEdgeEffect(
+                        view: RecyclerView,
+                        direction: Int
+                    ): EdgeEffect {
+                        val base = super.createEdgeEffect(view, direction)
+                        if (direction != DIRECTION_TOP) return base
+                        return object : EdgeEffect(view.context) {
+                            override fun onPull(deltaDistance: Float) {
+                                super.onPull(deltaDistance)
+                                grow(deltaDistance)
+                            }
+
+                            override fun onPull(
+                                deltaDistance: Float,
+                                displacement: Float
+                            ) {
+                                super.onPull(deltaDistance, displacement)
+                                grow(deltaDistance)
+                            }
+
+                            override fun onRelease() {
+                                super.onRelease()
+                                springBack()
+                            }
+
+                            override fun onAbsorb(velocity: Int) {
+                                super.onAbsorb(velocity)
+                                springBack()
+                            }
+
+                            private fun grow(delta: Float) {
+                                heroPullAnimator?.cancel()
+                                heroPullGrow =
+                                    (heroPullGrow + delta * 0.10f)
+                                        .coerceAtMost(0.06f)
+                                applyHeroCollapse()
+                            }
+
+                            private fun springBack() {
+                                if (heroPullGrow <= 0f) return
+                                heroPullAnimator?.cancel()
+                                heroPullAnimator = ValueAnimator.ofFloat(
+                                    heroPullGrow, 0f
+                                ).apply {
+                                    duration = 250L
+                                    addUpdateListener { anim ->
+                                        heroPullGrow =
+                                            anim.animatedValue as Float
+                                        applyHeroCollapse()
+                                    }
+                                    start()
+                                }
+                            }
+                        }
+                    }
+                }
+        }
         // Re-apply when the header scrolls back into view: while it is
         // detached there is no holder to transform, and the frame may
         // still carry the values from when it left the screen.
@@ -1215,7 +1294,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 // a viewer watching the screen sees the shelves change on
                 // their own, animated by the rows' item animators.
                 homeAutoRotateHandler.removeCallbacks(homeAutoRotateRunnable)
-                homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 20_000L)
+                homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 60_000L)
             }
 
             homeApiFab.isVisible = isLayout(PHONE)
@@ -1252,6 +1331,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     setDistanceToTriggerSync(120.toPx)
                     setOnRefreshListener {
                         homeSwipeRefresh.hapticTick()
+                        // 8.71: a manual refresh also advances the row
+                        // posters one step (his request) — rotation is no
+                        // longer a 20 s timer shake; it runs every 60 s
+                        // and whenever he pulls to refresh.
+                        rotateVisibleHomeRows()
                         homeViewModel.loadAndCancel(
                             homeViewModel.apiName.value ?: noneApi.name,
                             forceReload = true,

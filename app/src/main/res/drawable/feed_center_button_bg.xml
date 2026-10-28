@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 8.71: transparent — he asked for the dark circle under the feed
+     player's cast/audio/subtitle and play/pause icons to go away. The
+     shape stays an (invisible) oval so padding/ripple bounds are kept. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="#B3262626" />
+    <solid android:color="@android:color/transparent" />
 </shape>

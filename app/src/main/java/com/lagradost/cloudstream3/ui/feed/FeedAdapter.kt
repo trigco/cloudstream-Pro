@@ -78,8 +78,12 @@ class FeedAdapter(
             // title in when it lands.
             val override = titleOverrides[response.url]
                 ?: TitleResolver.cached(context, response.url)
+            val shownTitle = override ?: displayTitle(response.name, response.url)
+            // Phase 8.71: never print the raw placeholder ("Id 1260107139")
+            // as a title — while resolution is pending (or failed) the
+            // card shows its poster + meta only.
             binding.feedCardTitle.text =
-                override ?: displayTitle(response.name, response.url)
+                if (TitleResolver.isIdLike(shownTitle)) "" else shownTitle
             if (override == null && TitleResolver.isIdLike(response.name)) {
                 onTitleNeeded(entry)
             }
@@ -104,10 +108,15 @@ class FeedAdapter(
                 declaredDub.contains(DubStatus.Subbed) -> "SUB"
                 else -> null
             }
+            // Phase 8.71: prefer the type learned from the details page
+            // (TitleResolver cache) over the listing's declared type, so
+            // the card tag matches the watch screen's tag.
+            val shownType = TitleResolver.cachedType(context, response.url)
+                ?: response.type
             binding.feedCardMeta.text = buildString {
                 append(entry.apiName)
                 append(" • ")
-                append(typeLabel(response.type))
+                append(typeLabel(shownType))
                 if (rating != null) append(" • ★ ").append(rating)
                 if (dubSub != null) append(" • ").append(dubSub)
             }

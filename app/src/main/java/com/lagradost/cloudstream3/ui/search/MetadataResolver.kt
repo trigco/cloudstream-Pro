@@ -140,7 +140,13 @@ object MetadataResolver {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val tmdbKey = prefs.getString(TMDB_KEY_PREF, null)?.trim().orEmpty()
         if (tmdbKey.isNotEmpty()) {
+            // Phase 8.71: providers regularly mislabel the kind (an
+            // anime-tagged film, a series listed as a movie) — if the
+            // requested kind misses, try the other one before giving
+            // up. His report: key set, yet many providers showed no
+            // rating at all.
             tmdb(tmdbKey, title, year, tv)?.let { return it }
+            tmdb(tmdbKey, title, year, !tv)?.let { return it }
         }
         val omdbKey = prefs.getString(OMDB_KEY_PREF, null)?.trim().orEmpty()
         if (omdbKey.isNotEmpty()) {
@@ -218,6 +224,24 @@ object MetadataResolver {
     }
 
     private suspend fun tmdb(apiKey: String, title: String, year: Int?, tv: Boolean): String? {
+        // Strict pass first: year-filtered search, year must agree.
+        tmdbOnce(apiKey, title, year, tv, enforceYear = true)?.let { return it }
+        // Phase 8.71: a wrong provider year makes TMDB's own year
+        // filter return zero results - retry unfiltered and accept
+        // the best title match regardless of year.
+        if (year != null) {
+            tmdbOnce(apiKey, title, null, tv, enforceYear = false)?.let { return it }
+        }
+        return null
+    }
+
+    private suspend fun tmdbOnce(
+        apiKey: String,
+        title: String,
+        year: Int?,
+        tv: Boolean,
+        enforceYear: Boolean
+    ): String? {
         val kind = if (tv) "tv" else "movie"
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = when {
@@ -244,7 +268,7 @@ object MetadataResolver {
                 if (tv) "first_air_date" else "release_date"
             )
             val candidateYear = dateText.take(4).toIntOrNull()
-            if (year != null && candidateYear != null &&
+            if (enforceYear && year != null && candidateYear != null &&
                 kotlin.math.abs(candidateYear - year) > 1
             ) continue
             val votes = item.optInt("vote_count", 0)
@@ -256,6 +280,13 @@ object MetadataResolver {
     }
 
     private suspend fun omdb(apiKey: String, title: String, year: Int?): String? {
+        omdbOnce(apiKey, title, year)?.let { return it }
+        // Phase 8.71: same wrong-year trap as TMDB - retry yearless.
+        if (year != null) omdbOnce(apiKey, title, null)?.let { return it }
+        return null
+    }
+
+    private suspend fun omdbOnce(apiKey: String, title: String, year: Int?): String? {
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = if (year != null) "&y=$year" else ""
         val json = getJson(

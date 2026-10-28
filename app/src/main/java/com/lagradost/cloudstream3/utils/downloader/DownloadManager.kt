@@ -1538,6 +1538,16 @@ object VideoDownloadManager {
             linkHash = link.url.hashCode(),
             isHLS = false
         )
+        // Phase 8.71: a DASH export otherwise runs with total = 0, so
+        // every progress event reported "0 of 0" and the Downloads
+        // page sat frozen while the notification moved (his report).
+        // Estimate the final size from the manifest (duration x top
+        // bitrate) so progress has a real denominator; the poll loop
+        // below raises the total if the export outgrows the estimate.
+        val dashEstimate = estimateDashTotalBytes(link)
+        if (dashEstimate != null && dashEstimate > 0) {
+            metadata.totalBytes = dashEstimate
+        }
         val tempFile = File(
             context.cacheDir,
             "dash_export_" + (parentId ?: link.url.hashCode()) + ".mp4"
@@ -1567,6 +1577,11 @@ object VideoDownloadManager {
                         metadata.addBytes(delta)
                         metadata.addBytesWritten(delta)
                         last = len
+                    }
+                    // Phase 8.71: never let progress pass 100% when
+                    // the manifest estimate undershoots the export.
+                    if ((metadata.totalBytes ?: 0L) < len) {
+                        metadata.totalBytes = len
                     }
                     delay(700)
                 }
@@ -1631,6 +1646,39 @@ object VideoDownloadManager {
             fileStream?.closeQuietly()
             metadata.close()
             tempFile.delete()
+        }
+    }
+
+    /**
+     * Phase 8.71: rough final-size estimate for a DASH download from
+     * its manifest — mediaPresentationDuration x the top video
+     * bandwidth (plus a small allowance for the audio track and
+     * container overhead). Null when the manifest can't be read or
+     * parsed; the download then keeps the old total-less behaviour.
+     */
+    private suspend fun estimateDashTotalBytes(link: ExtractorLink): Long? {
+        return try {
+            val response = app.get(
+                link.url,
+                headers = link.getAllHeaders()
+            )
+            if (response.code !in 200..299) return null
+            val mpd = response.text
+            val durationText = Regex("""mediaPresentationDuration="([^"]+)"""")
+                .find(mpd)?.groupValues?.get(1) ?: return null
+            val dur = Regex("""PT(?:([\d.]+)H)?(?:([\d.]+)M)?(?:([\d.]+)S)?""")
+                .find(durationText) ?: return null
+            val seconds = (dur.groupValues[1].toDoubleOrNull() ?: 0.0) * 3600 +
+                (dur.groupValues[2].toDoubleOrNull() ?: 0.0) * 60 +
+                (dur.groupValues[3].toDoubleOrNull() ?: 0.0)
+            if (seconds <= 0.0) return null
+            val topBandwidth = Regex("""bandwidth="(\d+)"""")
+                .findAll(mpd)
+                .mapNotNull { it.groupValues[1].toLongOrNull() }
+                .maxOrNull() ?: return null
+            ((topBandwidth / 8.0) * seconds * 1.15).toLong()
+        } catch (t: Throwable) {
+            null
         }
     }
 

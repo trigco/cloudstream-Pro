@@ -37,6 +37,7 @@ import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.ViewHolderState
 import com.lagradost.cloudstream3.ui.WatchType
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountEditDialog
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
@@ -345,8 +346,21 @@ class HomeParentItemAdapterPreview(
                 homePreviewDescription.text = item.plot?.html() ?: ""
 
                 val scoreText = item.score?.toStringNull(0.1, 10, 1, false)
+                // Phase 8.71: hero score gets the universal-rating
+                // fallback too — providers without their own score
+                // showed no hero rating even with a TMDB key set.
+                val resolvedScore = scoreText
+                    ?: homePreviewScore.context.let { ctx ->
+                        MetadataResolver.cached(
+                            ctx, item.name, MetadataResolver.yearOf(item)
+                        ).also { hit ->
+                            if (hit == null) {
+                                MetadataResolver.resolve(ctx, item)
+                            }
+                        }
+                    }
 
-                scoreText?.let { score ->
+                resolvedScore?.let { score ->
                     homePreviewScore.text =
                         homePreviewScore.context.getString(R.string.extension_rating, score)
 
@@ -361,7 +375,7 @@ class HomeParentItemAdapterPreview(
                     homePreviewScore.backgroundTintList =
                         android.content.res.ColorStateList.valueOf(color)
                 }
-                homePreviewScore.isGone = scoreText == null
+                homePreviewScore.isGone = resolvedScore == null
 
                 item.year?.let { year ->
                     homePreviewYear.text = year.toString()

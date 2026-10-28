@@ -47,7 +47,11 @@ object AddonRepository {
 
     private fun defaultCinemeta(): StoredAddon = StoredAddon(
         manifestUrl = CINEMETA_URL,
-        enabled = true,
+        // Default OFF (his order, 2026-10-28): the built-in catalog stays
+        // available in the list but does not activate itself; the user
+        // turns it on if he wants it. Existing installs keep whatever
+        // state they already stored.
+        enabled = false,
         addedAt = 0L,
         manifestJson = null,
         builtIn = true,

@@ -626,9 +626,29 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         } else {
             ""
         }
+        // Phase 8.71: rating + year next to the title (his request).
+        // Sources, best first: the loaded page's own score, then the
+        // universal TMDB/OMDb cache for the title+year.
+        val page0 = FeedPlayer.currentPage
+        val year = page0?.year
+        val headerRating = page0?.score?.toStringNull(0.5, 10)
+            ?: com.lagradost.cloudstream3.ui.search.MetadataResolver
+                .cached(context, name, year)
+        // Phase 8.71: teach the feed cards this item's real type, so
+        // a card tagged "Anime" by its provider agrees with this
+        // screen's "Movie" after the first open.
+        val currentUrl = FeedPlayer.currentUrl
+        val loadedType = ep?.tvType ?: page0?.type
+        val appCtx = context
+        if (currentUrl != null && loadedType != null && appCtx != null) {
+            com.lagradost.cloudstream3.ui.search.TitleResolver
+                .storeType(appCtx, currentUrl, loadedType)
+        }
         binding.feedWatchMeta.text =
             listOf(FeedPlayer.currentApiName ?: apiName, typeText)
-                .filter { it.isNotBlank() }.joinToString(" • ") + epText
+                .filter { it.isNotBlank() }.joinToString(" • ") + epText +
+                (if (headerRating != null) " • ★ $headerRating" else "") +
+                (if (year != null) " • $year" else "")
         // Phase 8.57: Add-to-list label mirrors the details
         // bookmark FAB — the watch status once one is set.
         val page = FeedPlayer.currentPage

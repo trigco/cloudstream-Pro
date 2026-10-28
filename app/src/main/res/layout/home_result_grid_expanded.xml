@@ -187,7 +187,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:ellipsize="end"
-            android:gravity="center"
+            android:gravity="top|center_horizontal"
             android:maxLines="2"
             android:minLines="2"
             android:paddingStart="5dp"
@@ -196,6 +196,7 @@
             android:paddingBottom="5dp"
             android:textColor="?attr/textColor"
             android:textSize="13sp"
+            android:textStyle="bold"
             tools:text="The Perfect Run\nThe Perfect Run\nhello" />
     </LinearLayout>
 </androidx.cardview.widget.CardView>

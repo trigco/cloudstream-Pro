@@ -103,7 +103,15 @@ class DownloadAdapter(
             }
 
             downloadHeaderPoster.apply {
-                loadImage(data.poster)
+                // Phase 8.71: the list rebuilds every second during an
+                // active download, and loadImage() disposes + crossfades
+                // on every bind - every visible poster blinked once per
+                // second (his thumbnail flicker report). Only load when
+                // the poster actually changed.
+                if (tag != data.poster) {
+                    tag = data.poster
+                    loadImage(data.poster)
+                }
                 if (isMultiDeleteState) {
                     setOnClickListener {
                         toggleIsChecked(deleteCheckbox, data.id)

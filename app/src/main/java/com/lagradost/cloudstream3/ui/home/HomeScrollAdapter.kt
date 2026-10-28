@@ -7,6 +7,7 @@ import androidx.core.view.isGone
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.databinding.HomeScrollViewBinding
 import com.lagradost.cloudstream3.databinding.HomeScrollViewTvBinding
 import com.lagradost.cloudstream3.ui.BaseDiffCallback
@@ -94,8 +95,25 @@ class HomeScrollAdapter(
                 // result page's TvType -> *_singular string mapping.
                 val metaParts = mutableListOf<String>()
                 item.year?.let { metaParts += it.toString() }
-                item.score?.toStringNull(0.1, 10, 1, false, '.')
-                    ?.let { metaParts += "★ $it" }
+                // Phase 8.71: same universal-rating fallback as the
+                // cards — this strip (Continue Watching / lists) only
+                // ever showed the item's own score, so whole providers
+                // stayed rating-less here even with a TMDB key set.
+                val scrollCtx = binding.root.context
+                val ownScore = item.score?.toStringNull(0.1, 10, 1, false, '.')
+                val metaRating = ownScore
+                    ?: MetadataResolver.cached(scrollCtx, item.name, item.year)
+                if (metaRating != null) {
+                    metaParts += "★ $metaRating"
+                } else {
+                    MetadataResolver.resolve(
+                        scrollCtx, item.name, item.year,
+                        item.type == TvType.TvSeries ||
+                            item.type == TvType.Anime ||
+                            item.type == TvType.OVA ||
+                            item.type == TvType.AsianDrama
+                    )
+                }
                 metaParts += binding.root.context.getString(
                     when (item.type) {
                         TvType.Movie -> R.string.movies_singular
