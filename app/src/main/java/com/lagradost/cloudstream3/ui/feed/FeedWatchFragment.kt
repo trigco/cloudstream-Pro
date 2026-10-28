@@ -86,10 +86,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
     private val hideControlsRunnable = Runnable { binding?.feedWatchControls?.isVisible = false }
-    private val skipHideRunnable = Runnable {
-        binding?.feedWatchSkipBack?.isVisible = false
-        binding?.feedWatchSkipForward?.isVisible = false
-    }
+    // 8.70: seek-wedge state (ported from the main player, 8.62) —
+    // a burst counter so repeated double-taps show 10/20/30 seconds.
+    private var seekFxToken = 0
+    private var seekBurstMs = 0L
+    private var seekBurstAt = 0L
 
     // Phase 8.38: navigating to the batch download page must not
     // kill the video being watched; onDestroyView checks this.
@@ -748,10 +749,35 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
         exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
         binding.feedWatchPlayer.hapticTick()
-        binding.feedWatchSkipBack.isVisible = back
-        binding.feedWatchSkipForward.isVisible = !back
-        handler.removeCallbacks(skipHideRunnable)
-        handler.postDelayed(skipHideRunnable, 600L)
+        // 8.70: show the main player's seek wedge; repeated taps inside
+        // the burst window accumulate the displayed seconds.
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - seekBurstAt > 900L) seekBurstMs = 0L
+        seekBurstAt = now
+        seekBurstMs += 10_000L
+        showFeedSeekFx(back, seekBurstMs / 1000L)
+    }
+
+    /** The main player's wedge animation (PlayerView.showSeekFx, 8.62). */
+    private fun showFeedSeekFx(back: Boolean, seconds: Long) {
+        val binding = binding ?: return
+        val fx = if (back) binding.feedSeekFxLeft else binding.feedSeekFxRight
+        val label = if (back) binding.feedSeekFxLeftText else binding.feedSeekFxRightText
+        label.text = getString(R.string.seek_fx_seconds_format, seconds)
+        val token = ++seekFxToken
+        fx.animate().cancel()
+        fx.visibility = android.view.View.VISIBLE
+        fx.alpha = 0f
+        fx.animate().alpha(1f).setDuration(130).start()
+        fx.postDelayed({
+            if (token == seekFxToken) {
+                fx.animate().alpha(0f).setDuration(240)
+                    .withEndAction {
+                        if (token == seekFxToken) fx.visibility = android.view.View.GONE
+                    }
+                    .start()
+            }
+        }, 620)
     }
 
     private fun minimizeToFeed() {

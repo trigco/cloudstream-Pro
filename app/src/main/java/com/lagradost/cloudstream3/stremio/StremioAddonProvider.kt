@@ -510,18 +510,21 @@ object StremioProviders {
                 registered.remove(url)
             }
         }
-        // Register new ones.
+        // Register new ones. One bad addon must not take the others (or
+        // the caller's remaining work) down with it.
         for (addon in enabledSnapshot) {
             if (registered.containsKey(addon.manifestUrl)) continue
-            val provider = StremioAddonProvider(addon)
-            // Name lookup is by provider name; keep ours unique.
-            val clash = APIHolder.getApiFromNameNull(provider.name)
-            if (clash != null && clash !== provider) {
-                provider.name = provider.name + " (Stremio)"
+            runCatching {
+                val provider = StremioAddonProvider(addon)
+                // Name lookup is by provider name; keep ours unique.
+                val clash = APIHolder.getApiFromNameNull(provider.name)
+                if (clash != null && clash !== provider) {
+                    provider.name = provider.name + " (Stremio)"
+                }
+                APIHolder.allProviders.add(provider)
+                APIHolder.addPluginMapping(provider)
+                registered[addon.manifestUrl] = provider
             }
-            APIHolder.allProviders.add(provider)
-            APIHolder.addPluginMapping(provider)
-            registered[addon.manifestUrl] = provider
         }
     }
 }

@@ -44,12 +44,6 @@ class NuvioHostBridge(
     private val repoUrl: String,
     private val scraperId: String,
 ) {
-    companion object {
-        const val DEFAULT_USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    }
-
     @Volatile
     var resultJson: String? = null
         private set
@@ -289,6 +283,9 @@ class NuvioHostBridge(
     }
 
     companion object {
+        const val DEFAULT_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         private const val MAX_BODY_BYTES = 15 * 1024 * 1024
         private val HTTP = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
