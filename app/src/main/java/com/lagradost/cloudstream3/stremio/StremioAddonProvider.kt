@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.stremio
 
 import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -19,6 +20,7 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.nuvio.NuvioStreamService
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -260,39 +262,71 @@ class StremioAddonProvider(private val stored: StoredAddon) : MainAPI() {
         var emitted = 0
         val seenUrls = mutableSetOf<String>()
         val seenSubs = mutableSetOf<String>()
+
+        suspend fun emitStream(sourceName: String, stream: StremioStream) {
+            for (sub in stream.subtitles) {
+                if (seenSubs.add(sub.url)) {
+                    subtitleCallback(newSubtitleFile(sub.lang, sub.url))
+                }
+            }
+            if (!stream.isDirect) return // torrent/YouTube/external: not playable yet
+            val streamUrl = stream.url!!
+            if (!seenUrls.add(streamUrl)) return
+            val headers = stream.proxyRequestHeaders
+            val label = stream.name
+                ?: stream.title?.lineSequence()?.firstOrNull()
+                ?: sourceName
+            callback(
+                newExtractorLink(
+                    source = sourceName,
+                    name = label,
+                    url = streamUrl,
+                    type = inferLinkType(streamUrl),
+                ) {
+                    this.referer = headers.entries.firstOrNull {
+                        it.key.equals("referer", ignoreCase = true)
+                    }?.value ?: ""
+                    this.headers = headers
+                    this.quality = parseQuality(
+                        listOfNotNull(stream.name, stream.title, stream.filename)
+                            .joinToString(" ")
+                    )
+                }
+            )
+            emitted++
+        }
+
         for ((addon, streams) in perAddon) {
             val addonName = addon.manifest()?.name ?: name
             for (stream in streams) {
-                for (sub in stream.subtitles) {
-                    if (seenSubs.add(sub.url)) {
-                        subtitleCallback(newSubtitleFile(sub.lang, sub.url))
-                    }
-                }
-                if (!stream.isDirect) continue // torrent/YouTube/external: step 2
-                val streamUrl = stream.url!!
-                if (!seenUrls.add(streamUrl)) continue
-                val headers = stream.proxyRequestHeaders
-                val label = stream.name
-                    ?: stream.title?.lineSequence()?.firstOrNull()
-                    ?: addonName
-                callback(
-                    newExtractorLink(
-                        source = addonName,
-                        name = label,
-                        url = streamUrl,
-                        type = inferLinkType(streamUrl),
-                    ) {
-                        this.referer = headers.entries.firstOrNull {
-                            it.key.equals("referer", ignoreCase = true)
-                        }?.value ?: ""
-                        this.headers = headers
-                        this.quality = parseQuality(
-                            listOfNotNull(stream.name, stream.title, stream.filename)
-                                .joinToString(" ")
-                        )
-                    }
+                emitStream(addonName, stream)
+            }
+        }
+
+        // Nuvio plugins (bridge step 2): JS scrapers keyed by TMDB id,
+        // resolved from this payload's IMDb id. Their streams merge
+        // into the same emission path as addon streams.
+        val appContext = runCatching { CloudStreamApp.context }.getOrNull()
+        if (appContext != null) {
+            val idParts = payload.id.split(':')
+            val baseId = idParts.firstOrNull() ?: payload.id
+            val seasonNum = if (type == "series" && idParts.size >= 3) {
+                idParts[1].toIntOrNull()
+            } else {
+                null
+            }
+            val episodeNum = if (type == "series" && idParts.size >= 3) {
+                idParts[2].toIntOrNull()
+            } else {
+                null
+            }
+            val nuvioStreams = runCatching {
+                NuvioStreamService.resolve(
+                    appContext, baseId, type, seasonNum, episodeNum
                 )
-                emitted++
+            }.getOrElse { emptyList() }
+            for (stream in nuvioStreams) {
+                emitStream(stream.name ?: "Nuvio", stream)
             }
         }
 
@@ -476,18 +510,21 @@ object StremioProviders {
                 registered.remove(url)
             }
         }
-        // Register new ones.
+        // Register new ones. One bad addon must not take the others (or
+        // the caller's remaining work) down with it.
         for (addon in enabledSnapshot) {
             if (registered.containsKey(addon.manifestUrl)) continue
-            val provider = StremioAddonProvider(addon)
-            // Name lookup is by provider name; keep ours unique.
-            val clash = APIHolder.getApiFromNameNull(provider.name)
-            if (clash != null && clash !== provider) {
-                provider.name = provider.name + " (Stremio)"
+            runCatching {
+                val provider = StremioAddonProvider(addon)
+                // Name lookup is by provider name; keep ours unique.
+                val clash = APIHolder.getApiFromNameNull(provider.name)
+                if (clash != null && clash !== provider) {
+                    provider.name = provider.name + " (Stremio)"
+                }
+                APIHolder.allProviders.add(provider)
+                APIHolder.addPluginMapping(provider)
+                registered[addon.manifestUrl] = provider
             }
-            APIHolder.allProviders.add(provider)
-            APIHolder.addPluginMapping(provider)
-            registered[addon.manifestUrl] = provider
         }
     }
 }

@@ -18,6 +18,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
+import android.widget.BaseAdapter
+import android.widget.CheckedTextView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -139,6 +141,57 @@ import java.util.Calendar
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * One row of the grouped source list (8.69): either a provider group header
+ * ("▸ Dahmermovies · 23") or one playable link. Items carry their index into
+ * the dialog's filteredLinks list so selection keeps working exactly like
+ * the old flat list.
+ */
+private sealed interface SourceRow {
+    data class Header(val name: String, val count: Int, val collapsed: Boolean) : SourceRow
+    data class Item(val filteredIndex: Int, val text: String) : SourceRow
+}
+
+private class GroupedSourcesAdapter(
+    private val context: android.content.Context,
+    private val rows: List<SourceRow>,
+) : BaseAdapter() {
+    override fun getCount(): Int = rows.size
+    override fun getItem(position: Int): SourceRow = rows[position]
+    override fun getItemId(position: Int): Long = position.toLong()
+    override fun getViewTypeCount(): Int = 2
+    override fun getItemViewType(position: Int): Int =
+        if (rows[position] is SourceRow.Header) 0 else 1
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val inflater = LayoutInflater.from(context)
+        return when (val row = rows[position]) {
+            is SourceRow.Header -> {
+                val view = (convertView as? TextView)
+                    ?: (inflater.inflate(
+                        android.R.layout.simple_list_item_1, parent, false
+                    ) as TextView)
+                view.text = buildString {
+                    append(if (row.collapsed) "▸  " else "▾  ")
+                    append(row.name)
+                    append("  ·  ")
+                    append(row.count)
+                }
+                view.setTypeface(null, Typeface.BOLD)
+                view
+            }
+            is SourceRow.Item -> {
+                val view = (convertView as? CheckedTextView)
+                    ?: (inflater.inflate(
+                        R.layout.sort_bottom_single_choice, parent, false
+                    ) as CheckedTextView)
+                view.text = row.text
+                view
+            }
+        }
+    }
+}
 
 @OptIn(UnstableApi::class)
 class GeneratorPlayer : FullScreenPlayer() {
@@ -1136,6 +1189,10 @@ class GeneratorPlayer : FullScreenPlayer() {
                 // Filtered and sorted links
                 var currentHiddenFooter: View? = null
                 var filteredLinks: List<DisplayLink> = emptyList()
+                // 8.69: provider-group collapse state for the source list,
+                // kept across refreshLinks() calls within one dialog.
+                val collapsedSourceGroups = mutableSetOf<String>()
+                var sourceGroupsInit = false
 
                 fun refreshLinks(qualityProfile: Int) {
                     val currentLinkUsed = currentSelectedLink
@@ -1151,31 +1208,113 @@ class GeneratorPlayer : FullScreenPlayer() {
                         startSource = filteredLinks.indexOfFirst { it.link == currentLinkUsed }
                         sourceIndex = startSource
 
-                        val sourcesArrayAdapter =
-                            ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
-
-                        sourcesArrayAdapter.addAll(filteredLinks.map { displayLink ->
+                        // 8.69: group the source list by provider name with
+                        // collapsible headers (his request — a 23-source
+                        // provider is one row until tapped). Grouping kicks
+                        // in only when there is something to group: more
+                        // than one provider and a list long enough to hurt.
+                        // sourceIndex always stays an index into
+                        // filteredLinks; rows translate positions.
+                        fun displayName(displayLink: DisplayLink): String {
                             val (link, uri) = displayLink.link
-                            val name = link?.name ?: uri?.name ?: "NULL"
-                            "$name ${Qualities.getStringByInt(link?.quality)}"
-                        })
+                            return link?.name ?: uri?.name ?: "NULL"
+                        }
+
+                        val groupsByName: Map<String, List<Int>> =
+                            filteredLinks.indices.groupBy { displayName(filteredLinks[it]) }
+                        val useGrouping = groupsByName.size > 1 && filteredLinks.size > 6
+                        if (useGrouping && !sourceGroupsInit) {
+                            val currentGroup = filteredLinks.getOrNull(startSource)
+                                ?.let { displayName(it) }
+                            collapsedSourceGroups.clear()
+                            groupsByName.keys.forEach { name ->
+                                if (name != currentGroup) collapsedSourceGroups += name
+                            }
+                            sourceGroupsInit = true
+                        }
+
+                        fun buildSourceRows(): List<SourceRow> {
+                            if (!useGrouping) {
+                                return filteredLinks.indices.map { idx ->
+                                    val displayLink = filteredLinks[idx]
+                                    SourceRow.Item(
+                                        idx,
+                                        "${displayName(displayLink)} " +
+                                            Qualities.getStringByInt(displayLink.link.first?.quality)
+                                    )
+                                }
+                            }
+                            val rows = mutableListOf<SourceRow>()
+                            val seen = mutableSetOf<String>()
+                            filteredLinks.indices.forEach { idx ->
+                                val group = displayName(filteredLinks[idx])
+                                if (seen.add(group)) {
+                                    val members = groupsByName[group].orEmpty()
+                                    val collapsed = group in collapsedSourceGroups
+                                    rows += SourceRow.Header(group, members.size, collapsed)
+                                    if (!collapsed) {
+                                        members.forEach { memberIdx ->
+                                            val displayLink = filteredLinks[memberIdx]
+                                            rows += SourceRow.Item(
+                                                memberIdx,
+                                                "${displayName(displayLink)} " +
+                                                    Qualities.getStringByInt(
+                                                        displayLink.link.first?.quality
+                                                    )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            return rows
+                        }
+
+                        var sourceRows = buildSourceRows()
+
+                        fun checkCurrentSource() {
+                            val pos = sourceRows.indexOfFirst {
+                                it is SourceRow.Item && it.filteredIndex == sourceIndex
+                            }
+                            if (pos >= 0) {
+                                providerList.setSelection(pos)
+                                providerList.setItemChecked(pos, true)
+                            }
+                        }
 
                         providerList.choiceMode = AbsListView.CHOICE_MODE_SINGLE
-                        providerList.adapter = sourcesArrayAdapter
-                        providerList.setSelection(sourceIndex)
-                        providerList.setItemChecked(sourceIndex, true)
+                        providerList.adapter = GroupedSourcesAdapter(ctx, sourceRows)
+                        checkCurrentSource()
 
                         providerList.setOnItemClickListener { _, _, which, _ ->
-                            sourceIndex = which
-                            providerList.setItemChecked(which, true)
+                            when (val row = sourceRows.getOrNull(which)) {
+                                is SourceRow.Header -> {
+                                    if (row.name in collapsedSourceGroups) {
+                                        collapsedSourceGroups -= row.name
+                                    } else {
+                                        collapsedSourceGroups += row.name
+                                    }
+                                    sourceRows = buildSourceRows()
+                                    providerList.adapter =
+                                        GroupedSourcesAdapter(ctx, sourceRows)
+                                    checkCurrentSource()
+                                }
+                                is SourceRow.Item -> {
+                                    sourceIndex = row.filteredIndex
+                                    providerList.setItemChecked(which, true)
+                                }
+                                null -> Unit
+                            }
                         }
 
                         providerList.setOnItemLongClickListener { _, _, position, _ ->
-                            sortedLinks.getOrNull(position)?.link?.first?.url?.let {
-                                clipboardHelper(
-                                    txt(R.string.video_source),
-                                    it
-                                )
+                            (sourceRows.getOrNull(position) as? SourceRow.Item)?.let { item ->
+                                filteredLinks.getOrNull(item.filteredIndex)
+                                    ?.link?.first?.url?.let {
+                                        clipboardHelper(
+                                            txt(R.string.video_source),
+                                            it
+                                        )
+                                    }
                             }
                             true
                         }

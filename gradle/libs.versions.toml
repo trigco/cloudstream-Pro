@@ -22,6 +22,7 @@ instancioCore = "5.6.0"
 jacksonModuleKotlin = { strictly = "2.13.1" } # Later versions don't support minSdk <26 (Crashes on Android TV's and FireSticks)
 json = "20260522"
 jsoup = "1.22.1"
+quickjs = "1.0.15"
 junit = "4.13.2"
 junitKtx = "1.3.0"
 junitVersion = "1.3.0"
@@ -57,7 +58,7 @@ video = "1.0.0"
 workRuntimeKtx = "2.11.2"
 zipline = "1.27.0"
 
-jvmTarget = "1.8"
+jvmTarget = "11" # Raised from 1.8 in 8.64: dokar quickjs-kt is built with JVM target 11 and its inline builder/evaluate cannot inline into 1.8 bytecode
 jdkToolchain = "17"
 minSdk = "23"
 compileSdk = "37"
@@ -90,6 +91,7 @@ instancio-core = { group = "org.instancio", name = "instancio-core", version.ref
 jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jacksonModuleKotlin" }
 json = { module = "org.json:json", version.ref = "json" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+quickjs = { module = "io.github.dokar3:quickjs-kt-android", version.ref = "quickjs" }
 junit = { module = "junit:junit", version.ref = "junit" }
 junit-ktx = { module = "androidx.test.ext:junit-ktx", version.ref = "junitKtx" }
 juniversalchardet = { module = "com.github.albfernandez:juniversalchardet", version.ref = "juniversalchardet" }
