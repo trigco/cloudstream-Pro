@@ -621,6 +621,10 @@
     <string name="nuvio_repo_checking">Checking repository…</string>
     <string name="nuvio_repo_added">Repository added</string>
     <string name="nuvio_repo_refreshed">Repository refreshed</string>
+    <string name="nuvio_repo_added_off">Repository added — all scrapers start OFF. Switch on the ones you want.</string>
+    <string name="nuvio_repo_check">Check scrapers</string>
+    <string name="nuvio_check_title">Checking scrapers</string>
+    <string name="nuvio_check_done">Check finished: %1$d load OK, %2$d broken</string>
     <string name="nuvio_repo_add_failed">Could not load that repository. Check the link and try again.</string>
     <string name="nuvio_plugins_empty">No Nuvio repositories yet. Tap “Add repository” and paste a Nuvio plugin repository link — its scrapers add streams to Stremio addon titles. A TMDB API key (Settings → Account) is needed so scrapers can find titles.</string>
     <string name="nuvio_repo_remove_title">Remove repository?</string>

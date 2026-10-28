@@ -31,6 +31,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.nuvio.NuvioEngine
 import com.lagradost.cloudstream3.nuvio.NuvioDiagnostics
+import com.lagradost.cloudstream3.nuvio.NuvioValidity
 import com.lagradost.cloudstream3.nuvio.NuvioParse
 import com.lagradost.cloudstream3.nuvio.NuvioProviders
 import com.lagradost.cloudstream3.nuvio.NuvioRepository
@@ -90,6 +91,7 @@ class NuvioPluginsFragment : Fragment() {
             onRefreshRepo = { repo -> fetchAndStoreRepo(repo.manifestUrl) },
             onRemoveRepo = { repo -> confirmRemove(repo) },
             onSettings = { repo, scraper -> openScraperSettings(repo, scraper) },
+            onCheckRepo = { repo -> checkRepo(repo) },
             onToggleCollapse = { repo ->
                 val ctx = requireContext()
                 val collapsed = NuvioRepository.collapsedRepos(ctx)
@@ -101,6 +103,82 @@ class NuvioPluginsFragment : Fragment() {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
         refresh()
+    }
+
+    /**
+     * Validity check for one repository (8.68): downloads each scraper's
+     * code and load-tests it in the engine (no stream fetch — just "does
+     * this code load and export getStreams"). Results land in NuvioValidity
+     * and show on the scraper rows, so broken scrapers (syntax errors,
+     * missing exports, dead code URLs) are visible before pressing Play.
+     */
+    private fun checkRepo(repo: StoredNuvioRepo) {
+        val manifest = repo.manifest() ?: return
+        val ctx = requireContext()
+        val progress = TextView(ctx).apply {
+            setPadding(48, 24, 48, 8)
+            text = "…"
+        }
+        var cancelled = false
+        val dialog = AlertDialog.Builder(ctx)
+            .setTitle(R.string.nuvio_check_title)
+            .setView(progress)
+            .setNegativeButton(R.string.cancel) { _, _ -> cancelled = true }
+            .create()
+        dialog.show()
+        lifecycleScope.launch {
+            var ok = 0
+            var bad = 0
+            val scrapers = manifest.scrapers
+            for ((index, scraper) in scrapers.withIndex()) {
+                if (cancelled) break
+                progress.text = "${index + 1} / ${scrapers.size} · ${scraper.name}"
+                val code = NuvioRepository.fetchCode(ctx, repo, scraper)
+                if (code == null) {
+                    NuvioValidity.setProbe(
+                        ctx, repo.manifestUrl, scraper.id, false, "code download failed"
+                    )
+                    bad++
+                    continue
+                }
+                val result = NuvioEngine.probe(
+                    ctx, repo.manifestUrl, scraper, code,
+                    NuvioRepository.scraperSettings(ctx, repo.manifestUrl, scraper.id),
+                    NuvioTmdb.apiKey(ctx),
+                )
+                when {
+                    result.has("error") -> {
+                        NuvioValidity.setProbe(
+                            ctx, repo.manifestUrl, scraper.id, false,
+                            result.optString("error").take(120)
+                        )
+                        bad++
+                    }
+                    !result.optBoolean("gs") -> {
+                        NuvioValidity.setProbe(
+                            ctx, repo.manifestUrl, scraper.id, false, "no getStreams export"
+                        )
+                        bad++
+                    }
+                    else -> {
+                        NuvioValidity.setProbe(
+                            ctx, repo.manifestUrl, scraper.id, true,
+                            if (result.optBoolean("st")) "loads · has settings" else "loads"
+                        )
+                        ok++
+                    }
+                }
+            }
+            if (dialog.isShowing) dialog.dismiss()
+            if (!cancelled && isAdded) {
+                Toast.makeText(
+                    ctx,
+                    getString(R.string.nuvio_check_done, ok, bad),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            if (isAdded) refresh()
+        }
     }
 
     private fun refresh() {
@@ -173,7 +251,7 @@ class NuvioPluginsFragment : Fragment() {
             }
             NuvioRepository.addRepo(ctx, url, fetched)
             toast(
-                if (existed) R.string.nuvio_repo_refreshed else R.string.nuvio_repo_added
+                if (existed) R.string.nuvio_repo_refreshed else R.string.nuvio_repo_added_off
             )
             refresh()
             // Prefetch scraper code so the first play is not slowed by it.
@@ -418,6 +496,7 @@ private class NuvioRepoAdapter(
     private val onRemoveRepo: (StoredNuvioRepo) -> Unit,
     private val onSettings: (StoredNuvioRepo, NuvioScraperInfo) -> Unit,
     private val onToggleCollapse: (StoredNuvioRepo) -> Unit,
+    private val onCheckRepo: (StoredNuvioRepo) -> Unit,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var rows: List<NuvioRow> = emptyList()
@@ -466,6 +545,7 @@ private class NuvioRepoAdapter(
                 h.url.text = row.repo.manifestUrl
                 h.expand.rotation = if (row.collapsed) -90f else 0f
                 h.itemView.setOnClickListener { onToggleCollapse(row.repo) }
+                h.check.setOnClickListener { onCheckRepo(row.repo) }
                 h.refresh.setOnClickListener { onRefreshRepo(row.repo) }
                 h.remove.setOnClickListener { onRemoveRepo(row.repo) }
             }
@@ -498,6 +578,22 @@ private class NuvioRepoAdapter(
                 }
                 h.settings.visibility = if (scraper.hasSettings) View.VISIBLE else View.GONE
                 h.settings.setOnClickListener { onSettings(row.repo, scraper) }
+                // Validity line (8.68): last load-test result and/or last
+                // real fetch outcome for this scraper, when known.
+                val validity = NuvioValidity.get(
+                    h.itemView.context, row.repo.manifestUrl, scraper.id
+                )
+                val statusParts = mutableListOf<String>()
+                validity?.probe?.let { probe ->
+                    statusParts += if (validity.probeOk) "✓ $probe" else "✗ $probe"
+                }
+                validity?.last?.let { statusParts += "last fetch: $it" }
+                if (statusParts.isEmpty()) {
+                    h.status.visibility = View.GONE
+                } else {
+                    h.status.visibility = View.VISIBLE
+                    h.status.text = statusParts.joinToString(" · ")
+                }
                 h.enabled.setOnCheckedChangeListener(null)
                 h.enabled.isChecked = row.enabled
                 h.enabled.setOnCheckedChangeListener { _, checked ->
@@ -511,6 +607,7 @@ private class NuvioRepoAdapter(
         val expand: ImageView = view.findViewById(R.id.item_repo_expand)
         val name: TextView = view.findViewById(R.id.item_repo_name)
         val url: TextView = view.findViewById(R.id.item_repo_url)
+        val check: ImageButton = view.findViewById(R.id.item_repo_check)
         val refresh: ImageButton = view.findViewById(R.id.item_repo_refresh)
         val remove: ImageButton = view.findViewById(R.id.item_repo_remove)
     }
@@ -519,6 +616,7 @@ private class NuvioRepoAdapter(
         val logo: ImageView = view.findViewById(R.id.item_scraper_logo)
         val name: TextView = view.findViewById(R.id.item_scraper_name)
         val desc: TextView = view.findViewById(R.id.item_scraper_desc)
+        val status: TextView = view.findViewById(R.id.item_scraper_status)
         val settings: ImageButton = view.findViewById(R.id.item_scraper_settings)
         val enabled: SwitchCompat = view.findViewById(R.id.item_scraper_enabled)
     }

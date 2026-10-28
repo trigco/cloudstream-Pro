@@ -44,6 +44,12 @@ class NuvioHostBridge(
     private val repoUrl: String,
     private val scraperId: String,
 ) {
+    companion object {
+        const val DEFAULT_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }
+
     @Volatile
     var resultJson: String? = null
         private set
@@ -192,15 +198,22 @@ class NuvioHostBridge(
         val builder = Request.Builder().url(url)
         var contentType: String? = null
         val headers = p.optJSONObject("headers")
+        var hasUserAgent = false
         if (headers != null) {
             val keys = headers.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
                 val value = headers.optString(key)
                 if (key.equals("content-type", ignoreCase = true)) contentType = value
+                if (key.equals("user-agent", ignoreCase = true)) hasUserAgent = true
                 builder.header(key, value)
             }
         }
+        // Same default as SkyStream's engine: a plain HTTP-client UA gets
+        // 403 from many source sites, so present a browser UA whenever the
+        // scraper did not set its own. (Native HTTP has no CORS; a 403 here
+        // is the site refusing the client, and the UA is the usual reason.)
+        if (!hasUserAgent) builder.header("User-Agent", DEFAULT_USER_AGENT)
         synchronized(cookies) {
             val jar = cookies[host]
             if (!jar.isNullOrEmpty() && headers?.optString("Cookie").isNullOrBlank()) {
@@ -288,7 +301,7 @@ class NuvioHostBridge(
 
 object NuvioEngine {
 
-    enum class Mode { STREAMS, SETTINGS }
+    enum class Mode { STREAMS, SETTINGS, PROBE }
 
     private const val DEFAULT_TIMEOUT_MS = 60_000L
 
@@ -350,10 +363,10 @@ object NuvioEngine {
                     "nuvio-polyfill.js"
                 )
                 evaluate<Any?>(wrapScraper(code), "scraper.js")
-                val callScript = if (mode == Mode.SETTINGS) {
-                    SETTINGS_CALL
-                } else {
-                    streamsCall(tmdbId, mediaType, season, episode)
+                val callScript = when (mode) {
+                    Mode.SETTINGS -> SETTINGS_CALL
+                    Mode.PROBE -> PROBE_CALL
+                    else -> streamsCall(tmdbId, mediaType, season, episode)
                 }
                 val fromEval = runCatching {
                     evaluate<String>(callScript, "nuvio-call.js")
@@ -378,6 +391,30 @@ object NuvioEngine {
         }
         return runCatching { JSONObject(raw) }
             .getOrElse { JSONObject().put("error", "Bad result payload") }
+    }
+
+    /**
+     * Load test only: evaluates the polyfill + scraper and reports whether
+     * getStreams / onSettings exist. No network calls are made by the probe
+     * itself. Returns the probe payload, or {"error": ...} when the code
+     * does not even load (syntax errors, missing host APIs).
+     */
+    suspend fun probe(
+        context: Context,
+        repoUrl: String,
+        scraper: NuvioScraperInfo,
+        code: String,
+        settings: JSONObject,
+        tmdbKey: String?,
+    ): JSONObject {
+        return runCatching {
+            run(
+                context, repoUrl, scraper, code, settings, tmdbKey,
+                Mode.PROBE, timeoutMs = 20_000L
+            )
+        }.getOrElse { e ->
+            JSONObject().put("error", e.message ?: e.javaClass.simpleName)
+        }
     }
 
     /** Runs onSettings() and parses the form layout. */
@@ -426,6 +463,21 @@ object NuvioEngine {
             "  }\n" +
             "})();"
     }
+
+    private const val PROBE_CALL =
+        "(function () {\n" +
+            "  try {\n" +
+            "    var gs = (module.exports && module.exports.getStreams) || globalThis.getStreams;\n" +
+            "    var st = (module.exports && module.exports.onSettings) || globalThis.onSettings;\n" +
+            "    var p = JSON.stringify({ probe: true, gs: typeof gs === 'function', st: typeof st === 'function' });\n" +
+            "    __nuvio_result(p);\n" +
+            "    return p;\n" +
+            "  } catch (e) {\n" +
+            "    var ep = JSON.stringify({ error: (e && e.message) ? e.message : String(e) });\n" +
+            "    __nuvio_result(ep);\n" +
+            "    return ep;\n" +
+            "  }\n" +
+            "})();"
 
     private const val SETTINGS_CALL =
         "(async function () {\n" +

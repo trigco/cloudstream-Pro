@@ -151,6 +151,15 @@ object NuvioStreamService {
                         val e = result.exceptionOrNull()
                         "${scraper.name}: error (${e?.message ?: e?.javaClass?.simpleName ?: "failed"})"
                     }
+                    NuvioValidity.setLast(
+                        context, repo.manifestUrl, scraper.id,
+                        if (result.isSuccess) {
+                            "${streams.size} streams"
+                        } else {
+                            val e = result.exceptionOrNull()
+                            "error (${e?.message ?: e?.javaClass?.simpleName ?: "failed"})"
+                        }
+                    )
                     streams to note
                 }
             }.awaitAll()

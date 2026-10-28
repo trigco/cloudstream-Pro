@@ -106,11 +106,19 @@ object NuvioRepository {
             saveRepos(ctx, current)
             return false
         }
+        // New repository: every scraper starts OFF (his rule, 2026-10-28 —
+        // a 60-scraper repo must not switch everything on at once and slow
+        // every fetch). The user enables the ones he wants; re-adding an
+        // existing repo (refresh) keeps his choices untouched.
+        val initialDisabled = runCatching {
+            NuvioParse.parseRepoManifest(JSONObject(rawManifestJson))
+                .scrapers.map { it.id }.toSet()
+        }.getOrElse { emptySet() }
         current += StoredNuvioRepo(
             manifestUrl = manifestUrl,
             addedAt = System.currentTimeMillis(),
             manifestJson = rawManifestJson,
-            disabledScrapers = emptySet(),
+            disabledScrapers = initialDisabled,
             enabledOverrides = emptySet(),
         )
         saveRepos(ctx, current)
@@ -271,5 +279,63 @@ object NuvioRepository {
         val arr = JSONArray()
         current.forEach { arr.put(it) }
         prefs(ctx).edit().putString(KEY_COLLAPSED, arr.toString()).apply()
+    }
+}
+
+/**
+ * Per-scraper validity record (8.68): the last load-test (probe) result and
+ * the last real stream-fetch outcome, shown on the Nuvio Plugins rows so the
+ * user can see which scrapers actually work instead of guessing.
+ */
+object NuvioValidity {
+
+    private const val KEY_VALIDITY = "nuvio_validity_v1"
+
+    data class Entry(val probe: String?, val probeOk: Boolean, val last: String?)
+
+    private fun prefs(ctx: Context) =
+        PreferenceManager.getDefaultSharedPreferences(ctx)
+
+    private fun key(repoUrl: String, scraperId: String): String =
+        repoUrl + "|" + scraperId
+
+    private fun root(ctx: Context): JSONObject = runCatching {
+        JSONObject(prefs(ctx).getString(KEY_VALIDITY, null) ?: "{}")
+    }.getOrElse { JSONObject() }
+
+    fun get(ctx: Context, repoUrl: String, scraperId: String): Entry? {
+        val obj = root(ctx).optJSONObject(key(repoUrl, scraperId)) ?: return null
+        return Entry(
+            probe = obj.optString("p").takeIf { it.isNotBlank() },
+            probeOk = obj.optBoolean("ok"),
+            last = obj.optString("l").takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun update(
+        ctx: Context,
+        repoUrl: String,
+        scraperId: String,
+        mutate: (JSONObject) -> Unit,
+    ) {
+        synchronized(this) {
+            val all = root(ctx)
+            val k = key(repoUrl, scraperId)
+            val obj = all.optJSONObject(k) ?: JSONObject()
+            mutate(obj)
+            all.put(k, obj)
+            prefs(ctx).edit().putString(KEY_VALIDITY, all.toString()).apply()
+        }
+    }
+
+    fun setProbe(ctx: Context, repoUrl: String, scraperId: String, ok: Boolean, text: String) {
+        update(ctx, repoUrl, scraperId) { obj ->
+            obj.put("ok", ok)
+            obj.put("p", text)
+        }
+    }
+
+    fun setLast(ctx: Context, repoUrl: String, scraperId: String, text: String) {
+        update(ctx, repoUrl, scraperId) { obj -> obj.put("l", text) }
     }
 }

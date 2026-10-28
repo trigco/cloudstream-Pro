@@ -40,6 +40,15 @@
             android:ellipsize="end"
             android:maxLines="2"
             android:textAppearance="?attr/textAppearanceCaption" />
+
+        <TextView
+            android:id="@+id/item_scraper_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:visibility="gone" />
     </LinearLayout>
 
     <ImageButton

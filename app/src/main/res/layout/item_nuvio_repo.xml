@@ -43,6 +43,14 @@
     </LinearLayout>
 
     <ImageButton
+        android:id="@+id/item_repo_check"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/nuvio_repo_check"
+        android:src="@drawable/ic_baseline_check_24" />
+
+    <ImageButton
         android:id="@+id/item_repo_refresh"
         android:layout_width="48dp"
         android:layout_height="48dp"
