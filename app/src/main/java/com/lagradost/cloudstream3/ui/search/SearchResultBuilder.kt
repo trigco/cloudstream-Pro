@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.search
 
 import android.annotation.SuppressLint
+import coil3.request.crossfade
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.View
@@ -246,6 +247,14 @@ object SearchResultBuilder {
             if (cardView.tag != card.posterUrl) {
                 cardView.tag = card.posterUrl
                 cardView.loadImage(card.posterUrl, card.posterHeaders) {
+                    // Phase 8.76: no crossfade on grid posters. The
+                    // loader's default 150ms fade turned every rebind
+                    // wave (titles/ratings landing during scroll)
+                    // into a visible shimmer across the whole grid —
+                    // the rest of his কাপাকাপি. Posters now cut in
+                    // instantly; the URL guard above still skips
+                    // reloads of posters already on screen.
+                    crossfade(false)
                     error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
                 }
             }

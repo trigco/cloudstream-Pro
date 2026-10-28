@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.home
 
 import android.view.LayoutInflater
+import coil3.request.crossfade
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isGone
@@ -64,6 +65,8 @@ class HomeScrollAdapter(
                 // Phase 8.9: a failed/missing hero banner shows the custom
                 // poster placeholder instead of staying blank
                 binding.homeScrollPreview.loadImage(posterUrl, item.posterHeaders) {
+                    // Phase 8.76: same no-crossfade rule as the grids.
+                    crossfade(false)
                     error {
                         getImageFromDrawable(
                             binding.root.context,

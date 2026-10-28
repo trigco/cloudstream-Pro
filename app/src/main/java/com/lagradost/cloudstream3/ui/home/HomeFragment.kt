@@ -766,7 +766,42 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 homeAutoRotateHandler.postDelayed(this, 600L)
                 return
             }
-            homeMasterAdapter?.notifyDataSetChanged()
+            // Phase 8.76: this used to rebind the WHOLE master
+            // adapter — hero, strips and every row — each time a
+            // burst of titles/ratings landed, which he still felt
+            // as the screen shaking while posters loaded and while
+            // scrolling. Refresh only the adapters actually on
+            // screen (row child lists + the header strips); the
+            // hero and off-screen rows are left alone.
+            if (recycler == null) {
+                homeMasterAdapter?.notifyDataSetChanged()
+            } else {
+                refreshVisibleHomeLists(recycler)
+            }
+        }
+    }
+
+    /** Phase 8.76: notify only the HomeChildItemAdapter /
+     *  HomeScrollAdapter instances inside the master list's
+     *  currently attached (visible) children. The hero ViewPager2's
+     *  internal list is deliberately not matched — its adapter is
+     *  neither type — so the hero never rebinds from here. */
+    private fun refreshVisibleHomeLists(recycler: RecyclerView) {
+        fun walk(view: View) {
+            if (view is RecyclerView) {
+                val childAdapter = view.adapter
+                if (childAdapter is HomeChildItemAdapter ||
+                    childAdapter is HomeScrollAdapter
+                ) {
+                    childAdapter.notifyDataSetChanged()
+                }
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) walk(view.getChildAt(i))
+            }
+        }
+        for (i in 0 until recycler.childCount) {
+            walk(recycler.getChildAt(i))
         }
     }
 
