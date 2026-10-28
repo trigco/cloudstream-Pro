@@ -1885,6 +1885,20 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             initAll()
             // No duplicates (which can happen by registerMainAPI)
             apis = allProviders.distinctBy { it }
+            // Register the user's Stremio addons as providers (they join
+            // apis through addPluginMapping inside sync). Each bridge sync
+            // is isolated (8.70): a failure in one must never starve the
+            // other — with Cinemeta enabled, a Stremio-side failure here
+            // previously could skip the Nuvio registration entirely, which
+            // is exactly the "Nuvio provider not showing" report.
+            runCatching {
+                com.lagradost.cloudstream3.stremio.StremioProviders.sync(this@MainActivity)
+            }
+            // Same for the Nuvio provider (TMDB catalogue + JS scrapers);
+            // it only registers when a TMDB key and a scraper exist.
+            runCatching {
+                com.lagradost.cloudstream3.nuvio.NuvioProviders.sync(this@MainActivity)
+            }
         }
 
         //  val navView: BottomNavigationView = findViewById(R.id.nav_view)
