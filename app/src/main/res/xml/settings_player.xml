@@ -2,7 +2,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreference
+    <SwitchPreferenceCompat
         android:icon="@drawable/baseline_sync_24"
         android:summary="@string/episode_sync_settings_des"
         android:title="@string/episode_sync_settings"
@@ -35,7 +35,7 @@
             android:icon="@drawable/ic_baseline_text_format_24"
             android:key="@string/prefer_limit_show_player_info"
             android:title="@string/limit_title_rez" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:icon="@drawable/ic_baseline_text_format_24"
             android:key="@string/hide_player_control_names_key"
@@ -62,55 +62,55 @@
             android:summary="@string/source_priority_help"
             android:title="@string/source_priority"
             app:key="@string/player_source_priority_key"/>
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_picture_in_picture_alt_24"
             android:summary="@string/picture_in_picture_des"
             android:title="@string/picture_in_picture"
             app:defaultValue="true"
             app:key="@string/pip_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_aspect_ratio_24"
             android:summary="@string/player_size_settings_des"
             android:title="@string/player_size_settings"
             app:defaultValue="true"
             app:key="@string/player_resize_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_speed_24"
             android:summary="@string/speed_setting_summary"
             android:title="@string/eigengraumode_settings"
             app:defaultValue="false"
             app:key="@string/playback_speed_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/speedup"
             android:summary="@string/speedup_summary"
             android:title="@string/speedup_title"
             app:defaultValue="false"
             app:key="@string/speedup_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_skip_next_24"
             android:summary="@string/autoplay_next_settings_des"
             android:title="@string/autoplay_next_settings"
             app:defaultValue="true"
             app:key="@string/autoplay_next_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_skip_next_24"
             android:summary="@string/enable_skip_op_from_database_des"
             android:title="@string/video_skip_op"
             app:defaultValue="true"
             app:key="@string/enable_skip_op_from_database" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/screen_rotation"
             android:summary="@string/rotate_video_desc"
             android:title="@string/rotate_video"
             app:defaultValue="false"
             app:key="@string/rotate_video_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/screen_rotation"
             android:summary="@string/auto_rotate_video_desc"
             android:title="@string/auto_rotate_video"
             app:defaultValue="true"
             app:key="@string/auto_rotate_video_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/preview_seekbar_24"
             android:summary="@string/preview_seekbar_desc"
             android:title="@string/preview_seekbar"
@@ -122,7 +122,7 @@
             android:title="@string/software_decoding"
             app:defaultValue="true"
             app:key="@string/software_decoding_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/sun_7_24"
             android:summary="@string/extra_brightness_settings_des"
             android:title="@string/extra_brightness_settings"
@@ -132,25 +132,25 @@
     <PreferenceCategory
         android:title="@string/pref_category_gestures"
         app:key="@string/pref_category_gestures_key">
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_ondemand_video_24"
             android:summary="@string/swipe_to_seek_settings_des"
             android:title="@string/swipe_to_seek_settings"
             app:defaultValue="true"
             app:key="@string/swipe_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_ondemand_video_24"
             android:summary="@string/swipe_to_change_settings_des"
             android:title="@string/swipe_to_change_settings"
             app:defaultValue="true"
             app:key="@string/swipe_vertical_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_touch_app_24"
             android:summary="@string/double_tap_to_seek_settings_des"
             android:title="@string/double_tap_to_seek_settings"
             app:defaultValue="true"
             app:key="@string/double_tap_enabled_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/netflix_pause"
             android:summary="@string/double_tap_to_pause_settings_des"
             android:title="@string/double_tap_to_pause_settings"
@@ -202,7 +202,7 @@
             android:key="@string/video_buffer_clear_key"
             android:title="@string/video_buffer_clear_settings" />
 
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_delete_outline_24"
             android:summary="@string/auto_clear_cache_settings_summary"
             android:title="@string/auto_clear_cache_settings"

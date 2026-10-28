@@ -191,7 +191,29 @@ class HomeViewModel : ViewModel() {
             return@launchSafe
         }
 
-        val watchPrefNotNull = preferredWatchStatus ?: EnumSet.of(currentWatchTypes.first())
+        // Phase 8.71: resolve every bookmark once; the strip below
+        // picks from this list. Previously the strip defaulted to one
+        // arbitrary watch type, so a list added from the Feed often
+        // surfaced as a bare category bar whose posters needed a tap
+        // into a popup page (his report).
+        val allBookmarks = withContext(Dispatchers.IO) {
+            watchStatusIds
+                .mapNotNull { (id, type) ->
+                    if (type == WatchType.NONE) {
+                        null
+                    } else {
+                        getBookmarkedData(id)?.let { type to it }
+                    }
+                }
+                .sortedBy { -it.second.latestUpdatedTime }
+        }
+
+        // Default selection: the type of the most recently updated
+        // bookmark, so a just-added item's posters show on Home at
+        // once instead of hiding behind another type's filter.
+        val watchPrefNotNull = preferredWatchStatus
+            ?: allBookmarks.firstOrNull()?.let { EnumSet.of(it.first) }
+            ?: EnumSet.of(currentWatchTypes.first())
         //if (currentWatchTypes.any { watchPrefNotNull.contains(it) }) watchPrefNotNull else listOf(currentWatchTypes.first())
 
         DataStoreHelper.homeBookmarkedList = watchPrefNotNull.map { it.internalId }.toIntArray()
@@ -202,10 +224,17 @@ class HomeViewModel : ViewModel() {
 
             )
 
-        val list = withContext(Dispatchers.IO) {
-            watchStatusIds.filter { watchPrefNotNull.contains(it.second) }
-                .mapNotNull { getBookmarkedData(it.first) }
-                .sortedBy { -it.latestUpdatedTime }
+        val filtered = allBookmarks
+            .filter { watchPrefNotNull.contains(it.first) }
+            .map { it.second }
+        // Passive rebuilds (no explicit chip choice) fall back to
+        // every bookmark when the selected type has none, so posters
+        // stay visible on Home directly. Explicit chip taps keep
+        // their exact filter.
+        val list = if (filtered.isNotEmpty() || preferredWatchStatus != null) {
+            filtered
+        } else {
+            allBookmarks.map { it.second }
         }
         _bookmarks.postValue(Pair(true, list))
     }
@@ -521,6 +550,11 @@ class HomeViewModel : ViewModel() {
         onGoingLoad?.cancel()
         isCurrentlyLoadingName = "custom:" + list.id
         onGoingLoad = ioSafe {
+            // Phase 8.75: publish the list's name as the current
+            // "api" name — the provider switcher label is driven by
+            // apiName, and custom loads never posted it, so the
+            // switcher sat blank while a custom list was active.
+            _apiName.postValue(list.name)
             _page.postValue(Resource.Loading())
             _preview.postValue(Resource.Loading())
             customRoutes.clear()

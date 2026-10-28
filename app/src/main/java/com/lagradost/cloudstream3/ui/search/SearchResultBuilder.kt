@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.search
 
 import android.annotation.SuppressLint
+import coil3.request.crossfade
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.View
@@ -237,10 +238,30 @@ object SearchResultBuilder {
         }
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {
-            cardView.loadImage(card.posterUrl, card.posterHeaders) {
-                error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
+            // Phase 8.73: loadImage() disposes + crossfades on EVERY
+            // bind, and Home rebinds constantly (resolved titles /
+            // ratings landing, row rotation) — every rebind blinked
+            // every visible poster, which he reads as the screen /
+            // categories shaking. Skip the reload when this view
+            // already shows this poster.
+            if (cardView.tag != card.posterUrl) {
+                cardView.tag = card.posterUrl
+                cardView.loadImage(card.posterUrl, card.posterHeaders) {
+                    // Phase 8.76: no crossfade on grid posters. The
+                    // loader's default 150ms fade turned every rebind
+                    // wave (titles/ratings landing during scroll)
+                    // into a visible shimmer across the whole grid —
+                    // the rest of his কাপাকাপি. Posters now cut in
+                    // instantly; the URL guard above still skips
+                    // reloads of posters already on screen.
+                    crossfade(false)
+                    error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
+                }
             }
-        } else cardView.loadImage(R.drawable.poster_placeholder)
+        } else {
+            cardView.tag = null
+            cardView.loadImage(R.drawable.poster_placeholder)
+        }
 
         fun click(view: View?) {
             clickCallback.invoke(

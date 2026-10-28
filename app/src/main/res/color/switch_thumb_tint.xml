@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.74: switch thumb colours matching his reference shot —
+     deep blue when ON, light gray when OFF. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#0B57D0" android:state_checked="true" />
+    <item android:color="#BDC1C6" />
+</selector>

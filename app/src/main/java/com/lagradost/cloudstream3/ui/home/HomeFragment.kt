@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.home
 
 import android.annotation.SuppressLint
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
@@ -11,6 +12,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.EdgeEffect
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
@@ -422,6 +424,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // same picker (his request) so providers and custom
             // lists are managed in one place.
             val customLists = HomeCustomLists.getLists(this)
+            // Phase 8.74: the customs as DISPLAYED (pinned ones first);
+            // updateList() recomputes it, click/pin handlers read it.
+            var displayCustoms: List<HomeCustomLists.CustomList> = customLists
             builder.show()
             builder.let { dialog ->
                 val isMultiLang = getApiProviderLangSettings().let { set ->
@@ -505,9 +510,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
                         val providerApi =
                             currentValidApis.getOrNull(position)
+                        // Phase 8.74: custom lists pin too — their key
+                        // in the same pinned store is "custom:<id>".
+                        val customAtPos = if (providerApi == null) {
+                            displayCustoms.getOrNull(
+                                position - currentValidApis.size
+                            )
+                        } else {
+                            null
+                        }
                         val isPinned =
-                            providerApi != null &&
-                                pinnedphashset.contains(providerApi.name)
+                            (providerApi != null &&
+                                pinnedphashset.contains(providerApi.name)) ||
+                                (customAtPos != null &&
+                                    pinnedphashset.contains(
+                                        "custom:" + customAtPos.id
+                                    ))
                         pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
 
                         val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
@@ -538,7 +556,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         currentApiName.let(callback)
                         dialog.dismissSafe()
                     } else if (onCustomSelect != null) {
-                        val list = customLists.getOrNull(
+                        val list = displayCustoms.getOrNull(
                             i - currentValidApis.size
                         )
                         if (list != null) {
@@ -596,13 +614,30 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         val displayName = getDisplayName(it.name)
                         if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
                     }
-                    val customNames = customLists.map { "\u2605 " + it.name }
+                    // Phase 8.74: pinned customs join the top group
+                    // like pinned providers (same store, "custom:<id>"
+                    // keys, most-recent pin first), and the star
+                    // prefix beside custom names is gone (his call).
+                    val pinnedCustoms = pinnedp.asReversed()
+                        .mapNotNull { key ->
+                            if (key.startsWith("custom:")) {
+                                customLists.firstOrNull {
+                                    "custom:" + it.id == key
+                                }
+                            } else {
+                                null
+                            }
+                        }
+                    displayCustoms = pinnedCustoms + customLists.filterNot {
+                        pinnedphashset.contains("custom:" + it.id)
+                    }
+                    val customNames = displayCustoms.map { it.name }
                     var index = currentValidApis.map { it.name }
                         .indexOf(currentApiName)
                     val activeCustomPos =
                         HomeCustomLists.activeList(this@selectHomepage)
                             ?.let { active ->
-                                customLists.indexOfFirst {
+                                displayCustoms.indexOfFirst {
                                     it.id == active.id
                                 }
                             } ?: -1
@@ -627,6 +662,25 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         }
                         DataStoreHelper.pinnedProviders = pinnedp.toTypedArray()
                         updateList()
+                    } else {
+                        // Phase 8.74: custom lists pin/unpin on hold
+                        // exactly like providers.
+                        val custom = displayCustoms.getOrNull(
+                            i - currentValidApis.size
+                        )
+                        if (custom != null) {
+                            val pinnedp =
+                                DataStoreHelper.pinnedProviders.toMutableList()
+                            val key = "custom:" + custom.id
+                            if (pinnedp.contains(key)) {
+                                pinnedp.remove(key)
+                            } else {
+                                pinnedp.add(key)
+                            }
+                            DataStoreHelper.pinnedProviders =
+                                pinnedp.toTypedArray()
+                            updateList()
+                        }
                     }
                     true
                 }
@@ -712,7 +766,42 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 homeAutoRotateHandler.postDelayed(this, 600L)
                 return
             }
-            homeMasterAdapter?.notifyDataSetChanged()
+            // Phase 8.76: this used to rebind the WHOLE master
+            // adapter — hero, strips and every row — each time a
+            // burst of titles/ratings landed, which he still felt
+            // as the screen shaking while posters loaded and while
+            // scrolling. Refresh only the adapters actually on
+            // screen (row child lists + the header strips); the
+            // hero and off-screen rows are left alone.
+            if (recycler == null) {
+                homeMasterAdapter?.notifyDataSetChanged()
+            } else {
+                refreshVisibleHomeLists(recycler)
+            }
+        }
+    }
+
+    /** Phase 8.76: notify only the HomeChildItemAdapter /
+     *  HomeScrollAdapter instances inside the master list's
+     *  currently attached (visible) children. The hero ViewPager2's
+     *  internal list is deliberately not matched — its adapter is
+     *  neither type — so the hero never rebinds from here. */
+    private fun refreshVisibleHomeLists(recycler: RecyclerView) {
+        fun walk(view: View) {
+            if (view is RecyclerView) {
+                val childAdapter = view.adapter
+                if (childAdapter is HomeChildItemAdapter ||
+                    childAdapter is HomeScrollAdapter
+                ) {
+                    childAdapter.notifyDataSetChanged()
+                }
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) walk(view.getChildAt(i))
+            }
+        }
+        for (i in 0 until recycler.childCount) {
+            walk(recycler.getChildAt(i))
         }
     }
 
@@ -743,6 +832,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         TitleResolver.removeListener(titleResolveListener)
         MetadataResolver.removeListener(metadataResolveListener)
         homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        // Phase 8.73: never leave the activity's bottom nav translated
+        // away (or the switcher either) when Home's view goes away.
+        homeChromeHidden = false
+        homeChromeDy = 0
+        activity?.findViewById<View>(R.id.nav_view)?.let {
+            it.animate().cancel()
+            it.translationY = 0f
+        }
+        binding?.homeApiFab?.let {
+            it.animate().cancel()
+            it.translationY = 0f
+        }
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
         // Phase 8.17: the auto-rotation timer must not outlive the view.
@@ -817,8 +918,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         val visible = if (homeViewModel.isCustomActive) {
             lastHomeCopies
         } else {
+            // Phase 8.73: match hidden names NORMALIZED (trim +
+            // case-insensitive) — provider shelf names are scraped
+            // text and can vary in stray whitespace/casing between
+            // loads, which made Hide appear to do nothing.
             val hidden = hiddenCategoryNames()
-            lastHomeCopies.filterNot { it.list.name in hidden }
+                .map { it.trim().lowercase() }.toSet()
+            lastHomeCopies.filterNot {
+                it.list.name.trim().lowercase() in hidden
+            }
         }
         // Phase 8.50: Family Mode strips NSFW items from every
         // row (rows left empty disappear) on all home variants.
@@ -885,10 +993,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             .show()
     }
     private val homeAutoRotateHandler = Handler(Looper.getMainLooper())
+
+    // Phase 8.71: hero pull-grow state (see setupHeroScrollCollapse).
+    @Volatile
+    private var heroPullGrow: Float = 0f
+    private var heroPullAnimator: ValueAnimator? = null
     private val homeAutoRotateRunnable = object : Runnable {
         override fun run() {
             rotateVisibleHomeRows()
-            homeAutoRotateHandler.postDelayed(this, 20_000L)
+            homeAutoRotateHandler.postDelayed(this, 60_000L)
         }
     }
 
@@ -1041,6 +1154,68 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      * while this writes scale/alpha/translationY on the outer frame from
      * the *vertical* list scroll — disjoint properties on disjoint views.
      */
+    // Phase 8.73: provider-switcher + bottom-nav auto-hide state.
+    private var homeChromeHidden = false
+    private var homeChromeDy = 0
+
+    /**
+     * Phase 8.73 (his request): while scrolling down through Home, the
+     * provider switcher and the bottom navigation slide away; a slight
+     * scroll back up brings both back. Accumulated-delta thresholds so
+     * slow drags count too, not just flings. Transforms only.
+     */
+    private fun setupHomeChromeAutoHide(recyclerView: RecyclerView) {
+        if (!isLayout(PHONE)) return
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (dy == 0) return
+                // Phase 8.74: he found hide AND show both laggy — the
+                // accumulator kept the opposite direction's backlog,
+                // so reversing direction first had to "pay it off".
+                // Reset on any direction flip and use small thresholds.
+                if ((dy > 0) != (homeChromeDy > 0)) homeChromeDy = 0
+                homeChromeDy += dy
+                if (homeChromeDy > 24 && !homeChromeHidden) {
+                    homeChromeHidden = true
+                    homeChromeDy = 0
+                    applyHomeChromeVisibility()
+                } else if (homeChromeDy < -12 && homeChromeHidden) {
+                    homeChromeHidden = false
+                    homeChromeDy = 0
+                    applyHomeChromeVisibility()
+                }
+            }
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    homeChromeDy = 0
+                }
+            }
+        })
+    }
+
+    private fun applyHomeChromeVisibility() {
+        val fab = binding?.homeApiFab
+        val nav = activity?.findViewById<View>(R.id.nav_view)
+        if (homeChromeHidden) {
+            if (fab != null) {
+                val lp = fab.layoutParams as? ViewGroup.MarginLayoutParams
+                val shift = fab.height + (lp?.bottomMargin ?: 0) + 8.toPx
+                fab.animate().translationY(shift.toFloat())
+                    .setDuration(150).start()
+            }
+            if (nav != null) {
+                val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
+                val shift = nav.height + (lp?.bottomMargin ?: 0) + 8.toPx
+                nav.animate().translationY(shift.toFloat())
+                    .setDuration(150).start()
+            }
+        } else {
+            fab?.animate()?.translationY(0f)?.setDuration(150)?.start()
+            nav?.animate()?.translationY(0f)?.setDuration(150)?.start()
+        }
+    }
+
     private fun setupHeroScrollCollapse(recyclerView: RecyclerView) {
         fun applyHeroCollapse() {
             val header = recyclerView.findViewHolderForAdapterPosition(0)?.itemView ?: return
@@ -1055,10 +1230,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // into them, so the mapping stays exact in both directions.
             val scrolled = -(header.top + frame.top)
             val ratio = (scrolled.toFloat() / height).coerceIn(0f, 1f)
-            val scale = 1f - 0.08f * ratio
+            // Phase 8.71: stronger, clearly visible curve (his ask) —
+            // shrink to 85% with a gentler fade, anchored to the top
+            // edge; plus a pull-grow factor from the top edge effect
+            // (heroPullGrow) so dragging down at the very top swells
+            // the hero slightly before it springs back.
+            frame.pivotY = 0f
+            frame.pivotX = frame.width / 2f
+            val scale = (1f - 0.15f * ratio) * (1f + heroPullGrow)
             frame.scaleX = scale
             frame.scaleY = scale
-            frame.alpha = 1f - 0.75f * ratio
+            frame.alpha = 1f - 0.6f * ratio
             // Slight parallax lag: the frame drifts down against the
             // scroll by 20% of the scrolled distance while it dissolves.
             frame.translationY = scrolled * 0.2f
@@ -1069,6 +1251,78 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 applyHeroCollapse()
             }
         })
+        // Phase 8.71: pull-grow. The top edge effect reports overscroll
+        // pulls while the list is already at the top; each pull swells
+        // the hero a little (capped at +6%), and releasing springs it
+        // back over 250 ms. Pure transform state — the scroll mapping
+        // above remains the single writer via applyHeroCollapse().
+        runCatching {
+            recyclerView.edgeEffectFactory =
+                object : RecyclerView.EdgeEffectFactory() {
+                    override fun createEdgeEffect(
+                        view: RecyclerView,
+                        direction: Int
+                    ): EdgeEffect {
+                        val base = super.createEdgeEffect(view, direction)
+                        if (direction != DIRECTION_TOP) return base
+                        return object : EdgeEffect(view.context) {
+                            override fun onPull(deltaDistance: Float) {
+                                super.onPull(deltaDistance)
+                                grow(deltaDistance)
+                            }
+
+                            override fun onPull(
+                                deltaDistance: Float,
+                                displacement: Float
+                            ) {
+                                super.onPull(deltaDistance, displacement)
+                                grow(deltaDistance)
+                            }
+
+                            override fun onRelease() {
+                                super.onRelease()
+                                springBack()
+                            }
+
+                            override fun onAbsorb(velocity: Int) {
+                                super.onAbsorb(velocity)
+                                springBack()
+                            }
+
+                            private fun grow(delta: Float) {
+                                // Phase 8.73: only swell at the very
+                                // top — an edge absorb mid-fling used
+                                // to fight the scroll and read as
+                                // screen shake.
+                                if (view.computeVerticalScrollOffset() != 0) {
+                                    return
+                                }
+                                heroPullAnimator?.cancel()
+                                heroPullGrow =
+                                    (heroPullGrow + delta * 0.10f)
+                                        .coerceAtMost(0.06f)
+                                applyHeroCollapse()
+                            }
+
+                            private fun springBack() {
+                                if (heroPullGrow <= 0f) return
+                                heroPullAnimator?.cancel()
+                                heroPullAnimator = ValueAnimator.ofFloat(
+                                    heroPullGrow, 0f
+                                ).apply {
+                                    duration = 250L
+                                    addUpdateListener { anim ->
+                                        heroPullGrow =
+                                            anim.animatedValue as Float
+                                        applyHeroCollapse()
+                                    }
+                                    start()
+                                }
+                            }
+                        }
+                    }
+                }
+        }
         // Re-apply when the header scrolls back into view: while it is
         // detached there is no holder to transform, and the frame may
         // still carry the values from when it left the screen.
@@ -1132,6 +1386,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 SectionEntranceAnimator(firstAnimatedPosition = 1)
                     .attachTo(homeMasterRecycler)
                 setupHeroScrollCollapse(homeMasterRecycler)
+                setupHomeChromeAutoHide(homeMasterRecycler)
 
                 // Phase 8.17: long-press a category's title strip and drag
                 // it up or down to reorder the home categories; the order
@@ -1202,9 +1457,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         if (!categoryDragSwapped) {
                             val pos = viewHolder.bindingAdapterPosition
                             if (pos > 0) {
-                                homeCategoryItems.getOrNull(pos - 1)?.let {
-                                    showCategoryMenu(it)
-                                }
+                                // Phase 8.73: resolve the row from the
+                                // ADAPTER's current list, not the
+                                // fragment-side copy — ParentItemAdapter
+                                // re-sorts (empty rows last), so the two
+                                // orders can differ and the menu hid the
+                                // WRONG category (his "hide হয় না").
+                                val item = homeMasterAdapter
+                                    ?.immutableCurrentList
+                                    ?.getOrNull(pos - 1)
+                                    ?: homeCategoryItems.getOrNull(pos - 1)
+                                item?.let { showCategoryMenu(it) }
                             }
                         }
                     }
@@ -1215,7 +1478,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 // a viewer watching the screen sees the shelves change on
                 // their own, animated by the rows' item animators.
                 homeAutoRotateHandler.removeCallbacks(homeAutoRotateRunnable)
-                homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 20_000L)
+                homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 60_000L)
             }
 
             homeApiFab.isVisible = isLayout(PHONE)
@@ -1252,6 +1515,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     setDistanceToTriggerSync(120.toPx)
                     setOnRefreshListener {
                         homeSwipeRefresh.hapticTick()
+                        // 8.71: a manual refresh also advances the row
+                        // posters one step (his request) — rotation is no
+                        // longer a 20 s timer shake; it runs every 60 s
+                        // and whenever he pulls to refresh.
+                        rotateVisibleHomeRows()
                         homeViewModel.loadAndCancel(
                             homeViewModel.apiName.value ?: noneApi.name,
                             forceReload = true,
@@ -1449,6 +1717,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         // state can leave it missing (see PHASE85C_CHANGES.md).
                         homeApiFab.isVisible = isLayout(PHONE)
                         anchorHomeApiFab()
+                        // Phase 8.73: re-assert the switcher label from
+                        // the actually-loaded provider on every load —
+                        // after switching back to the default it could
+                        // keep showing the previous provider's name.
+                        val loadedApiName = homeViewModel.apiName.value
+                        val loadedDisplay =
+                            context?.getDisplayName(loadedApiName)
+                                ?: loadedApiName
+                        homeApiFab.text = loadedDisplay
+                        homeChangeApi.text = loadedDisplay
 
                         //home_loaded?.isVisible = true
                         if (toggleRandomButton) {

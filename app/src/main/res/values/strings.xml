@@ -380,6 +380,7 @@
     <string name="feed_empty">No content found. Check your providers, then pull to refresh.</string>
     <string name="feed_like">Like</string>
     <string name="feed_up_next">Up next</string>
+    <string name="feed_for_you">For You</string>
     <string name="pref_category_metadata">Ratings (Universal)</string>
     <string name="tmdb_key_title">TMDB API Key</string>
     <string name="omdb_key_title">IMDb API Key (OMDb)</string>
@@ -399,6 +400,7 @@
     <string name="feed_sources">Sources</string>
     <string name="feed_finding_sources">Finding sources… %1$d found</string>
     <string name="feed_more">More</string>
+    <string name="feed_info">Info</string>
     <string name="feed_less">Less</string>
     <string name="feed_back_to_top">Back to top</string>
     <string name="download_queue_queued">Queued</string>

@@ -31,6 +31,7 @@ object TitleResolver {
     private val semaphore = Semaphore(3)
     private val inFlight = mutableSetOf<String>()
     private val memory = ConcurrentHashMap<String, String>()
+    private val typeMemory = ConcurrentHashMap<String, String>()
     private val listeners = mutableListOf<(String, String) -> Unit>()
 
     fun addListener(listener: (String, String) -> Unit) {
@@ -66,6 +67,33 @@ object TitleResolver {
         return stored
     }
 
+    /**
+     * Phase 8.71: the TvType learned from an item's details page. Feed
+     * cards prefer this over the SearchResponse's declared type — some
+     * providers tag every animation "Anime" on the listing while the
+     * details page (and the player) correctly say "Movie", which made
+     * the card tag and the watch-screen tag disagree.
+     */
+    fun cachedType(context: Context?, url: String): com.lagradost.cloudstream3.TvType? {
+        val raw = typeMemory[url]
+            ?: if (context == null) {
+                null
+            } else {
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getString("type:$url", null)
+                    ?.also { typeMemory[url] = it }
+            }
+        return raw?.let {
+            runCatching { com.lagradost.cloudstream3.TvType.valueOf(it) }.getOrNull()
+        }
+    }
+
+    fun storeType(context: Context, url: String, type: com.lagradost.cloudstream3.TvType) {
+        typeMemory[url] = type.name
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString("type:$url", type.name).apply()
+    }
+
     fun resolve(context: Context, apiName: String, url: String, currentName: String) {
         if (!isIdLike(currentName)) return
         if (cached(context, url) != null) return
@@ -79,7 +107,11 @@ object TitleResolver {
                     val loaded = withTimeoutOrNull(20_000) {
                         APIRepository(api).load(url)
                     }
-                    val name = (loaded as? Resource.Success)?.value?.name
+                    val loadedValue = (loaded as? Resource.Success)?.value
+                    val name = loadedValue?.name
+                    if (loadedValue != null) {
+                        storeType(context, url, loadedValue.type)
+                    }
                     if (!name.isNullOrBlank() && !isIdLike(name)) {
                         memory[url] = name
                         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

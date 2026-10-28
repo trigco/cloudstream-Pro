@@ -29,7 +29,9 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentHomeHeadBinding
+import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.databinding.FragmentHomeHeadTvBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.debugException
@@ -37,6 +39,7 @@ import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.ViewHolderState
 import com.lagradost.cloudstream3.ui.WatchType
+import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountEditDialog
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.account.AccountViewModel
@@ -315,6 +318,11 @@ class HomeParentItemAdapterPreview(
         private val previewViewpagerText: ViewGroup =
             itemView.findViewById(R.id.home_preview_viewpager_text)
 
+        // Phase 8.74: hero loading skeleton (phone head layout only;
+        // null on the TV head, which keeps the old behaviour).
+        private val heroSkeleton: com.facebook.shimmer.ShimmerFrameLayout? =
+            itemView.findViewById(R.id.home_hero_skeleton)
+
         // private val previewHeader: FrameLayout = itemView.findViewById(R.id.home_preview)
         private val resumeHolder: View = itemView.findViewById(R.id.home_watch_holder)
         private val resumeRecyclerView: RecyclerView =
@@ -345,8 +353,26 @@ class HomeParentItemAdapterPreview(
                 homePreviewDescription.text = item.plot?.html() ?: ""
 
                 val scoreText = item.score?.toStringNull(0.1, 10, 1, false)
+                // Phase 8.71: hero score gets the universal-rating
+                // fallback too — providers without their own score
+                // showed no hero rating even with a TMDB key set.
+                val resolvedScore = scoreText
+                    ?: homePreviewScore.context.let { ctx ->
+                        MetadataResolver.cached(ctx, item.name, item.year)
+                            .also { hit ->
+                                if (hit == null) {
+                                    MetadataResolver.resolve(
+                                        ctx, item.name, item.year,
+                                        item.type == TvType.TvSeries ||
+                                            item.type == TvType.Anime ||
+                                            item.type == TvType.OVA ||
+                                            item.type == TvType.AsianDrama
+                                    )
+                                }
+                            }
+                    }
 
-                scoreText?.let { score ->
+                resolvedScore?.let { score ->
                     homePreviewScore.text =
                         homePreviewScore.context.getString(R.string.extension_rating, score)
 
@@ -361,7 +387,7 @@ class HomeParentItemAdapterPreview(
                     homePreviewScore.backgroundTintList =
                         android.content.res.ColorStateList.valueOf(color)
                 }
-                homePreviewScore.isGone = scoreText == null
+                homePreviewScore.isGone = resolvedScore == null
 
                 item.year?.let { year ->
                     homePreviewYear.text = year.toString()
@@ -707,6 +733,8 @@ class HomeParentItemAdapterPreview(
 
                     previewViewpager.isVisible = true
                     previewViewpagerText.isVisible = true
+                    heroSkeleton?.stopShimmer()
+                    heroSkeleton?.isVisible = false
                     alternativeAccountPadding?.isVisible = false
                     (binding as? FragmentHomeHeadTvBinding)?.apply {
                         homePreviewInfoBtt.isVisible = true
@@ -723,8 +751,25 @@ class HomeParentItemAdapterPreview(
                     previewAdapter.submitList(listOf())
                     previewViewpager.setCurrentItem(0, false)
                     previewViewpager.isVisible = false
-                    previewViewpagerText.isVisible = false
-                    alternativeAccountPadding?.isVisible = true
+                    // Phase 8.74: do NOT collapse the 500dp hero frame
+                    // while a real provider's preview is loading or
+                    // failed — that collapse yanked every category up
+                    // (the shake he reported). Hold the space with the
+                    // shimmer skeleton instead. Only the None provider
+                    // (no hero by design) keeps the compact padding.
+                    if (viewModel.apiName.value == noneApi.name ||
+                        heroSkeleton == null
+                    ) {
+                        previewViewpagerText.isVisible = false
+                        heroSkeleton?.stopShimmer()
+                        heroSkeleton?.isVisible = false
+                        alternativeAccountPadding?.isVisible = true
+                    } else {
+                        previewViewpagerText.isVisible = true
+                        heroSkeleton?.isVisible = true
+                        heroSkeleton?.startShimmer()
+                        alternativeAccountPadding?.isVisible = false
+                    }
                     (binding as? FragmentHomeHeadTvBinding)?.apply {
                         homePreviewInfoBtt.isVisible = false
                     }

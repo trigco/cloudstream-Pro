@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FeedCardBinding
 import com.lagradost.cloudstream3.ui.search.MetadataResolver
+import com.lagradost.cloudstream3.ui.search.goldStarText
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -78,8 +79,12 @@ class FeedAdapter(
             // title in when it lands.
             val override = titleOverrides[response.url]
                 ?: TitleResolver.cached(context, response.url)
+            val shownTitle = override ?: displayTitle(response.name, response.url)
+            // Phase 8.71: never print the raw placeholder ("Id 1260107139")
+            // as a title — while resolution is pending (or failed) the
+            // card shows its poster + meta only.
             binding.feedCardTitle.text =
-                override ?: displayTitle(response.name, response.url)
+                if (TitleResolver.isIdLike(shownTitle)) "" else shownTitle
             if (override == null && TitleResolver.isIdLike(response.name)) {
                 onTitleNeeded(entry)
             }
@@ -104,13 +109,18 @@ class FeedAdapter(
                 declaredDub.contains(DubStatus.Subbed) -> "SUB"
                 else -> null
             }
-            binding.feedCardMeta.text = buildString {
+            // Phase 8.71: prefer the type learned from the details page
+            // (TitleResolver cache) over the listing's declared type, so
+            // the card tag matches the watch screen's tag.
+            val shownType = TitleResolver.cachedType(context, response.url)
+                ?: response.type
+            binding.feedCardMeta.text = goldStarText(buildString {
                 append(entry.apiName)
                 append(" • ")
-                append(typeLabel(response.type))
+                append(typeLabel(shownType))
                 if (rating != null) append(" • ★ ").append(rating)
                 if (dubSub != null) append(" • ").append(dubSub)
-            }
+            })
             bindLike(entry)
 
             binding.root.setOnClickListener { onPlay(entry) }
@@ -133,7 +143,10 @@ class FeedAdapter(
             val context = binding.root.context
             val liked = FeedLikes.isLiked(context, entry.response.url)
             binding.feedCardLike.setImageResource(
-                if (liked) R.drawable.ic_baseline_favorite_24
+                // Phase 8.73: a genuinely FILLED heart when liked —
+                // the old "filled" drawable is a hollow outline in
+                // this project, so the tap only reddened the rim.
+                if (liked) R.drawable.ic_favorite_filled_24
                 else R.drawable.ic_baseline_favorite_border_24
             )
             binding.feedCardLike.imageTintList = ContextCompat.getColorStateList(

@@ -60,7 +60,7 @@
         android:src="@drawable/ic_outline_settings_24"
         android:visibility="gone" />
 
-    <androidx.appcompat.widget.SwitchCompat
+    <com.google.android.material.materialswitch.MaterialSwitch
         android:id="@+id/item_scraper_enabled"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />

@@ -18,6 +18,70 @@
         android:layout_width="match_parent"
         android:layout_height="500dp">
 
+        <!-- Phase 8.74: hero loading skeleton. The hero frame used to
+             be hidden entirely while the preview loaded (or when it
+             failed), collapsing 500dp to a 50dp padding strip — every
+             category below jumped up, the "shake" he kept reporting.
+             Now the frame keeps its full height and shows this
+             shimmer until real preview items land. -->
+        <com.facebook.shimmer.ShimmerFrameLayout
+            android:id="@+id/home_hero_skeleton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            app:shimmer_auto_start="false">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:layout_marginBottom="86dp"
+                    android:orientation="vertical">
+
+                    <View
+                        android:layout_width="180dp"
+                        android:layout_height="26dp"
+                        android:background="#2A2A2A" />
+
+                    <View
+                        android:layout_width="120dp"
+                        android:layout_height="14dp"
+                        android:layout_marginTop="10dp"
+                        android:background="#2A2A2A" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:layout_width="64dp"
+                            android:layout_height="30dp"
+                            android:background="#2A2A2A" />
+
+                        <View
+                            android:layout_width="88dp"
+                            android:layout_height="30dp"
+                            android:layout_marginStart="10dp"
+                            android:background="#2A2A2A" />
+
+                        <View
+                            android:layout_width="64dp"
+                            android:layout_height="30dp"
+                            android:layout_marginStart="10dp"
+                            android:background="#2A2A2A" />
+                    </LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+        </com.facebook.shimmer.ShimmerFrameLayout>
+
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/home_preview_viewpager"
             android:layout_width="match_parent"

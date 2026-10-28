@@ -425,9 +425,14 @@ class DownloadViewModel : ViewModel() {
             }.mapNotNull {
                 val isSelected = selectedItemIds.value?.contains(it.id) ?: false
                 val info = getDownloadFileInfo(context, it.id) ?: return@mapNotNull null
+                // Phase 8.71: same live-progress merge as the header
+                // list — a DASH export's destination file stays empty
+                // until the final copy, so fileLength alone froze this
+                // page's rows at 0 for the whole download.
+                val live = liveProgress[it.id]
                 VisualDownloadCached.Child(
-                    currentBytes = info.fileLength,
-                    totalBytes = info.totalBytes,
+                    currentBytes = maxOf(info.fileLength, live?.first ?: 0L),
+                    totalBytes = maxOf(info.totalBytes, live?.second ?: 0L),
                     isSelected = isSelected,
                     data = it,
                 )

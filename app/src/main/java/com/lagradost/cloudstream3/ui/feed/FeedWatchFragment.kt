@@ -31,6 +31,8 @@ import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.player.GeneratorPlayer
 import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
+import com.lagradost.cloudstream3.ui.search.TitleResolver
+import com.lagradost.cloudstream3.ui.search.goldStarText
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
@@ -133,6 +135,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     private val stateListener: () -> Unit = { updatePlaybackUi() }
+
+    // Phase 8.74: when a raw "Id …" title resolves in the background,
+    // refresh the header so the real title replaces the blank.
+    private val watchTitleListener: (String, String) -> Unit = { url, _ ->
+        if (url == FeedPlayer.currentUrl) updateHeader()
+    }
 
     /**
      * Phase 8.23 — the title bar gets out of the way while the viewer
@@ -253,6 +261,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchPlayer.player = FeedPlayer.exo
         FeedPlayer.exo?.addListener(iconListener)
         FeedPlayer.addListener(stateListener)
+        TitleResolver.addListener(watchTitleListener)
 
         binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
         binding.feedWatchUpnext.adapter = upNextAdapter
@@ -291,7 +300,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             view.hapticTick()
             val open = !binding.feedWatchStorylineText.isVisible
             binding.feedWatchStorylineText.isVisible = open
-            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_more)
+            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_info)
             val box = binding.feedWatchTitleBox
             val params = box.layoutParams
             params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -503,6 +512,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     override fun onDestroyView() {
         FeedPlayer.removeListener(stateListener)
+        TitleResolver.removeListener(watchTitleListener)
         FeedPlayer.exo?.removeListener(iconListener)
         handler.removeCallbacksAndMessages(null)
         orientationListener?.disable()
@@ -609,9 +619,26 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private fun updateHeader() {
         val binding = binding ?: return
         val name = FeedPlayer.currentName ?: return
-        binding.feedWatchTitle.text = FeedAdapter.displayTitle(
-            name, FeedPlayer.currentUrl ?: ""
-        )
+        // Phase 8.74: never print the raw "Id 1260…" title while the
+        // video loads — show the resolved title when one is cached,
+        // kick off resolution and keep the title blank until the
+        // resolver listener refreshes this header.
+        val currentUrl0 = FeedPlayer.currentUrl ?: ""
+        val titleOverride = TitleResolver.cached(context, currentUrl0)
+        binding.feedWatchTitle.text = when {
+            titleOverride != null ->
+                FeedAdapter.displayTitle(titleOverride, currentUrl0)
+            TitleResolver.isIdLike(name) -> {
+                context?.let { ctx ->
+                    TitleResolver.resolve(
+                        ctx, FeedPlayer.currentApiName ?: "",
+                        currentUrl0, name
+                    )
+                }
+                ""
+            }
+            else -> FeedAdapter.displayTitle(name, currentUrl0)
+        }
         val ep = FeedPlayer.currentEpisode
         val apiName = FeedPlayer.currentApiName ?: ""
         val typeText = ep?.let { FeedAdapter.typeLabel(it.tvType) } ?: ""
@@ -626,9 +653,30 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         } else {
             ""
         }
-        binding.feedWatchMeta.text =
+        // Phase 8.71: rating + year next to the title (his request).
+        // Sources, best first: the loaded page's own score, then the
+        // universal TMDB/OMDb cache for the title+year.
+        val page0 = FeedPlayer.currentPage
+        val year = page0?.year
+        val headerRating = page0?.score?.toStringNull(0.5, 10)
+            ?: com.lagradost.cloudstream3.ui.search.MetadataResolver
+                .cached(context, name, year)
+        // Phase 8.71: teach the feed cards this item's real type, so
+        // a card tagged "Anime" by its provider agrees with this
+        // screen's "Movie" after the first open.
+        val currentUrl = FeedPlayer.currentUrl
+        val loadedType = ep?.tvType ?: page0?.type
+        val appCtx = context
+        if (currentUrl != null && loadedType != null && appCtx != null) {
+            com.lagradost.cloudstream3.ui.search.TitleResolver
+                .storeType(appCtx, currentUrl, loadedType)
+        }
+        binding.feedWatchMeta.text = goldStarText(
             listOf(FeedPlayer.currentApiName ?: apiName, typeText)
-                .filter { it.isNotBlank() }.joinToString(" • ") + epText
+                .filter { it.isNotBlank() }.joinToString(" • ") + epText +
+                (if (headerRating != null) " • ★ $headerRating" else "") +
+                (if (year != null) " • $year" else "")
+        )
         // Phase 8.57: Add-to-list label mirrors the details
         // bookmark FAB — the watch status once one is set.
         val page = FeedPlayer.currentPage
@@ -646,7 +694,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // default; the "More" label only appears with a plot.
         val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
         binding.feedWatchMore.isVisible = plot != null
-        binding.feedWatchMore.setText(R.string.feed_more)
+        binding.feedWatchMore.setText(R.string.feed_info)
         binding.feedWatchStorylineText.isVisible = false
         if (plot != null) binding.feedWatchStorylineText.text = plot
         // Phase 8.42: the collapse animation's full height was

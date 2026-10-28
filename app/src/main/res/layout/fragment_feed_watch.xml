@@ -177,8 +177,8 @@
 
                 <androidx.mediarouter.app.MediaRouteButton
                     android:id="@+id/feed_watch_cast"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:mediaRouteTypes="user"
                     android:visibility="gone"
@@ -186,22 +186,22 @@
 
                 <ImageButton
                     android:id="@+id/feed_watch_audio"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_audio"
-                    android:padding="9dp"
+                    android:padding="10dp"
                     android:src="@drawable/feed_audio" />
 
                 <ImageButton
                     android:id="@+id/feed_watch_subtitles"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_subtitles"
-                    android:padding="9dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_baseline_subtitles_24" />
             </LinearLayout>
 
@@ -255,7 +255,7 @@
                     android:id="@+id/feed_watch_fullscreen"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_fullscreen"
                     android:src="@drawable/baseline_fullscreen_24" />
 
@@ -283,37 +283,46 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/feed_watch_player_box">
 
-        <LinearLayout
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="top"
-            android:orientation="horizontal">
+            android:layout_height="wrap_content">
 
             <TextView
                 android:id="@+id/feed_watch_title"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="2"
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                app:layout_constrainedWidth="true"
+                app:layout_constraintEnd_toStartOf="@id/feed_watch_more"
+                app:layout_constraintHorizontal_bias="0"
+                app:layout_constraintHorizontal_chainStyle="packed"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
                 android:id="@+id/feed_watch_more"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:drawablePadding="1dp"
                 android:paddingTop="2dp"
                 android:paddingBottom="4dp"
                 android:paddingEnd="2dp"
-                android:text="@string/feed_more"
+                android:text="@string/feed_info"
                 android:textColor="@color/grayTextColor"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:visibility="gone" />
-        </LinearLayout>
+                android:visibility="gone"
+                app:drawableEndCompat="@drawable/ic_baseline_keyboard_arrow_right_24"
+                app:drawableTint="@color/grayTextColor"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/feed_watch_title"
+                app:layout_constraintTop_toTopOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
         <TextView
             android:id="@+id/feed_watch_meta"
@@ -333,17 +342,25 @@
             android:textSize="13sp"
             android:visibility="gone" />
 
-        <LinearLayout
+        <!-- 8.71: one-line pill row, natural widths inside a
+             HorizontalScrollView — four pills never squeeze or
+             truncate their labels on narrow phones; the row simply
+             swipes a little when it overflows. -->
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:orientation="horizontal">
 
             <LinearLayout
                 android:id="@+id/feed_watch_source_btn"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:background="@drawable/feed_pill_bg"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
@@ -371,9 +388,8 @@
             <LinearLayout
                 android:id="@+id/feed_watch_episodes_btn"
                 android:layout_marginStart="8dp"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:background="@drawable/feed_pill_bg"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
@@ -401,9 +417,8 @@
             <LinearLayout
                 android:id="@+id/feed_watch_download_btn"
                 android:layout_marginStart="8dp"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:background="@drawable/feed_pill_bg"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
@@ -435,51 +450,69 @@
                     android:textColor="@android:color/white"
                     android:textSize="12sp" />
             </LinearLayout>
-        </LinearLayout>
 
-        <!-- Phase 8.57: Add to list lives HERE (feed player),
-             not on the details page (his order). Label mirrors
-             the details bookmark FAB: the current watch status
-             once set. -->
-        <LinearLayout
-            android:id="@+id/feed_watch_list_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/feed_pill_bg"
-            android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingStart="10dp"
+            <!-- Phase 8.71: Add to list moves INTO the pill row — all
+                 four actions on one line (his request); the row was
+                 previously three wide pills + this one alone below. -->
+            <LinearLayout
+                android:id="@+id/feed_watch_list_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/feed_pill_bg"
+                android:foreground="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
                 android:paddingEnd="10dp"
                 android:paddingTop="4dp"
                 android:paddingBottom="4dp">
 
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:contentDescription="@string/add_to_list"
-                android:src="@drawable/ic_baseline_bookmark_24" />
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:contentDescription="@string/add_to_list"
+                    android:src="@drawable/ic_baseline_bookmark_24" />
 
-            <TextView
-                android:id="@+id/feed_watch_list_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="@string/add_to_list"
-                android:textColor="@android:color/white"
-                android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/feed_watch_list_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/add_to_list"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
+        </HorizontalScrollView>
 
-        <TextView
-            android:id="@+id/feed_watch_upnext_label"
+        <!-- Phase 8.73: "For You" section header with a red underline
+             bar (his suggestion) — reads as a deliberate header
+             instead of a floating label with dead space under the
+             pills; top margin tightened 18dp -> 10dp. -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="@string/feed_up_next"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="10dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/feed_watch_upnext_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/feed_for_you"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="34dp"
+                android:layout_height="3dp"
+                android:layout_marginTop="4dp"
+                android:background="@color/colorPrimaryRed" />
+        </LinearLayout>
     </LinearLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout

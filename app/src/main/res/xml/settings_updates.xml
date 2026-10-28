@@ -20,7 +20,7 @@
             android:title="@string/apk_installer_settings"
             android:summary="@string/apk_installer_settings_des" />
 
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_notifications_active_24"
             android:summary="@string/updates_settings_des"
             android:title="@string/updates_settings"
@@ -53,7 +53,7 @@
 
     <PreferenceCategory
         android:title="@string/pref_category_extensions">
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/ic_baseline_extension_24"
             android:key="@string/auto_update_plugins_key"

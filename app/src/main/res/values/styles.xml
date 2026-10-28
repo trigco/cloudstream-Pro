@@ -18,6 +18,12 @@
 
         <item name="android:textViewStyle">@style/AppTextViewStyle</item>
         <item name="android:buttonStyle">@style/AppButtonStyle</item>
+        <!-- Phase 8.74: EVERY switch in the app (MaterialSwitch rows
+             and the SwitchCompat inside preference screens) takes his
+             reference colours — light-blue track, deep-blue thumb
+             when ON — via these two theme styles. -->
+        <item name="switchStyle">@style/Widget.CloudStreamPro.Switch</item>
+        <item name="materialSwitchStyle">@style/Widget.CloudStreamPro.MaterialSwitch</item>
         <item name="android:editTextStyle">@style/AppEditStyle</item>
         <item name="editTextStyle">@style/AppEditStyle</item> <!-- Phase 8.10-C: AppCompatEditText resolves the unprefixed attr; pointing it at AppEditStyle makes the rounded text box reach every dialog field, not just framework EditTexts -->
         <item name="alertDialogTheme">@style/Theme.AlertDialog</item>
@@ -138,6 +144,10 @@
     </style>
 
     <style name="AmoledMode">
+        <!-- Phase 8.74: switch styles ride along in the mode overlays
+             too, so the reference switch colours hold in every theme. -->
+        <item name="switchStyle">@style/Widget.CloudStreamPro.Switch</item>
+        <item name="materialSwitchStyle">@style/Widget.CloudStreamPro.MaterialSwitch</item>
         <item name="primaryGrayBackground">@color/black</item>
         <item name="primaryBlackBackground">@color/black</item>
         <item name="iconGrayBackground">@color/primaryBlackBackground</item>
@@ -168,9 +178,23 @@
         <item name="android:textColor">@color/ratingColor</item>
     </style>-->
 
+    <!-- Phase 8.74: global switch styles (see AppTheme switchStyle /
+         materialSwitchStyle items). -->
+    <style name="Widget.CloudStreamPro.Switch" parent="Widget.AppCompat.CompoundButton.Switch">
+        <item name="trackTint">@color/switch_track_tint</item>
+        <item name="thumbTint">@color/switch_thumb_tint</item>
+    </style>
+
+    <style name="Widget.CloudStreamPro.MaterialSwitch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="trackTint">@color/switch_track_tint</item>
+        <item name="thumbTint">@color/switch_thumb_tint</item>
+    </style>
+
     <style name="RatingButton" parent="@style/SearchBox">
         <item name="android:minWidth">40dp</item>
-        <item name="drawableTint">?attr/textColor</item>
+        <!-- Phase 8.74: the badge star is gold now (his request);
+             it used to inherit the plain text colour. -->
+        <item name="drawableTint">@color/ratingStarGold</item>
         <item name="drawableSize">10sp</item>
 
         <item name="drawableEndCompat">@drawable/kid_star_24px</item>
@@ -240,10 +264,17 @@
     </style>
 
     <style name="MonetMode">
-        <item name="primaryGrayBackground">@color/material_dynamic_neutral20</item>
+        <item name="switchStyle">@style/Widget.CloudStreamPro.Switch</item>
+        <item name="materialSwitchStyle">@style/Widget.CloudStreamPro.MaterialSwitch</item>
+        <!-- Phase 8.72: surfaces move OFF the all-neutral (gray) palette
+             onto wallpaper-tinted dynamic tones — his report was that
+             Material You on Android 12+ showed only gray. Cards/chips
+             take a primary tint, icon surfaces a secondary tint; the
+             page background and text stay neutral for contrast. -->
+        <item name="primaryGrayBackground">@color/material_dynamic_primary20</item>
         <item name="primaryBlackBackground">@color/material_dynamic_neutral10</item>
-        <item name="iconGrayBackground">@color/material_dynamic_neutral20</item>
-        <item name="boxItemBackground">@color/material_dynamic_neutral20</item>
+        <item name="iconGrayBackground">@color/material_dynamic_secondary20</item>
+        <item name="boxItemBackground">@color/material_dynamic_primary20</item>
         <item name="textColor">@color/material_dynamic_neutral90</item>
         <item name="grayTextColor">@color/material_dynamic_neutral60</item>
         <item name="white">@color/material_dynamic_neutral90</item>
