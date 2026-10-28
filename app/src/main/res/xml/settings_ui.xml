@@ -19,7 +19,7 @@
             android:icon="@drawable/baseline_grid_view_24"
             android:key="@string/app_icon_key"
             android:title="@string/app_icon_settings" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/title_24px"
             android:key="@string/bottom_title_key"
@@ -56,50 +56,50 @@
             android:icon="@drawable/ic_baseline_tv_24"
             android:key="@string/poster_ui_key"
             android:title="@string/poster_ui_settings" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/search_icon"
             android:summary="@string/advanced_search_des"
             android:title="@string/advanced_search"
             app:defaultValue="true"
             app:key="advanced_search" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/search_icon"
             android:summary="@string/search_suggestions_des"
             android:title="@string/search_suggestions"
             app:defaultValue="true"
             app:key="search_suggestions_enabled" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/baseline_theaters_24"
             android:key="@string/show_trailers_key"
             android:title="@string/show_trailers_settings" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/kitsu_icon"
             android:key="@string/show_kitsu_posters_key"
             android:title="@string/kitsu_settings" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/ic_baseline_people_24"
             android:key="@string/show_cast_in_details_key"
             android:title="@string/show_cast_in_details" />    
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:icon="@drawable/ic_baseline_skip_next_24"
             android:key="@string/show_fillers_key"
             android:title="@string/show_fillers_settings" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:icon="@drawable/metadata_overlay_icon"
             android:key="@string/show_player_metadata_key"
             android:title="@string/show_player_metadata_overlay" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
                 android:icon="@drawable/ic_baseline_clock_24"
                 android:summary="@string/tv_layout_clock_settings_des"
                 android:title="@string/tv_layout_clock_settings"
                 android:defaultValue="false"
                 android:key="@string/tv_layout_clock_key" />
-        <SwitchPreference
+        <SwitchPreferenceCompat
             android:icon="@drawable/ic_baseline_play_arrow_24"
             android:summary="@string/random_button_settings_desc"
             android:title="@string/random_button_settings"

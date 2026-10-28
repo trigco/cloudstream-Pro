@@ -15,7 +15,7 @@
         android:key="@string/display_sub_key"
         android:title="@string/display_subbed_dubbed_settings" />
 
-    <SwitchPreference
+    <SwitchPreferenceCompat
         android:icon="@drawable/ic_baseline_extension_24"
         android:key="@string/enable_nsfw_on_providers_key"
         android:summary="@string/apply_on_restart"

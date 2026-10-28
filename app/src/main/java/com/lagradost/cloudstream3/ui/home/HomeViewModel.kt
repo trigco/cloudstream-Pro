@@ -550,6 +550,11 @@ class HomeViewModel : ViewModel() {
         onGoingLoad?.cancel()
         isCurrentlyLoadingName = "custom:" + list.id
         onGoingLoad = ioSafe {
+            // Phase 8.75: publish the list's name as the current
+            // "api" name — the provider switcher label is driven by
+            // apiName, and custom loads never posted it, so the
+            // switcher sat blank while a custom list was active.
+            _apiName.postValue(list.name)
             _page.postValue(Resource.Loading())
             _preview.postValue(Resource.Loading())
             customRoutes.clear()

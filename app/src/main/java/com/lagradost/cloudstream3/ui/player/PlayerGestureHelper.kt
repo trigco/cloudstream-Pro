@@ -914,7 +914,7 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
      *
      * @param x           X coordinate of the tap in the view's coordinate space.
      * @param viewWidth   Width of the view (used to compute left/center/right zones).
-     * @param isLocked    Whether player controls are locked (suppresses double-tap seek).
+     * @param isLocked    Whether player controls are locked. Since 8.75 a double tap is a deliberate gesture, so seeking still works while locked (his request); single taps and swipe/speed gestures stay suppressed.
      * @param onSingleTap Invoked when it is determined to be a single tap; may be deferred.
      * @return true if a double-tap action was performed.
      */
@@ -926,7 +926,7 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
         }
 
         val timeSinceLast = System.currentTimeMillis() - lastTouchEndTime
-        return if (!isLocked && timeSinceLast < DOUBLE_TAP_MINIMUM_TIME_BETWEEN) {
+        return if (timeSinceLast < DOUBLE_TAP_MINIMUM_TIME_BETWEEN) {
             /** Double-tap */
             tapCount++
             doubleTapToken++ // cancel any pending single-tap runnable

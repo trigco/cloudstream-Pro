@@ -300,7 +300,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             view.hapticTick()
             val open = !binding.feedWatchStorylineText.isVisible
             binding.feedWatchStorylineText.isVisible = open
-            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_more)
+            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_info)
             val box = binding.feedWatchTitleBox
             val params = box.layoutParams
             params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -694,7 +694,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // default; the "More" label only appears with a plot.
         val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
         binding.feedWatchMore.isVisible = plot != null
-        binding.feedWatchMore.setText(R.string.feed_more)
+        binding.feedWatchMore.setText(R.string.feed_info)
         binding.feedWatchStorylineText.isVisible = false
         if (plot != null) binding.feedWatchStorylineText.text = plot
         // Phase 8.42: the collapse animation's full height was
