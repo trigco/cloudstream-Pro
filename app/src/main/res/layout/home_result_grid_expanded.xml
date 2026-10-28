@@ -189,7 +189,6 @@
             android:ellipsize="end"
             android:gravity="top|center_horizontal"
             android:maxLines="2"
-            android:minLines="2"
             android:paddingStart="5dp"
             android:paddingTop="5dp"
             android:paddingEnd="5dp"

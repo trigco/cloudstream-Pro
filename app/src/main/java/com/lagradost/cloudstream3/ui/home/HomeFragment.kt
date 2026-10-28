@@ -745,6 +745,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         TitleResolver.removeListener(titleResolveListener)
         MetadataResolver.removeListener(metadataResolveListener)
         homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
+        // Phase 8.73: never leave the activity's bottom nav translated
+        // away (or the switcher either) when Home's view goes away.
+        homeChromeHidden = false
+        homeChromeDy = 0
+        activity?.findViewById<View>(R.id.nav_view)?.let {
+            it.animate().cancel()
+            it.translationY = 0f
+        }
+        binding?.homeApiFab?.let {
+            it.animate().cancel()
+            it.translationY = 0f
+        }
         (activity as? ComponentActivity)?.detachBackPressedCallback("HomeFragment_BackPress")
         bottomSheetDialog?.ownHide()
         // Phase 8.17: the auto-rotation timer must not outlive the view.
@@ -819,8 +831,15 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         val visible = if (homeViewModel.isCustomActive) {
             lastHomeCopies
         } else {
+            // Phase 8.73: match hidden names NORMALIZED (trim +
+            // case-insensitive) — provider shelf names are scraped
+            // text and can vary in stray whitespace/casing between
+            // loads, which made Hide appear to do nothing.
             val hidden = hiddenCategoryNames()
-            lastHomeCopies.filterNot { it.list.name in hidden }
+                .map { it.trim().lowercase() }.toSet()
+            lastHomeCopies.filterNot {
+                it.list.name.trim().lowercase() in hidden
+            }
         }
         // Phase 8.50: Family Mode strips NSFW items from every
         // row (rows left empty disappear) on all home variants.
@@ -1048,6 +1067,56 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      * while this writes scale/alpha/translationY on the outer frame from
      * the *vertical* list scroll — disjoint properties on disjoint views.
      */
+    // Phase 8.73: provider-switcher + bottom-nav auto-hide state.
+    private var homeChromeHidden = false
+    private var homeChromeDy = 0
+
+    /**
+     * Phase 8.73 (his request): while scrolling down through Home, the
+     * provider switcher and the bottom navigation slide away; a slight
+     * scroll back up brings both back. Accumulated-delta thresholds so
+     * slow drags count too, not just flings. Transforms only.
+     */
+    private fun setupHomeChromeAutoHide(recyclerView: RecyclerView) {
+        if (!isLayout(PHONE)) return
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                homeChromeDy += dy
+                if (homeChromeDy > 40 && !homeChromeHidden) {
+                    homeChromeHidden = true
+                    homeChromeDy = 0
+                    applyHomeChromeVisibility()
+                } else if (homeChromeDy < -25 && homeChromeHidden) {
+                    homeChromeHidden = false
+                    homeChromeDy = 0
+                    applyHomeChromeVisibility()
+                }
+            }
+        })
+    }
+
+    private fun applyHomeChromeVisibility() {
+        val fab = binding?.homeApiFab
+        val nav = activity?.findViewById<View>(R.id.nav_view)
+        if (homeChromeHidden) {
+            if (fab != null) {
+                val lp = fab.layoutParams as? ViewGroup.MarginLayoutParams
+                val shift = fab.height + (lp?.bottomMargin ?: 0) + 8.toPx
+                fab.animate().translationY(shift.toFloat())
+                    .setDuration(200).start()
+            }
+            if (nav != null) {
+                val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
+                val shift = nav.height + (lp?.bottomMargin ?: 0) + 8.toPx
+                nav.animate().translationY(shift.toFloat())
+                    .setDuration(200).start()
+            }
+        } else {
+            fab?.animate()?.translationY(0f)?.setDuration(200)?.start()
+            nav?.animate()?.translationY(0f)?.setDuration(200)?.start()
+        }
+    }
+
     private fun setupHeroScrollCollapse(recyclerView: RecyclerView) {
         fun applyHeroCollapse() {
             val header = recyclerView.findViewHolderForAdapterPosition(0)?.itemView ?: return
@@ -1122,6 +1191,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                             }
 
                             private fun grow(delta: Float) {
+                                // Phase 8.73: only swell at the very
+                                // top — an edge absorb mid-fling used
+                                // to fight the scroll and read as
+                                // screen shake.
+                                if (view.computeVerticalScrollOffset() != 0) {
+                                    return
+                                }
                                 heroPullAnimator?.cancel()
                                 heroPullGrow =
                                     (heroPullGrow + delta * 0.10f)
@@ -1211,6 +1287,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 SectionEntranceAnimator(firstAnimatedPosition = 1)
                     .attachTo(homeMasterRecycler)
                 setupHeroScrollCollapse(homeMasterRecycler)
+                setupHomeChromeAutoHide(homeMasterRecycler)
 
                 // Phase 8.17: long-press a category's title strip and drag
                 // it up or down to reorder the home categories; the order
@@ -1281,9 +1358,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         if (!categoryDragSwapped) {
                             val pos = viewHolder.bindingAdapterPosition
                             if (pos > 0) {
-                                homeCategoryItems.getOrNull(pos - 1)?.let {
-                                    showCategoryMenu(it)
-                                }
+                                // Phase 8.73: resolve the row from the
+                                // ADAPTER's current list, not the
+                                // fragment-side copy — ParentItemAdapter
+                                // re-sorts (empty rows last), so the two
+                                // orders can differ and the menu hid the
+                                // WRONG category (his "hide হয় না").
+                                val item = homeMasterAdapter
+                                    ?.immutableCurrentList
+                                    ?.getOrNull(pos - 1)
+                                    ?: homeCategoryItems.getOrNull(pos - 1)
+                                item?.let { showCategoryMenu(it) }
                             }
                         }
                     }
@@ -1533,6 +1618,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         // state can leave it missing (see PHASE85C_CHANGES.md).
                         homeApiFab.isVisible = isLayout(PHONE)
                         anchorHomeApiFab()
+                        // Phase 8.73: re-assert the switcher label from
+                        // the actually-loaded provider on every load —
+                        // after switching back to the default it could
+                        // keep showing the previous provider's name.
+                        val loadedApiName = homeViewModel.apiName.value
+                        val loadedDisplay =
+                            context?.getDisplayName(loadedApiName)
+                                ?: loadedApiName
+                        homeApiFab.text = loadedDisplay
+                        homeChangeApi.text = loadedDisplay
 
                         //home_loaded?.isVisible = true
                         if (toggleRandomButton) {

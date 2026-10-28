@@ -237,10 +237,22 @@ object SearchResultBuilder {
         }
         cardView.isVisible = true
         if (!card.posterUrl.isNullOrEmpty()) {
-            cardView.loadImage(card.posterUrl, card.posterHeaders) {
-                error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
+            // Phase 8.73: loadImage() disposes + crossfades on EVERY
+            // bind, and Home rebinds constantly (resolved titles /
+            // ratings landing, row rotation) — every rebind blinked
+            // every visible poster, which he reads as the screen /
+            // categories shaking. Skip the reload when this view
+            // already shows this poster.
+            if (cardView.tag != card.posterUrl) {
+                cardView.tag = card.posterUrl
+                cardView.loadImage(card.posterUrl, card.posterHeaders) {
+                    error { getImageFromDrawable(itemView.context, R.drawable.poster_placeholder) }
+                }
             }
-        } else cardView.loadImage(R.drawable.poster_placeholder)
+        } else {
+            cardView.tag = null
+            cardView.loadImage(R.drawable.poster_placeholder)
+        }
 
         fun click(view: View?) {
             clickCallback.invoke(

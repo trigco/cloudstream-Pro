@@ -142,7 +142,10 @@ class FeedAdapter(
             val context = binding.root.context
             val liked = FeedLikes.isLiked(context, entry.response.url)
             binding.feedCardLike.setImageResource(
-                if (liked) R.drawable.ic_baseline_favorite_24
+                // Phase 8.73: a genuinely FILLED heart when liked —
+                // the old "filled" drawable is a hollow outline in
+                // this project, so the tap only reddened the rim.
+                if (liked) R.drawable.ic_favorite_filled_24
                 else R.drawable.ic_baseline_favorite_border_24
             )
             binding.feedCardLike.imageTintList = ContextCompat.getColorStateList(

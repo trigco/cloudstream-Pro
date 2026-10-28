@@ -380,6 +380,7 @@
     <string name="feed_empty">No content found. Check your providers, then pull to refresh.</string>
     <string name="feed_like">Like</string>
     <string name="feed_up_next">Up next</string>
+    <string name="feed_for_you">For You</string>
     <string name="pref_category_metadata">Ratings (Universal)</string>
     <string name="tmdb_key_title">TMDB API Key</string>
     <string name="omdb_key_title">IMDb API Key (OMDb)</string>

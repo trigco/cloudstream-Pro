@@ -25,6 +25,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.materialswitch.MaterialSwitch
 import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
 import com.lagradost.cloudstream3.R
@@ -362,7 +363,10 @@ class NuvioPluginsFragment : Fragment() {
                 "toggle" -> {
                     if (field.key.isBlank()) continue
                     val raw = currentRaw(field)
-                    val switch = SwitchCompat(ctx).apply {
+                    // Phase 8.72: MaterialSwitch — Google's M3 switch
+                    // with the thumb-grow/check animation he asked for
+                    // (was a plain SwitchCompat).
+                    val switch = MaterialSwitch(ctx).apply {
                         text = field.label.ifBlank { field.key }
                         isChecked = when (raw) {
                             is Boolean -> raw

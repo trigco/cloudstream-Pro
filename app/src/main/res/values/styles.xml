@@ -240,10 +240,15 @@
     </style>
 
     <style name="MonetMode">
-        <item name="primaryGrayBackground">@color/material_dynamic_neutral20</item>
+        <!-- Phase 8.72: surfaces move OFF the all-neutral (gray) palette
+             onto wallpaper-tinted dynamic tones — his report was that
+             Material You on Android 12+ showed only gray. Cards/chips
+             take a primary tint, icon surfaces a secondary tint; the
+             page background and text stay neutral for contrast. -->
+        <item name="primaryGrayBackground">@color/material_dynamic_primary20</item>
         <item name="primaryBlackBackground">@color/material_dynamic_neutral10</item>
-        <item name="iconGrayBackground">@color/material_dynamic_neutral20</item>
-        <item name="boxItemBackground">@color/material_dynamic_neutral20</item>
+        <item name="iconGrayBackground">@color/material_dynamic_secondary20</item>
+        <item name="boxItemBackground">@color/material_dynamic_primary20</item>
         <item name="textColor">@color/material_dynamic_neutral90</item>
         <item name="grayTextColor">@color/material_dynamic_neutral60</item>
         <item name="white">@color/material_dynamic_neutral90</item>

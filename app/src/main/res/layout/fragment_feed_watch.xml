@@ -479,15 +479,31 @@
         </LinearLayout>
         </HorizontalScrollView>
 
-        <TextView
-            android:id="@+id/feed_watch_upnext_label"
+        <!-- Phase 8.73: "For You" section header with a red underline
+             bar (his suggestion) — reads as a deliberate header
+             instead of a floating label with dead space under the
+             pills; top margin tightened 18dp -> 10dp. -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="@string/feed_up_next"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="10dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/feed_watch_upnext_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/feed_for_you"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="34dp"
+                android:layout_height="3dp"
+                android:layout_marginTop="4dp"
+                android:background="@color/colorPrimaryRed" />
+        </LinearLayout>
     </LinearLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
