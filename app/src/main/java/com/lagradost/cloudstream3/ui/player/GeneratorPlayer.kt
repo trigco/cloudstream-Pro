@@ -142,7 +142,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
-@OptIn(UnstableApi::class)
 /**
  * One row of the grouped source list (8.69): either a provider group header
  * ("▸ Dahmermovies · 23") or one playable link. Items carry their index into
@@ -194,6 +193,7 @@ private class GroupedSourcesAdapter(
     }
 }
 
+@OptIn(UnstableApi::class)
 class GeneratorPlayer : FullScreenPlayer() {
     companion object {
         const val NOTIFICATION_ID = 2326
