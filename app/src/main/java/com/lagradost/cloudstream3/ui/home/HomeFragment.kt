@@ -424,6 +424,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // same picker (his request) so providers and custom
             // lists are managed in one place.
             val customLists = HomeCustomLists.getLists(this)
+            // Phase 8.74: the customs as DISPLAYED (pinned ones first);
+            // updateList() recomputes it, click/pin handlers read it.
+            var displayCustoms: List<HomeCustomLists.CustomList> = customLists
             builder.show()
             builder.let { dialog ->
                 val isMultiLang = getApiProviderLangSettings().let { set ->
@@ -507,9 +510,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
                         val providerApi =
                             currentValidApis.getOrNull(position)
+                        // Phase 8.74: custom lists pin too — their key
+                        // in the same pinned store is "custom:<id>".
+                        val customAtPos = if (providerApi == null) {
+                            displayCustoms.getOrNull(
+                                position - currentValidApis.size
+                            )
+                        } else {
+                            null
+                        }
                         val isPinned =
-                            providerApi != null &&
-                                pinnedphashset.contains(providerApi.name)
+                            (providerApi != null &&
+                                pinnedphashset.contains(providerApi.name)) ||
+                                (customAtPos != null &&
+                                    pinnedphashset.contains(
+                                        "custom:" + customAtPos.id
+                                    ))
                         pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
 
                         val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
@@ -540,7 +556,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         currentApiName.let(callback)
                         dialog.dismissSafe()
                     } else if (onCustomSelect != null) {
-                        val list = customLists.getOrNull(
+                        val list = displayCustoms.getOrNull(
                             i - currentValidApis.size
                         )
                         if (list != null) {
@@ -598,13 +614,30 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         val displayName = getDisplayName(it.name)
                         if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
                     }
-                    val customNames = customLists.map { "\u2605 " + it.name }
+                    // Phase 8.74: pinned customs join the top group
+                    // like pinned providers (same store, "custom:<id>"
+                    // keys, most-recent pin first), and the star
+                    // prefix beside custom names is gone (his call).
+                    val pinnedCustoms = pinnedp.asReversed()
+                        .mapNotNull { key ->
+                            if (key.startsWith("custom:")) {
+                                customLists.firstOrNull {
+                                    "custom:" + it.id == key
+                                }
+                            } else {
+                                null
+                            }
+                        }
+                    displayCustoms = pinnedCustoms + customLists.filterNot {
+                        pinnedphashset.contains("custom:" + it.id)
+                    }
+                    val customNames = displayCustoms.map { it.name }
                     var index = currentValidApis.map { it.name }
                         .indexOf(currentApiName)
                     val activeCustomPos =
                         HomeCustomLists.activeList(this@selectHomepage)
                             ?.let { active ->
-                                customLists.indexOfFirst {
+                                displayCustoms.indexOfFirst {
                                     it.id == active.id
                                 }
                             } ?: -1
@@ -629,6 +662,25 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         }
                         DataStoreHelper.pinnedProviders = pinnedp.toTypedArray()
                         updateList()
+                    } else {
+                        // Phase 8.74: custom lists pin/unpin on hold
+                        // exactly like providers.
+                        val custom = displayCustoms.getOrNull(
+                            i - currentValidApis.size
+                        )
+                        if (custom != null) {
+                            val pinnedp =
+                                DataStoreHelper.pinnedProviders.toMutableList()
+                            val key = "custom:" + custom.id
+                            if (pinnedp.contains(key)) {
+                                pinnedp.remove(key)
+                            } else {
+                                pinnedp.add(key)
+                            }
+                            DataStoreHelper.pinnedProviders =
+                                pinnedp.toTypedArray()
+                            updateList()
+                        }
                     }
                     true
                 }
@@ -1081,15 +1133,27 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         if (!isLayout(PHONE)) return
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (dy == 0) return
+                // Phase 8.74: he found hide AND show both laggy — the
+                // accumulator kept the opposite direction's backlog,
+                // so reversing direction first had to "pay it off".
+                // Reset on any direction flip and use small thresholds.
+                if ((dy > 0) != (homeChromeDy > 0)) homeChromeDy = 0
                 homeChromeDy += dy
-                if (homeChromeDy > 40 && !homeChromeHidden) {
+                if (homeChromeDy > 24 && !homeChromeHidden) {
                     homeChromeHidden = true
                     homeChromeDy = 0
                     applyHomeChromeVisibility()
-                } else if (homeChromeDy < -25 && homeChromeHidden) {
+                } else if (homeChromeDy < -12 && homeChromeHidden) {
                     homeChromeHidden = false
                     homeChromeDy = 0
                     applyHomeChromeVisibility()
+                }
+            }
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    homeChromeDy = 0
                 }
             }
         })
@@ -1103,17 +1167,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 val lp = fab.layoutParams as? ViewGroup.MarginLayoutParams
                 val shift = fab.height + (lp?.bottomMargin ?: 0) + 8.toPx
                 fab.animate().translationY(shift.toFloat())
-                    .setDuration(200).start()
+                    .setDuration(150).start()
             }
             if (nav != null) {
                 val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
                 val shift = nav.height + (lp?.bottomMargin ?: 0) + 8.toPx
                 nav.animate().translationY(shift.toFloat())
-                    .setDuration(200).start()
+                    .setDuration(150).start()
             }
         } else {
-            fab?.animate()?.translationY(0f)?.setDuration(200)?.start()
-            nav?.animate()?.translationY(0f)?.setDuration(200)?.start()
+            fab?.animate()?.translationY(0f)?.setDuration(150)?.start()
+            nav?.animate()?.translationY(0f)?.setDuration(150)?.start()
         }
     }
 

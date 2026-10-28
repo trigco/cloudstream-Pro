@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.74: switch track colours matching his reference shot —
+     light blue when ON, dark neutral when OFF. Applied to every
+     switch in the app via the theme's switchStyle /
+     materialSwitchStyle (see styles.xml). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#A8C7FA" android:state_checked="true" />
+    <item android:color="#3F4448" />
+</selector>

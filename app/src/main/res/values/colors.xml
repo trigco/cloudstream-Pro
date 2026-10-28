@@ -101,6 +101,7 @@
     <!--Other Colors -->
     <color name="colorPrimaryBlue">#5664B7</color>
     <color name="colorPrimaryRed">#E50914</color> <!-- Phase 5A: Play-button red -->
+    <color name="ratingStarGold">#FFC107</color> <!-- Phase 8.74: gold rating star (his request) -->
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>
     <color name="colorPrimaryGreenApple">#48E484</color>

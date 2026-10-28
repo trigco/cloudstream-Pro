@@ -317,6 +317,11 @@ class HomeParentItemAdapterPreview(
         private val previewViewpagerText: ViewGroup =
             itemView.findViewById(R.id.home_preview_viewpager_text)
 
+        // Phase 8.74: hero loading skeleton (phone head layout only;
+        // null on the TV head, which keeps the old behaviour).
+        private val heroSkeleton: com.facebook.shimmer.ShimmerFrameLayout? =
+            itemView.findViewById(R.id.home_hero_skeleton)
+
         // private val previewHeader: FrameLayout = itemView.findViewById(R.id.home_preview)
         private val resumeHolder: View = itemView.findViewById(R.id.home_watch_holder)
         private val resumeRecyclerView: RecyclerView =
@@ -727,6 +732,8 @@ class HomeParentItemAdapterPreview(
 
                     previewViewpager.isVisible = true
                     previewViewpagerText.isVisible = true
+                    heroSkeleton?.stopShimmer()
+                    heroSkeleton?.isVisible = false
                     alternativeAccountPadding?.isVisible = false
                     (binding as? FragmentHomeHeadTvBinding)?.apply {
                         homePreviewInfoBtt.isVisible = true
@@ -743,8 +750,25 @@ class HomeParentItemAdapterPreview(
                     previewAdapter.submitList(listOf())
                     previewViewpager.setCurrentItem(0, false)
                     previewViewpager.isVisible = false
-                    previewViewpagerText.isVisible = false
-                    alternativeAccountPadding?.isVisible = true
+                    // Phase 8.74: do NOT collapse the 500dp hero frame
+                    // while a real provider's preview is loading or
+                    // failed — that collapse yanked every category up
+                    // (the shake he reported). Hold the space with the
+                    // shimmer skeleton instead. Only the None provider
+                    // (no hero by design) keeps the compact padding.
+                    if (viewModel.apiName.value == noneApi.name ||
+                        heroSkeleton == null
+                    ) {
+                        previewViewpagerText.isVisible = false
+                        heroSkeleton?.stopShimmer()
+                        heroSkeleton?.isVisible = false
+                        alternativeAccountPadding?.isVisible = true
+                    } else {
+                        previewViewpagerText.isVisible = true
+                        heroSkeleton?.isVisible = true
+                        heroSkeleton?.startShimmer()
+                        alternativeAccountPadding?.isVisible = false
+                    }
                     (binding as? FragmentHomeHeadTvBinding)?.apply {
                         homePreviewInfoBtt.isVisible = false
                     }

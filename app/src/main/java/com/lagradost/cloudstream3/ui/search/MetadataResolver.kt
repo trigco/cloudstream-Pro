@@ -21,6 +21,28 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * Phase 8.74: render a meta string with every ★ glyph in gold (his
+ * request — the rating star beside titles should be yellow). Returns
+ * the text unchanged when it contains no star.
+ */
+fun goldStarText(text: String): CharSequence {
+    if (!text.contains('★')) return text
+    val spannable = android.text.SpannableString(text)
+    var index = text.indexOf('★')
+    while (index >= 0) {
+        spannable.setSpan(
+            android.text.style.ForegroundColorSpan(
+                android.graphics.Color.parseColor("#FFC107")
+            ),
+            index, index + 1,
+            android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        index = text.indexOf('★', index + 1)
+    }
+    return spannable
+}
+
+/**
  * Phase 8.56 — universal ratings (his ask): many providers ship no
  * score, so cards and the details page show no rating at all. When
  * the user has entered a TMDB and/or IMDb (OMDb) API key under

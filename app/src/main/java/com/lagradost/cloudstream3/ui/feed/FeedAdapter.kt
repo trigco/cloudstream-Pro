@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FeedCardBinding
 import com.lagradost.cloudstream3.ui.search.MetadataResolver
+import com.lagradost.cloudstream3.ui.search.goldStarText
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -113,13 +114,13 @@ class FeedAdapter(
             // the card tag matches the watch screen's tag.
             val shownType = TitleResolver.cachedType(context, response.url)
                 ?: response.type
-            binding.feedCardMeta.text = buildString {
+            binding.feedCardMeta.text = goldStarText(buildString {
                 append(entry.apiName)
                 append(" • ")
                 append(typeLabel(shownType))
                 if (rating != null) append(" • ★ ").append(rating)
                 if (dubSub != null) append(" • ").append(dubSub)
-            }
+            })
             bindLike(entry)
 
             binding.root.setOnClickListener { onPlay(entry) }

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 8.71: transparent — he asked for the dark circle under the feed
-     player's cast/audio/subtitle and play/pause icons to go away. The
-     shape stays an (invisible) oval so padding/ripple bounds are kept. -->
+<!-- 8.71: made transparent (he disliked the heavy dark circles).
+     8.74: a LIGHT black oval is back (his call) — white icons vanished
+     on bright videos; ~20% black keeps them readable without the old
+     heavy disc. Used by the feed player's cast/audio/subtitle and
+     play/pause buttons, the fullscreen button, and the feed card
+     heart. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="@android:color/transparent" />
+    <solid android:color="#33000000" />
 </shape>

@@ -177,8 +177,8 @@
 
                 <androidx.mediarouter.app.MediaRouteButton
                     android:id="@+id/feed_watch_cast"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:mediaRouteTypes="user"
                     android:visibility="gone"
@@ -186,22 +186,22 @@
 
                 <ImageButton
                     android:id="@+id/feed_watch_audio"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_audio"
-                    android:padding="9dp"
+                    android:padding="10dp"
                     android:src="@drawable/feed_audio" />
 
                 <ImageButton
                     android:id="@+id/feed_watch_subtitles"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_subtitles"
-                    android:padding="9dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_baseline_subtitles_24" />
             </LinearLayout>
 
@@ -255,7 +255,7 @@
                     android:id="@+id/feed_watch_fullscreen"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/feed_center_button_bg"
                     android:contentDescription="@string/feed_fullscreen"
                     android:src="@drawable/baseline_fullscreen_24" />
 
