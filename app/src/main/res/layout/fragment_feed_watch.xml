@@ -83,53 +83,84 @@
                 android:text="@string/feed_retry" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/feed_watch_skip_back"
+        <!-- 8.70: the main player's YouTube-style seek wedge (8.62),
+             ported to the feed player — replaces the old skip badges. -->
+        <FrameLayout
+            android:id="@+id/feed_seek_fx_left"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginEnd="180dp"
-            android:gravity="center"
-            android:orientation="vertical"
             android:visibility="gone">
 
-            <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:contentDescription="@null"
-                android:src="@drawable/netflix_skip_back" />
+            <View
+                android:layout_width="300dp"
+                android:layout_height="560dp"
+                android:layout_gravity="center_vertical|start"
+                android:layout_marginStart="-150dp"
+                android:background="@drawable/seek_wedge_bg" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="10s"
-                android:textColor="@android:color/white"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+                android:layout_gravity="center_vertical|start"
+                android:layout_marginStart="36dp"
+                android:gravity="center"
+                android:orientation="vertical">
 
-        <LinearLayout
-            android:id="@+id/feed_watch_skip_forward"
+                <ImageView
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:contentDescription="@null"
+                    android:scaleX="-1"
+                    android:src="@drawable/ic_seek_triangles"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:id="@+id/feed_seek_fx_left_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/feed_seek_fx_right"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginStart="180dp"
-            android:gravity="center"
-            android:orientation="vertical"
             android:visibility="gone">
 
-            <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:contentDescription="@null"
-                android:src="@drawable/netflix_skip_forward" />
+            <View
+                android:layout_width="300dp"
+                android:layout_height="560dp"
+                android:layout_gravity="center_vertical|end"
+                android:layout_marginEnd="-150dp"
+                android:background="@drawable/seek_wedge_bg" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="10s"
-                android:textColor="@android:color/white"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+                android:layout_gravity="center_vertical|end"
+                android:layout_marginEnd="36dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageView
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_seek_triangles"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:id="@+id/feed_seek_fx_right_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </FrameLayout>
 
         <FrameLayout
             android:id="@+id/feed_watch_controls"
@@ -143,6 +174,15 @@
                 android:layout_gravity="top|end"
                 android:orientation="horizontal"
                 android:padding="4dp">
+
+                <androidx.mediarouter.app.MediaRouteButton
+                    android:id="@+id/feed_watch_cast"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/feed_center_button_bg"
+                    android:mediaRouteTypes="user"
+                    android:visibility="gone"
+                    app:mediaRouteButtonTint="?attr/textColor" />
 
                 <ImageButton
                     android:id="@+id/feed_watch_audio"
@@ -308,11 +348,14 @@
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
                 android:orientation="horizontal"
-                android:padding="6dp">
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
 
                 <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:contentDescription="@string/feed_sources"
                     android:src="@drawable/ic_baseline_dns_24" />
 
@@ -322,7 +365,7 @@
                     android:layout_marginStart="6dp"
                     android:text="@string/feed_sources"
                     android:textColor="@android:color/white"
-                    android:textSize="13sp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -335,11 +378,14 @@
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
                 android:orientation="horizontal"
-                android:padding="6dp">
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
 
                 <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:contentDescription="@string/episodes"
                     android:src="@drawable/baseline_list_alt_24" />
 
@@ -349,7 +395,7 @@
                     android:layout_marginStart="6dp"
                     android:text="@string/episodes"
                     android:textColor="@android:color/white"
-                    android:textSize="13sp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -362,19 +408,22 @@
                 android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
                 android:orientation="horizontal"
-                android:padding="6dp">
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
 
                 <ProgressBar
                     android:id="@+id/feed_watch_download_progress"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:indeterminateTint="@android:color/white"
                     android:visibility="gone" />
 
                 <ImageView
                     android:id="@+id/feed_watch_download_icon"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:contentDescription="@string/download"
                     android:src="@drawable/ic_feed_download" />
 
@@ -384,7 +433,7 @@
                     android:layout_marginStart="6dp"
                     android:text="@string/download"
                     android:textColor="@android:color/white"
-                    android:textSize="13sp" />
+                    android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -394,18 +443,21 @@
              once set. -->
         <LinearLayout
             android:id="@+id/feed_watch_list_btn"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:background="@drawable/feed_pill_bg"
             android:foreground="?android:attr/selectableItemBackgroundBorderless"
             android:gravity="center"
             android:orientation="horizontal"
-            android:padding="6dp">
+            android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
 
             <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
                 android:contentDescription="@string/add_to_list"
                 android:src="@drawable/ic_baseline_bookmark_24" />
 
@@ -416,7 +468,7 @@
                 android:layout_marginStart="6dp"
                 android:text="@string/add_to_list"
                 android:textColor="@android:color/white"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <TextView

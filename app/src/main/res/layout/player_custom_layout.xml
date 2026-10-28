@@ -439,6 +439,7 @@
 
                 <FrameLayout
                     android:id="@+id/player_rew_holder"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical|start"
@@ -494,6 +495,7 @@
                         android:layout_width="70dp"
                         android:layout_height="70dp"
                         android:layout_gravity="center"
+                        android:padding="14dp"
                         android:background="@drawable/video_tap_button"
                         android:nextFocusLeft="@id/player_rew"
 
@@ -509,6 +511,7 @@
 
                 <FrameLayout
                     android:id="@+id/player_ffwd_holder"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical|end"
@@ -1133,6 +1136,88 @@
             android:text="@string/episodes"
             android:visibility="gone" />
     </LinearLayout>
+
+
+    <!-- Phase 8.62: YouTube-style double-tap seek wedge - a tall
+         half-disc hugs the tapped edge, double triangles + seconds. -->
+    <FrameLayout
+        android:id="@+id/player_seek_fx_left"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="300dp"
+            android:layout_height="560dp"
+            android:layout_gravity="center_vertical|start"
+            android:layout_marginStart="-150dp"
+            android:background="@drawable/seek_wedge_bg" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|start"
+            android:layout_marginStart="36dp"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleX="-1"
+                android:src="@drawable/ic_seek_triangles"
+                app:tint="@color/white"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/player_seek_fx_left_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                tools:text="10 seconds" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/player_seek_fx_right"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="300dp"
+            android:layout_height="560dp"
+            android:layout_gravity="center_vertical|end"
+            android:layout_marginEnd="-150dp"
+            android:background="@drawable/seek_wedge_bg" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:layout_marginEnd="36dp"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:src="@drawable/ic_seek_triangles"
+                app:tint="@color/white"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/player_seek_fx_right_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                tools:text="10 seconds" />
+        </LinearLayout>
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/player_episode_overlay"

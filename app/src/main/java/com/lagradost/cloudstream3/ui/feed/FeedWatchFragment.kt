@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
 import androidx.media3.common.C.TRACK_TYPE_VIDEO
@@ -34,6 +35,10 @@ import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.mvvm.logError
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.lagradost.cloudstream3.utils.AppContextUtils.isCastApiAvailable
 import com.lagradost.cloudstream3.utils.AppContextUtils.loadSearchResult
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.ui.WatchType
@@ -81,10 +86,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
     private val hideControlsRunnable = Runnable { binding?.feedWatchControls?.isVisible = false }
-    private val skipHideRunnable = Runnable {
-        binding?.feedWatchSkipBack?.isVisible = false
-        binding?.feedWatchSkipForward?.isVisible = false
-    }
+    // 8.70: seek-wedge state (ported from the main player, 8.62) —
+    // a burst counter so repeated double-taps show 10/20/30 seconds.
+    private var seekFxToken = 0
+    private var seekBurstMs = 0L
+    private var seekBurstAt = 0L
 
     // Phase 8.38: navigating to the batch download page must not
     // kill the video being watched; onDestroyView checks this.
@@ -343,6 +349,27 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         // Phase 8.34: quick actions beside the title — source/dub,
         // episodes, download — the Premium Details pill row idea.
+        // Phase 8.62: TV cast option in the feed - the same
+        // MediaRouteButton wiring as the details page. The button
+        // starts gone and only appears when the Cast API is
+        // available and the CastContext initialises.
+        binding.feedWatchCast.let { castBtn ->
+            activity?.let { act ->
+                if (act.isCastApiAvailable()) {
+                    try {
+                        CastButtonFactory.setUpMediaRouteButton(act, castBtn)
+                        CastContext.getSharedInstance(act.applicationContext) {
+                            it.run()
+                        }.addOnCompleteListener {
+                            castBtn.isGone = !it.isSuccessful
+                        }
+                    } catch (e: Exception) {
+                        logError(e)
+                        castBtn.isGone = true
+                    }
+                }
+            }
+        }
         binding.feedWatchSourceBtn.setOnClickListener { view ->
             view.hapticTick()
             showQuality()
@@ -722,10 +749,35 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val duration = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
         exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, duration))
         binding.feedWatchPlayer.hapticTick()
-        binding.feedWatchSkipBack.isVisible = back
-        binding.feedWatchSkipForward.isVisible = !back
-        handler.removeCallbacks(skipHideRunnable)
-        handler.postDelayed(skipHideRunnable, 600L)
+        // 8.70: show the main player's seek wedge; repeated taps inside
+        // the burst window accumulate the displayed seconds.
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - seekBurstAt > 900L) seekBurstMs = 0L
+        seekBurstAt = now
+        seekBurstMs += 10_000L
+        showFeedSeekFx(back, seekBurstMs / 1000L)
+    }
+
+    /** The main player's wedge animation (PlayerView.showSeekFx, 8.62). */
+    private fun showFeedSeekFx(back: Boolean, seconds: Long) {
+        val binding = binding ?: return
+        val fx = if (back) binding.feedSeekFxLeft else binding.feedSeekFxRight
+        val label = if (back) binding.feedSeekFxLeftText else binding.feedSeekFxRightText
+        label.text = getString(R.string.seek_fx_seconds_format, seconds)
+        val token = ++seekFxToken
+        fx.animate().cancel()
+        fx.visibility = android.view.View.VISIBLE
+        fx.alpha = 0f
+        fx.animate().alpha(1f).setDuration(130).start()
+        fx.postDelayed({
+            if (token == seekFxToken) {
+                fx.animate().alpha(0f).setDuration(240)
+                    .withEndAction {
+                        if (token == seekFxToken) fx.visibility = android.view.View.GONE
+                    }
+                    .start()
+            }
+        }, 620)
     }
 
     private fun minimizeToFeed() {

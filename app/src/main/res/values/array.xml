@@ -283,16 +283,10 @@
 
     <string-array name="themes_names">
         <item>Dark</item>
-        <item>System</item>
-        <item>Light</item>
-        <item>AMOLED</item>
         <item>Material You</item>
     </string-array>
     <string-array name="themes_names_values">
         <item>AmoledLight</item>
-        <item>System</item>
-        <item>Light</item>
-        <item>Amoled</item>
         <item>Monet</item>
     </string-array>
 

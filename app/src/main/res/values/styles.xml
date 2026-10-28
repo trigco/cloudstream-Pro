@@ -96,6 +96,7 @@
     </style>
 
     <style name="AmoledModeLight" parent="AmoledMode">
+        <item name="primaryBlackBackground">@color/darkThemeBackground</item>
         <item name="primaryGrayBackground">@color/amoledModeLight</item>
         <item name="boxItemBackground">@color/amoledModeLight</item>
     </style>

@@ -1227,13 +1227,21 @@ class CS3IPlayer : IPlayer {
                     DefaultLoadControl.Builder()
                         .setTargetBufferBytes(
                             if (cacheSize <= 0) {
-                                DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES
+                                // Phase 8.59: default byte budget for
+                                // the read-ahead buffer (was: unset, so
+                                // only the 50 s time cap ruled).
+                                192 * 1024 * 1024
                             } else {
                                 if (cacheSize > Int.MAX_VALUE) Int.MAX_VALUE else cacheSize.toInt()
                             }
                         )
+                        // Phase 8.59: let the byte budget and the time
+                        // budget both bind (mpv-style preload): buffer
+                        // ahead up to videoBufferMs, capped by bytes so
+                        // low-RAM phones are not drowned.
+                        .setPrioritizeTimeOverSizeThresholds(false)
                         .setBackBuffer(
-                            30000,
+                            90000,
                             true
                         )
                         .setBufferDurationsMs(

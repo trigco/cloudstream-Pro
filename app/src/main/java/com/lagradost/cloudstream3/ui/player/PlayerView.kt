@@ -189,6 +189,11 @@ class PlayerView @JvmOverloads constructor(
     internal var playerFfwd: View? = null
     internal var exoRewText: TextView? = null
     internal var exoFfwdText: TextView? = null
+    internal var seekFxLeft: View? = null
+    internal var seekFxRight: View? = null
+    internal var seekFxLeftText: TextView? = null
+    internal var seekFxRightText: TextView? = null
+    private var seekFxToken = 0
     internal var playerCenterMenu: View? = null
     internal var playerRewHolder: View? = null
     internal var playerFfwdHolder: View? = null
@@ -224,6 +229,31 @@ class PlayerView @JvmOverloads constructor(
     // Kept so SubtitlesFragment can unsubscribe the exact same reference.
     private val subStyleListener: (SaveCaptionStyle) -> Unit = ::onSubStyleChanged
 
+    /**
+     * Phase 8.62: YouTube-style seek wedge - the half-disc on the
+     * tapped edge fades in with double triangles and the seek
+     * amount, then fades out. Repeated taps restart the clock.
+     */
+    fun showSeekFx(forward: Boolean, seconds: Long) {
+        val fx = (if (forward) seekFxRight else seekFxLeft) ?: return
+        val label = if (forward) seekFxRightText else seekFxLeftText
+        label?.text = context.getString(R.string.seek_fx_seconds_format, seconds)
+        val token = ++seekFxToken
+        fx.animate().cancel()
+        fx.visibility = View.VISIBLE
+        fx.alpha = 0f
+        fx.animate().alpha(1f).setDuration(130).start()
+        fx.postDelayed({
+            if (token == seekFxToken) {
+                fx.animate().alpha(0f).setDuration(240)
+                    .withEndAction {
+                        if (token == seekFxToken) fx.visibility = View.GONE
+                    }
+                    .start()
+            }
+        }, 620)
+    }
+
     /** View discovery */
 
     /**
@@ -236,6 +266,10 @@ class PlayerView @JvmOverloads constructor(
         exoPlayerView = root.findViewById(R.id.player_view)
         exoPosition = root.findViewById(R.id.exo_position)
         exoRewText = root.findViewById(R.id.exo_rew_text)
+        seekFxLeft = root.findViewById(R.id.player_seek_fx_left)
+        seekFxRight = root.findViewById(R.id.player_seek_fx_right)
+        seekFxLeftText = root.findViewById(R.id.player_seek_fx_left_text)
+        seekFxRightText = root.findViewById(R.id.player_seek_fx_right_text)
         piphide = root.findViewById(R.id.piphide)
         playerBuffering = root.findViewById(R.id.player_buffering)
         playerCenterMenu = root.findViewById(R.id.player_center_menu)
@@ -403,10 +437,23 @@ class PlayerView @JvmOverloads constructor(
                 val cs3 = player as? CS3IPlayer ?: return
                 cs3.cacheSize =
                     settingsManager.getInt(context.getString(R.string.video_buffer_size_key), 0) * 1024L * 1024L
+                // Phase 8.59: disk cache gets a 512 MB floor when the
+                // user never set one (0 used to mean "evict instantly",
+                // so nothing ever persisted between sessions).
+                val diskMb =
+                    settingsManager.getInt(context.getString(R.string.video_buffer_disk_key), 0)
                 cs3.simpleCacheSize =
-                    settingsManager.getInt(context.getString(R.string.video_buffer_disk_key), 0) * 1024L * 1024L
+                    (if (diskMb > 0) diskMb else 512) * 1024L * 1024L
+                // Phase 8.59: read-ahead defaults to the Preload buffer
+                // setting (5 min) instead of ExoPlayer's 50 s; an explicit
+                // buffer-length value still wins.
+                val lengthSec =
+                    settingsManager.getInt(context.getString(R.string.video_buffer_length_key), 0)
+                val preloadMin =
+                    settingsManager.getString(context.getString(R.string.player_preload_buffer_key), "5")
+                        ?.toIntOrNull() ?: 5
                 cs3.videoBufferMs =
-                    settingsManager.getInt(context.getString(R.string.video_buffer_length_key), 0) * 1000L
+                    if (lengthSec > 0) lengthSec * 1000L else preloadMin * 60_000L
             } catch (e: Exception) {
                 logError(e)
             }

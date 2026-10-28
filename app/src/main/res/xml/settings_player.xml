@@ -148,7 +148,7 @@
             android:icon="@drawable/ic_baseline_touch_app_24"
             android:summary="@string/double_tap_to_seek_settings_des"
             android:title="@string/double_tap_to_seek_settings"
-            app:defaultValue="false"
+            app:defaultValue="true"
             app:key="@string/double_tap_enabled_key" />
         <SwitchPreference
             android:icon="@drawable/netflix_pause"
@@ -171,6 +171,14 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/pref_category_cache">
+        <ListPreference
+            android:defaultValue="5"
+            android:entries="@array/player_preload_buffer_entries"
+            android:entryValues="@array/player_preload_buffer_values"
+            android:icon="@drawable/ic_baseline_storage_24"
+            android:summary="@string/player_preload_buffer_des"
+            android:title="@string/player_preload_buffer"
+            app:key="@string/player_preload_buffer_key" />
         <Preference
             android:icon="@drawable/ic_baseline_storage_24"
             android:key="@string/video_buffer_disk_key"

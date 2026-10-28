@@ -355,10 +355,12 @@ object CommonActivity {
 
         val currentTheme =
             when (settingsManager.getString(act.getString(R.string.app_theme_key), "AmoledLight")) {
-                "System" -> mapSystemTheme(act)
+                // Phase 8.61: Light / AMOLED / System themes are
+                // gone (his call) - old values land on the gray Dark.
+                "System" -> R.style.AmoledModeLight
                 "Black" -> R.style.AppTheme
-                "Light" -> R.style.LightMode
-                "Amoled" -> R.style.AmoledMode
+                "Light" -> R.style.AmoledModeLight
+                "Amoled" -> R.style.AmoledModeLight
                 "AmoledLight" -> R.style.AmoledModeLight
                 "Monet" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
                     R.style.MonetMode else R.style.AppTheme

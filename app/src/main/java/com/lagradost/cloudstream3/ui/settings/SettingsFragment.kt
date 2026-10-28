@@ -588,6 +588,17 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                 navigate(R.id.action_navigation_global_to_navigation_settings_extensions)
             }
 
+            // Stremio Addons is likewise a custom screen (addon list),
+            // so its row navigates to its own page.
+            settingsStremioAddons.setOnClickListener {
+                navigate(R.id.action_navigation_global_to_navigation_settings_stremio)
+            }
+
+            // Nuvio Plugins (bridge step 2) — JS scraper repositories.
+            settingsNuvioPlugins.setOnClickListener {
+                navigate(R.id.action_navigation_global_to_navigation_settings_nuvio)
+            }
+
             // Phase 8.45: Categories lives in the Content group
             // (his ask) and opens the custom home list manager.
             settingsCategories.setOnClickListener {

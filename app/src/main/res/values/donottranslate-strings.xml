@@ -163,4 +163,5 @@
         <item quantity="one">@string/episode</item>
         <item quantity="other">@string/episodes</item>
     </plurals>
+    <string name="player_preload_buffer_key">player_preload_buffer_key</string>
 </resources>
