@@ -9,7 +9,7 @@
 
     <color name="primaryGrayBackground">#121212</color> <!-- Phase 5A: near-black surface on pure black --> <!--0f0f10 0E0E10 303135 2B2C30-->
     <color name="primaryBlackBackground">#000000</color> <!-- Phase 5A: pure black default --> <!--1C1C20 191a1f 19181E 202125 1C1C20-->
-    <color name="iconGrayBackground">#1F1F1F</color> <!--141419 202125-->
+    <color name="iconGrayBackground">#22222E</color> <!--141419 202125. Phase 8.77: SkyStream surface highlight -->
     <color name="boxItemBackground">#232323</color> <!-- 17171B 1B1B20-->
 
     <color name="textColor">#FFFFFF</color> <!--FFF-->
@@ -30,8 +30,8 @@
     <color name="progressBackgroundColor">#1AFFFFFF</color>
 
     <color name="dubColorText">#121950</color> <!--3b65f5 f18c82 8294F1-->
-    <color name="amoledModeLight">#1F1F1F</color>
-    <color name="darkThemeBackground">#121212</color> <!-- Phase 8.61: Dark theme background - gray, not pure black -->
+    <color name="amoledModeLight">#18181F</color> <!-- Phase 8.77: SkyStream surface -->
+    <color name="darkThemeBackground">#000000</color> <!-- Phase 8.61: Dark theme background - gray, not pure black. Phase 8.77: SkyStream language - pure black. -->
 
     <color name="dubColorBg">#3B65F5</color>
     <color name="subColorText">#571711</color> <!--F53B66 FA3D79-->
@@ -102,6 +102,14 @@
     <color name="colorPrimaryBlue">#5664B7</color>
     <color name="colorPrimaryRed">#E50914</color> <!-- Phase 5A: Play-button red -->
     <color name="ratingStarGold">#FFC107</color> <!-- Phase 8.74: gold rating star (his request) -->
+    <!-- Phase 8.77: SkyStream design language tokens (from the
+         SkyStream app theme: primary #448AFF, surface #18181F,
+         surface highlight #22222E, pure-black background). -->
+    <color name="skyAccent">#448AFF</color>
+    <color name="skyAccentLight">#A8C7FA</color>
+    <color name="skyOnAccent">#0B57D0</color>
+    <color name="skySurface">#18181F</color>
+    <color name="skyOutline">#22222E</color>
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>
     <color name="colorPrimaryGreenApple">#48E484</color>

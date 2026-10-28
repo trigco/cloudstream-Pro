@@ -98,11 +98,26 @@ class NuvioPluginsFragment : Fragment() {
                 val collapsed = NuvioRepository.collapsedRepos(ctx)
                     .contains(repo.manifestUrl)
                 NuvioRepository.setRepoCollapsed(ctx, repo.manifestUrl, !collapsed)
-                refresh()
+                // Phase 8.77: animated single-group toggle; the
+                // full refresh() stays for data-changing actions.
+                adapter.toggleRepo(
+                    repo,
+                    NuvioRepository.getRepos(ctx),
+                    NuvioRepository.collapsedRepos(ctx),
+                )
             },
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
+        // Phase 8.77: SkyStream's AnimatedSize runs 300ms; the
+        // RecyclerView insert/remove animations approximate it.
+        (recycler.itemAnimator as? androidx.recyclerview.widget.DefaultItemAnimator)
+            ?.apply {
+                addDuration = 260
+                removeDuration = 200
+                moveDuration = 260
+                changeDuration = 200
+            }
         refresh()
     }
 
@@ -491,6 +506,9 @@ private sealed interface NuvioRow {
         val repo: StoredNuvioRepo,
         val scraper: NuvioScraperInfo,
         val enabled: Boolean,
+        // Phase 8.77: last row of an expanded group gets the
+        // rounded-bottom group background.
+        val groupLast: Boolean = false,
     ) : NuvioRow
 }
 
@@ -506,6 +524,14 @@ private class NuvioRepoAdapter(
     private var rows: List<NuvioRow> = emptyList()
 
     fun submit(repos: List<StoredNuvioRepo>, collapsed: Set<String> = emptySet()) {
+        rows = buildRows(repos, collapsed)
+        notifyDataSetChanged()
+    }
+
+    private fun buildRows(
+        repos: List<StoredNuvioRepo>,
+        collapsed: Set<String>,
+    ): List<NuvioRow> {
         val out = mutableListOf<NuvioRow>()
         for (repo in repos) {
             val manifest = repo.manifest()
@@ -514,15 +540,56 @@ private class NuvioRepoAdapter(
                 repo, manifest?.name ?: repo.manifestUrl, isCollapsed
             )
             if (!isCollapsed) {
-                manifest?.scrapers?.forEach { scraper ->
+                val scrapers = manifest?.scrapers.orEmpty()
+                scrapers.forEachIndexed { index, scraper ->
                     out += NuvioRow.ScraperRow(
-                        repo, scraper, repo.isScraperEnabled(scraper)
+                        repo, scraper, repo.isScraperEnabled(scraper),
+                        groupLast = index == scrapers.lastIndex,
                     )
                 }
             }
         }
-        rows = out
-        notifyDataSetChanged()
+        return out
+    }
+
+    /**
+     * Phase 8.77: expand/collapse ONE repo group with the list's
+     * item animator (insert/remove) instead of a full rebuild —
+     * the SkyStream-style smooth dropdown the GitHub feedback
+     * asked for. Falls back to a full submit when the header is
+     * not in the current rows.
+     */
+    fun toggleRepo(
+        repo: StoredNuvioRepo,
+        repos: List<StoredNuvioRepo>,
+        collapsed: Set<String>,
+    ) {
+        val headerPos = rows.indexOfFirst {
+            it is NuvioRow.RepoHeader && it.repo.manifestUrl == repo.manifestUrl
+        }
+        if (headerPos < 0) {
+            submit(repos, collapsed)
+            return
+        }
+        var oldCount = 0
+        var i = headerPos + 1
+        while (i < rows.size && rows[i] is NuvioRow.ScraperRow) {
+            oldCount++
+            i++
+        }
+        rows = buildRows(repos, collapsed)
+        var newCount = 0
+        var j = headerPos + 1
+        while (j < rows.size && rows[j] is NuvioRow.ScraperRow) {
+            newCount++
+            j++
+        }
+        notifyItemChanged(headerPos)
+        if (newCount > oldCount) {
+            notifyItemRangeInserted(headerPos + 1, newCount - oldCount)
+        } else if (oldCount > newCount) {
+            notifyItemRangeRemoved(headerPos + 1, oldCount - newCount)
+        }
     }
 
     override fun getItemViewType(position: Int): Int = when (rows[position]) {
@@ -547,7 +614,23 @@ private class NuvioRepoAdapter(
                 val h = holder as RepoHolder
                 h.name.text = row.name
                 h.url.text = row.repo.manifestUrl
-                h.expand.rotation = if (row.collapsed) -90f else 0f
+                // Phase 8.77: one group, one card — while expanded
+                // the header takes the top-segment background and
+                // loses its bottom margin so the scraper rows join
+                // it; the chevron animates instead of snapping.
+                h.itemView.setBackgroundResource(
+                    if (row.collapsed) R.drawable.bg_repository_card
+                    else R.drawable.bg_repository_card_top
+                )
+                (h.itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    lp.bottomMargin = if (row.collapsed) dp(h.itemView, 2) else 0
+                    h.itemView.layoutParams = lp
+                }
+                val targetRotation = if (row.collapsed) -90f else 0f
+                if (h.expand.rotation != targetRotation) {
+                    h.expand.animate().rotation(targetRotation)
+                        .setDuration(250).start()
+                }
                 h.itemView.setOnClickListener { onToggleCollapse(row.repo) }
                 h.check.setOnClickListener { onCheckRepo(row.repo) }
                 h.refresh.setOnClickListener { onRefreshRepo(row.repo) }
@@ -556,6 +639,19 @@ private class NuvioRepoAdapter(
             is NuvioRow.ScraperRow -> {
                 val h = holder as ScraperHolder
                 val scraper = row.scraper
+                // Phase 8.77: grouped-card segments — square middle
+                // rows, rounded bottom on the group's last row, no
+                // gaps inside the group (the repo header below the
+                // group carries the spacing via its top margin).
+                h.itemView.setBackgroundResource(
+                    if (row.groupLast) R.drawable.bg_group_bottom
+                    else R.drawable.bg_group_mid
+                )
+                (h.itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    lp.topMargin = 0
+                    lp.bottomMargin = if (row.groupLast) dp(h.itemView, 10) else 0
+                    h.itemView.layoutParams = lp
+                }
                 h.name.text = scraper.name
                 val version = h.itemView.context.getString(
                     R.string.nuvio_version_format, scraper.version
@@ -606,6 +702,9 @@ private class NuvioRepoAdapter(
             }
         }
     }
+
+    private fun dp(view: View, value: Int): Int =
+        (value * view.resources.displayMetrics.density).toInt()
 
     private class RepoHolder(view: View) : RecyclerView.ViewHolder(view) {
         val expand: ImageView = view.findViewById(R.id.item_repo_expand)
