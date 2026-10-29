@@ -47,11 +47,12 @@ object SkyStreamEngine {
         customBaseUrl: String? = null,
         timeoutMs: Long = TIMEOUT_MS,
     ): Any? {
-        val code = SkyStreamRepository.script(context, repoUrl, plugin.packageName)
-            ?: throw IllegalStateException("Plugin script is missing; refresh the repository")
+        val activePlugin = SkyStreamRepository.ensureScript(context, repoUrl, plugin.packageName)
+        val code = SkyStreamRepository.script(context, repoUrl, activePlugin.packageName)
+            ?: throw IllegalStateException("Plugin script is missing after download")
         require(code.isNotBlank()) { "Plugin script is empty" }
-        val bridge = SkyStreamHostBridge(context.applicationContext, plugin, repoUrl)
-        val manifest = plugin.manifest().apply {
+        val bridge = SkyStreamHostBridge(context.applicationContext, activePlugin, repoUrl)
+        val manifest = activePlugin.manifest().apply {
             if (!providerId.isNullOrBlank()) put("providerId", providerId)
             if (!customBaseUrl.isNullOrBlank()) put("baseUrl", customBaseUrl)
         }
