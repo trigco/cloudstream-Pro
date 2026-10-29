@@ -1,11 +1,13 @@
 package com.lagradost.cloudstream3.skystream
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.dokar.quickjs.binding.AsyncFunctionBinding
 import com.dokar.quickjs.binding.FunctionBinding
 import com.dokar.quickjs.quickJs
+import com.lagradost.cloudstream3.nuvio.NuvioPolyfill
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,7 +21,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.net.URI
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
+import javax.crypto.Cipher
+import javax.crypto.Mac
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Executes SkyStream's JavaScript provider contract in the existing QuickJS host.
@@ -80,8 +88,35 @@ object SkyStreamEngine {
                         }
                     }
                 )
-                evaluate<Any?>(buildHostPolyfill(manifest))
-                evaluate<Any?>(buildPluginWrapper(code))
+                // Reuse the app's more complete JS compatibility layer (fetch, XHR,
+                // URL, TextEncoder/Decoder, Buffer, axios, cheerio and CryptoJS).
+                defineBinding(
+                    "nuvioCall",
+                    object : FunctionBinding<String?> {
+                        override fun invoke(args: Array<Any?>): String? =
+                            bridge.callSync(args.firstOrNull() as? String ?: "{}")
+                    }
+                )
+                defineBinding(
+                    "nuvioFetchAsync",
+                    object : AsyncFunctionBinding<String> {
+                        override suspend fun invoke(args: Array<Any?>): String =
+                            bridge.fetchAsync(args.firstOrNull() as? String ?: "{}")
+                    }
+                )
+                defineBinding(
+                    "nuvioSleepAsync",
+                    object : AsyncFunctionBinding<Any?> {
+                        override suspend fun invoke(args: Array<Any?>): Any? {
+                            val ms = (args.firstOrNull() as? Number)?.toLong() ?: 0L
+                            delay(ms.coerceIn(0L, 30_000L))
+                            return null
+                        }
+                    }
+                )
+                evaluate<Any?>(NuvioPolyfill.build("{}", "null"), "skystream-shared-polyfill.js")
+                evaluate<Any?>(buildHostPolyfill(manifest), "skystream-host-polyfill.js")
+                evaluate<Any?>(buildPluginWrapper(code), "skystream-plugin.js")
                 val call = buildInvocation(functionName, argArray)
                 val evalText = runCatching { evaluate<String>(call, "skystream-call.js") }.getOrNull()
                 when {
@@ -121,7 +156,6 @@ object SkyStreamEngine {
   }
 })()
 """.trimIndent()
-            .replace("$args", args.toString())
     }
 
     private fun buildPluginWrapper(code: String): String {
@@ -159,56 +193,33 @@ globalThis.__skyStreamExports = (function() {
         val manifestLiteral = manifest.toString()
         return """
 (function() {
-  const manifest = $manifestLiteral;
-  globalThis.manifest = manifest;
+  globalThis.manifest = $manifestLiteral;
   globalThis.window = globalThis;
   globalThis.self = globalThis;
   globalThis.global = globalThis;
-  globalThis.process = { env: { NODE_ENV: 'production' }, platform: 'android', nextTick: (fn) => Promise.resolve().then(fn) };
-  globalThis.console = {
-    log: (...a) => skyStreamCall(JSON.stringify({op:'log', message:a.map(String).join(' ')})),
-    info: (...a) => skyStreamCall(JSON.stringify({op:'log', message:a.map(String).join(' ')})),
-    warn: (...a) => skyStreamCall(JSON.stringify({op:'log', message:a.map(String).join(' ')})),
-    error: (...a) => skyStreamCall(JSON.stringify({op:'log', message:a.map(String).join(' ')})),
-    debug: (...a) => skyStreamCall(JSON.stringify({op:'log', message:a.map(String).join(' ')}))
-  };
-  globalThis.setTimeout = (fn, ms) => { skyStreamSleepAsync(Number(ms)||0).then(() => { try { fn(); } catch(e) {} }); return 1; };
-  globalThis.clearTimeout = () => {};
-  globalThis.setInterval = (fn, ms) => { let active=true; const tick=()=>{if(!active)return; skyStreamSleepAsync(Number(ms)||0).then(()=>{if(!active)return;try{fn();}catch(e){}tick();});};tick();return {cancel:()=>{active=false;}}; };
-  globalThis.clearInterval = (timer) => { if (timer && timer.cancel) timer.cancel(); };
   globalThis.getPreference = (key) => {
     const raw = skyStreamCall(JSON.stringify({op:'get_preference', key:String(key)}));
-    try { return JSON.parse(raw); } catch(e) { return null; }
+    try { const obj = JSON.parse(raw || '{}'); return obj.value == null ? null : obj.value; } catch(e) { return null; }
   };
-  globalThis.setPreference = (key, value) => skyStreamCall(JSON.stringify({op:'set_preference', key:String(key), value:value}));
-  globalThis.localStorage = {
-    getItem: (key) => { const v=skyStreamCall(JSON.stringify({op:'storage_get',key:String(key)})); try {const o=JSON.parse(v);return o.value==null?null:o.value;}catch(e){return null;} },
-    setItem: (key,value) => skyStreamCall(JSON.stringify({op:'storage_set',key:String(key),value:String(value)})),
-    removeItem: (key) => skyStreamCall(JSON.stringify({op:'storage_remove',key:String(key)})),
-    clear: () => skyStreamCall(JSON.stringify({op:'storage_clear'}))
+  globalThis.setPreference = (key, value) =>
+    skyStreamCall(JSON.stringify({op:'set_preference', key:String(key), value:value}));
+  const legacyResponse = async (response) => {
+    const body = await response.text();
+    const headers = {};
+    if (response.headers && response.headers.forEach) response.headers.forEach((v,k) => headers[k] = v);
+    return {status:response.status, statusCode:response.status, code:response.status,
+      body:body, bodyText:body, data:body, content:body, url:response.url,
+      finalUrl:response.url, headers:headers};
   };
-  const doRequest = async (url, options={}) => {
-    const raw = await skyStreamFetchAsync(JSON.stringify({
-      url:String(url), method:options.method||'GET', headers:options.headers||{},
-      body:options.body||'', contentType:options.contentType||''
-    }));
-    const response = JSON.parse(raw || '{}');
-    if (response.error) throw new Error(response.error);
-    const headers = response.headers || {};
-    const headerBag = { get: (key) => headers[String(key).toLowerCase()] || headers[key] || null, forEach: (fn) => Object.keys(headers).forEach(k=>fn(headers[k],k)) };
-    return {
-      status:response.status||response.statusCode||0, statusCode:response.statusCode||response.status||0,
-      code:response.code||response.status||0, ok:(response.status||0)>=200&&(response.status||0)<300,
-      url:response.finalUrl||response.url||String(url), headers:headerBag,
-      body:response.body||'', data:response.body||'',
-      text:async()=>response.body||'', json:async()=>JSON.parse(response.body||'null'),
-      content:response.body||''
-    };
-  };
-  globalThis.fetch = (url, options={}) => doRequest(url, options);
-  globalThis.http_get = (url, headers={}, callback) => doRequest(url,{headers}).then(r=>{if(typeof callback==='function')callback(r);return r;});
-  globalThis.http_post = (url, headers={}, body='', callback) => doRequest(url,{method:'POST',headers,body}).then(r=>{if(typeof callback==='function')callback(r);return r;});
-  globalThis.http_parallel = (requests) => Promise.all((requests||[]).map(r=>doRequest(r.url,{method:r.method||'GET',headers:r.headers||{},body:r.body||''})));
+  globalThis.http_get = (url, headers={}, callback) =>
+    globalThis.fetch(url, {method:'GET', headers:headers || {}})
+      .then(legacyResponse).then(r => { if (typeof callback === 'function') callback(r); return r; });
+  globalThis.http_post = (url, headers={}, body='', callback) =>
+    globalThis.fetch(url, {method:'POST', headers:headers || {}, body:body || ''})
+      .then(legacyResponse).then(r => { if (typeof callback === 'function') callback(r); return r; });
+  globalThis.http_parallel = (requests) => Promise.all((requests || []).map(r =>
+    globalThis.fetch(r.url, {method:r.method || 'GET', headers:r.headers || {}, body:r.body || ''})
+      .then(legacyResponse)));
   globalThis._fetch = (url) => globalThis.http_get(url);
   globalThis.__skyStreamExports = {};
 })();
