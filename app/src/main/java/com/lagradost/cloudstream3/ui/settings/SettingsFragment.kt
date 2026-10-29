@@ -611,6 +611,13 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                 navigate(R.id.global_to_navigation_home_custom_lists)
             }
 
+            // Phase 8.91: Feed Categories (Content group, under
+            // Categories) — show/hide + reorder the Feed's
+            // category rows and chips.
+            settingsFeedCategories.setOnClickListener {
+                navigate(R.id.global_to_navigation_feed_categories)
+            }
+
             // Phase 8.50: Family Mode switch (Content group) —
             // hides adult providers and NSFW content app-wide.
             val familyPrefs = PreferenceManager

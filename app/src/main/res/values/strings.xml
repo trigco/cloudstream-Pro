@@ -75,6 +75,11 @@
     <string name="custom_home_lists_key">custom_home_lists</string>
     <string name="home_custom_lists_title">Custom Home Lists</string>
     <string name="home_custom_categories_row">Categories</string>
+    <string name="feed_categories_title">Feed Categories</string>
+    <string name="feed_categories_subtitle">Show or hide the Feed\'s categories and drag to set their order. The categories come from your providers\' own homepage shelves, mixed across providers.</string>
+    <string name="feed_categories_in_feed">%1$d in the current Feed</string>
+    <string name="feed_categories_not_in_feed">Not in the current Feed</string>
+    <string name="feed_categories_drag">Reorder</string>
     <string name="family_mode_title">Family Mode</string>
     <string name="family_mode_enabled">Family Mode on — adult providers and content are hidden</string>
     <string name="family_mode_disabled">Family Mode off</string>

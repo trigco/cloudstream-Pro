@@ -271,8 +271,24 @@
                     style="@style/SettingsItem"
                     android:drawablePadding="14dp"
                     android:nextFocusUp="@id/settings_sky_plugins"
-                    android:nextFocusDown="@id/settings_family_mode"
+                    android:nextFocusDown="@id/settings_feed_categories"
                     android:text="@string/home_custom_categories_row"
+                    app:drawableStartCompat="@drawable/baseline_list_alt_24" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="58dp"
+                    android:alpha="0.15"
+                    android:background="?attr/colorPrimaryDark" />
+
+                <TextView
+                    android:id="@+id/settings_feed_categories"
+                    style="@style/SettingsItem"
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_categories"
+                    android:nextFocusDown="@id/settings_family_mode"
+                    android:text="@string/feed_categories_title"
                     app:drawableStartCompat="@drawable/baseline_list_alt_24" />
 
                 <View
@@ -288,7 +304,7 @@
                     android:layout_height="50dp"
                     android:background="@drawable/bg_ripple_rounded"
                     android:gravity="center_vertical"
-                    android:nextFocusUp="@id/settings_categories"
+                    android:nextFocusUp="@id/settings_feed_categories"
                     android:nextFocusDown="@id/settings_updates"
                     android:orientation="horizontal"
                     android:paddingStart="20dp"

@@ -13,8 +13,36 @@ import com.lagradost.cloudstream3.utils.FamilyMode
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-/** One feed card: a provider search result plus the provider it came from. */
-data class FeedEntry(val response: SearchResponse, val apiName: String)
+/**
+ * One feed card: a provider search result plus the provider it
+ * came from. Phase 8.91: [sections] keeps the RAW homepage shelf
+ * names the item arrived under (provenance for the Feed's
+ * category rows — see FeedSectionTags); an item shelved by
+ * several providers/sections carries all of them. Search-built
+ * entries have none.
+ */
+data class FeedEntry(
+    val response: SearchResponse,
+    val apiName: String,
+    val sections: List<String> = emptyList()
+)
+
+/** Phase 8.91: fold [next] into the entry already stored for
+ *  its URL, unioning the section provenance instead of dropping
+ *  the later copy's shelves. */
+private fun unionSections(
+    map: LinkedHashMap<String, FeedEntry>,
+    next: FeedEntry
+) {
+    val prev = map[next.response.url]
+    map[next.response.url] = if (prev == null) {
+        next
+    } else {
+        prev.copy(
+            sections = (prev.sections + next.sections).distinct()
+        )
+    }
+}
 
 /** The last built feed, shared with the watch page's "Up next" list. */
 object FeedPool {
@@ -107,12 +135,19 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 val prepend = prependNext
                 prependNext = false
                 var entries = if (prepend) {
-                    val seen = mutableSetOf<String>()
-                    (fresh + FeedPool.entries).filter { seen.add(it.response.url) }
+                    // Phase 8.91: same URL from two builds keeps
+                    // BOTH copies' section provenance.
+                    val merged = LinkedHashMap<String, FeedEntry>()
+                    (fresh + FeedPool.entries).forEach {
+                        unionSections(merged, it)
+                    }
+                    merged.values.toList()
                 } else {
                     val merged = LinkedHashMap<String, FeedEntry>()
-                    FeedPool.entries.forEach { merged[it.response.url] = it }
-                    fresh.forEach { merged.putIfAbsent(it.response.url, it) }
+                    FeedPool.entries.forEach {
+                        unionSections(merged, it)
+                    }
+                    fresh.forEach { unionSections(merged, it) }
                     merged.values.toList()
                 }
                 if (firstBuild) {
@@ -223,12 +258,20 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                         .filterNot {
                             familyOn && FamilyMode.isAdultSection(it.name)
                         }
-                        .flatMap { it.list }
+                        // Phase 8.91: the shelf name rides along
+                        // with each item (it used to be flattened
+                        // away here) — it is the provenance the
+                        // Feed's category rows are built from.
+                        .flatMap { shelf ->
+                            shelf.list.map { item -> item to shelf.name }
+                        }
                         .filterNot {
-                            familyOn && FamilyMode.isAdultItem(it)
+                            familyOn && FamilyMode.isAdultItem(it.first)
                         }
                         .take(40)
-                        .map { FeedEntry(it, api.name) }
+                        .map { (item, shelf) ->
+                            FeedEntry(item, api.name, listOf(shelf))
+                        }
 
                     else -> emptyList()
                 }
@@ -238,8 +281,10 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Round-robin interleave so the feed mixes providers evenly.
+        // Phase 8.91: a URL shelved twice keeps its FIRST slot but
+        // unions the later copy's section provenance.
         val interleaved = mutableListOf<FeedEntry>()
-        val seen = mutableSetOf<String>()
+        val positions = HashMap<String, Int>()
         var index = 0
         var added = true
         while (added) {
@@ -247,7 +292,17 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             for (list in perProvider) {
                 val item = list.getOrNull(index) ?: continue
                 added = true
-                if (seen.add(item.response.url)) interleaved.add(item)
+                val pos = positions[item.response.url]
+                if (pos == null) {
+                    positions[item.response.url] = interleaved.size
+                    interleaved.add(item)
+                } else {
+                    val prev = interleaved[pos]
+                    interleaved[pos] = prev.copy(
+                        sections = (prev.sections + item.sections)
+                            .distinct()
+                    )
+                }
             }
             index++
         }

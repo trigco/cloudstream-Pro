@@ -450,17 +450,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             val chip = binding.feedChips.getChildAt(i) as? TextView ?: continue
             val tag = chip.tag as? String ?: continue
             styleChip(chip, selected = tag == selected)
+            // Phase 8.91: one presence rule for every tag kind —
+            // the memoised tagItems (provider sections first,
+            // metadata second) decides; special handling survives
+            // only for All / the selection / the two fixed tags.
             chip.alpha = when {
                 tag == "All" || tag == selected -> 1f
                 tag == TAG_TRENDING || tag == TAG_TOP_RATED -> 1f
-                tag in CURATED_TAGS ->
-                    if (tagItems(tag).isNotEmpty()) 1f else 0.45f
-                tag == TAG_EMOTIONAL ->
-                    if (pool.any { emotionalMatchesEntry(it) }) 1f else 0.45f
-                tag in FeedCategories.SMART_CATEGORIES ->
-                    if (pool.any { tag in categoriesOfEntry(it) }) 1f else 0.45f
                 else ->
-                    if (pool.any { genreMatchesEntry(it, tag) }) 1f else 0.45f
+                    if (tagItems(tag).isNotEmpty()) 1f else 0.45f
             }
         }
     }
@@ -523,13 +521,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         const val TAG_NEW_KDRAMA = "New Release K-Drama"
         const val TAG_NEW_CDRAMA = "New Release C-Drama"
 
-        /** Curated tags in their fixed row order (after
-         *  Trending / Top 250, before the count-sorted rest):
-         *  must-watch pair, then the region variants (Top,
-         *  then New Release, per region). An "Ongoing Series"
-         *  slot belongs here in spirit but is NOT implemented —
-         *  pool entries carry no airing-status signal at all
-         *  (see PHASE890_CHANGES.md, deviations). */
+        /** Curated tags from the reference app. Phase 8.91
+         *  re-slots them around the provider-section rows (see
+         *  updateCategoriesRow): the must-watch pair still
+         *  leads its block, the region variants (Top, then New
+         *  Release, per region) now follow the section rows.
+         *  "Ongoing Series" is no longer missing: it arrives
+         *  as a provider SECTION tag (MovieLinkBD shelves one
+         *  literally), which is exact data — the 8.90 gap was
+         *  only ever about faking it from metadata. */
         val CURATED_TAGS: List<String> = listOf(
             TAG_MUST_WATCH_DRAMA, TAG_MUST_WATCH_SERIES,
             TAG_TOP_ANIME, TAG_TOP_KDRAMA, TAG_NEW_KDRAMA,
@@ -592,18 +592,24 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     // ---------- Phase 8.90: tag vocabulary (chips + rows) ----------
 
     /**
-     * The plain predicate behind the simple tags: Trending /
-     * Top 250 / Emotional have their own derivations, the
-     * region categories read resolved metadata, everything
-     * else is a genre (resolved ∪ keyword).
+     * The plain predicate behind the simple tags. Phase 8.91:
+     * the PROVIDER SECTION tags read FIRST (exact, provider-
+     * curated data), the 8.88/8.90 metadata derivations second —
+     * a tag matches when either world claims the entry. Only
+     * Trending / Top 250 keep purely derived meanings here
+     * (their item lists are computed in computeTagItems).
      */
     private fun tagPredicate(entry: FeedEntry, tag: String): Boolean =
         when (tag) {
             TAG_TRENDING -> trendingUrls().contains(entry.response.url)
             TAG_TOP_RATED -> scoreOf(entry) != null
-            TAG_EMOTIONAL -> emotionalMatchesEntry(entry)
-            in FeedCategories.SMART_CATEGORIES -> tag in categoriesOfEntry(entry)
-            else -> genreMatchesEntry(entry, tag)
+            TAG_EMOTIONAL -> tag in sectionTagsOf(entry) ||
+                emotionalMatchesEntry(entry)
+            in FeedCategories.SMART_CATEGORIES ->
+                tag in sectionTagsOf(entry) ||
+                    tag in categoriesOfEntry(entry)
+            else -> tag in sectionTagsOf(entry) ||
+                genreMatchesEntry(entry, tag)
         }
 
     /** Trending = the pool's own head, in pool order (the same
@@ -662,6 +668,59 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         return if (high.size >= ROW_MIN_ITEMS) high else base
     }
 
+    // ---------- Phase 8.91: provider-section tags ----------
+
+    /** Canonical section tags per entry URL, memoised per pool
+     *  instance like tagItems below. Section provenance is
+     *  fixed for a pool's lifetime, so this never needs the
+     *  rating listener's invalidation. */
+    private var sectionTagsCache = mutableMapOf<String, Set<String>>()
+    private var sectionTagsCachePool: List<FeedEntry>? = null
+
+    /** The canonical tags of the provider shelves this entry
+     *  arrived under (FeedSectionTags mapping of the raw names
+     *  FeedViewModel kept). */
+    private fun sectionTagsOf(entry: FeedEntry): Set<String> {
+        if (sectionTagsCachePool !== pool) {
+            sectionTagsCache.clear()
+            sectionTagsCachePool = pool
+        }
+        return sectionTagsCache.getOrPut(entry.response.url) {
+            entry.sections
+                .mapNotNull { FeedSectionTags.canonicalTag(it) }
+                .toSet()
+        }
+    }
+
+    /** Every canonical section tag present anywhere in the pool. */
+    private fun poolSectionTags(): Set<String> {
+        val out = mutableSetOf<String>()
+        pool.forEach { out += sectionTagsOf(it) }
+        return out
+    }
+
+    /** The user's hidden Feed Categories (settings page). */
+    private fun hiddenTags(): Set<String> =
+        context?.let { FeedCategoryPrefs.hidden(it) } ?: emptySet()
+
+    /**
+     * The pool's section tags in display order: the user's
+     * saved order first (Settings → Feed Categories), else the
+     * curated FeedSectionTags.CANONICAL_ORDER; tags neither list
+     * mentions (new passthrough labels) append by item count.
+     */
+    private fun orderedSectionTags(): List<String> {
+        val present = poolSectionTags()
+        if (present.isEmpty()) return emptyList()
+        val saved = context?.let { FeedCategoryPrefs.order(it) }
+            ?: emptyList()
+        val base = saved.ifEmpty { FeedSectionTags.CANONICAL_ORDER }
+        val listed = base.filter { it in present }
+        val unlisted = (present - listed.toSet())
+            .sortedByDescending { categoryCount(it) }
+        return listed + unlisted
+    }
+
     /** tagItems results, memoised per pool instance — the row
      *  builder, the chip presence checks and the grid filter
      *  all ask repeatedly. Late-arriving ratings clear it via
@@ -680,7 +739,16 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     private fun computeTagItems(tag: String): List<FeedEntry> = when (tag) {
-        TAG_TRENDING -> pool.take(30)
+        // Phase 8.91: a real provider Trending shelf (MovieBox
+        // and Rtally both declare one) is exact data and wins;
+        // the 8.90 pool-head derivation remains the fallback
+        // for pools where no provider shelves Trending.
+        TAG_TRENDING -> {
+            val shelved = pool.filter {
+                FeedSectionTags.TRENDING in sectionTagsOf(it)
+            }
+            if (shelved.size >= ROW_MIN_ITEMS) shelved else pool.take(30)
+        }
         TAG_TOP_RATED -> byRatingDesc(
             pool.filter { scoreOf(it) != null }
         )
@@ -785,24 +853,25 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     /**
-     * Recompute the category ROWS from the current pool (Phase
-     * 8.90, replacing the 8.88 tiles): candidates are Trending,
-     * Top 250, the curated must-watch / Top / New Release rows,
-     * Emotional, every region category and ALL 18 canonical
-     * genres; a candidate with at least 4 pool items becomes a
-     * Home-style row. Order: Trending → Top 250 → Must-watch
-     * Drama → Must-watch Series → Top Anime → Top K-Drama →
-     * New Release K-Drama → Top C-Drama → New Release C-Drama →
-     * the rest by item count descending; at most 12 rows. The
-     * reference's Top/Popular naming is merged into the single
-     * Top row per region. NO Ongoing rows: pool entries are
-     * SearchResponses, which carry no airing-status signal
-     * (ShowStatus exists only on LoadResponse), and faking one
-     * from years or episode-number titles was explicitly ruled
-     * out — see PHASE890_CHANGES.md. Counts run over the
-     * fragment pool, which the ViewModel already
-     * Family-Mode/hidden filtered. Hidden while a filter is
-     * active — like the hero, the rows belong to browsing.
+     * Recompute the category ROWS from the current pool. Phase
+     * 8.91 — rows v2: the PROVIDER SECTIONS are the primary
+     * source now (the 8.90 rows were metadata-only). Slot
+     * order: 🔥 Trending (the providers' own Trending shelf
+     * when one exists, pool head otherwise) → ⭐ Top 250 →
+     * Must-watch Drama → Must-watch Series → the section-tag
+     * rows in the user's Feed Categories order (else item
+     * count) → the rating-sorted Top / New Release region rows
+     * → metadata-fallback rows ONLY for smart categories and
+     * genres that got no section data at all. A candidate
+     * needs at least 4 pool items; at most 12 rows. "Ongoing
+     * Series" exists in this world: providers shelf it by that
+     * exact name, so the row is provider-labelled and accurate
+     * — nothing is faked from years or episode titles. Tags
+     * the user hid on the Feed Categories settings page
+     * produce no row. Counts run over the fragment pool, which
+     * the ViewModel already Family-Mode/hidden filtered.
+     * Hidden while a filter is active — like the hero, the
+     * rows belong to browsing.
      */
     private fun updateCategoriesRow(binding: FragmentFeedBinding) {
         if (searchQuery.isNotEmpty() || filtersActive || pool.isEmpty()) {
@@ -812,17 +881,41 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         fun rowOf(tag: String) = FeedCategoryRowsAdapter.CategoryRow(
             tag, displayTitleFor(tag), categoryItems(tag)
         )
+        val hidden = hiddenTags()
+        fun wanted(tag: String) =
+            tag !in hidden && categoryCount(tag) >= ROW_MIN_ITEMS
         val rows = mutableListOf<FeedCategoryRowsAdapter.CategoryRow>()
-        val fixed = listOf(TAG_TRENDING, TAG_TOP_RATED) + CURATED_TAGS
-        for (tag in fixed) {
-            if (categoryCount(tag) >= ROW_MIN_ITEMS) rows += rowOf(tag)
+        // Fixed head + the must-watch pair.
+        for (tag in listOf(
+            TAG_TRENDING, TAG_TOP_RATED,
+            TAG_MUST_WATCH_DRAMA, TAG_MUST_WATCH_SERIES
+        )) {
+            if (wanted(tag)) rows += rowOf(tag)
         }
-        val rest = (listOf(TAG_EMOTIONAL) +
+        // Provider-section rows, in the user's order.
+        val sectionPresent = poolSectionTags()
+        for (tag in orderedSectionTags()) {
+            if (tag == TAG_TRENDING) continue
+            if (wanted(tag)) rows += rowOf(tag)
+        }
+        // Rating-sorted region variants (metadata world).
+        for (tag in listOf(
+            TAG_TOP_ANIME, TAG_TOP_KDRAMA, TAG_NEW_KDRAMA,
+            TAG_TOP_CDRAMA, TAG_NEW_CDRAMA
+        )) {
+            if (wanted(tag)) rows += rowOf(tag)
+        }
+        // Metadata fallback: smart categories and genres that
+        // no provider shelved — the 8.88/8.90 derivation keeps
+        // covering pools whose providers don't curate by name.
+        val fallback = (listOf(TAG_EMOTIONAL) +
             FeedCategories.SMART_CATEGORIES + genreTags)
+            .distinct()
+            .filter { it !in sectionPresent }
             .map { tag -> tag to categoryCount(tag) }
-            .filter { it.second >= ROW_MIN_ITEMS }
+            .filter { it.first !in hidden && it.second >= ROW_MIN_ITEMS }
             .sortedByDescending { it.second }
-        for ((tag, _) in rest) {
+        for ((tag, _) in fallback) {
             rows += rowOf(tag)
         }
         // Dedupe across the variants of one region (priority:
@@ -870,27 +963,38 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         filterCategory ?: filterGenre ?: "All"
 
     /**
-     * Phase 8.90: the tags actually present in the pool, in the
-     * shared vocabulary order — Trending, Top 250, the region
-     * categories, Emotional, then genres (resolved ∪ keyword).
-     * Same vocabulary as the category rows; a tag with no pool
-     * items never gets a chip.
+     * The tags actually present in the pool, in chip order —
+     * Phase 8.91: Trending, Top 250, the curated tags, then the
+     * PROVIDER-SECTION tags in the user's Feed Categories order,
+     * then the metadata smart categories / Emotional / genres
+     * not already covered. Same vocabulary as the category
+     * rows; a tag with no pool items never gets a chip, and a
+     * tag the user hid on the settings page gets none either.
+     * Curated tags keep their PLAIN names here (the emoji live
+     * in the row titles only).
      */
     private fun presentTags(): List<String> {
+        if (pool.isEmpty()) return emptyList()
+        val hidden = hiddenTags()
         val tags = mutableListOf<String>()
-        if (pool.isNotEmpty()) tags += TAG_TRENDING
-        if (pool.any { scoreOf(it) != null }) tags += TAG_TOP_RATED
-        // Curated tags keep their PLAIN names in the chip row
-        // (the emoji live in the row titles only).
+        val seen = mutableSetOf<String>()
+        fun add(tag: String) {
+            if (tag !in hidden && seen.add(tag)) tags += tag
+        }
+        add(TAG_TRENDING)
+        if (pool.any { scoreOf(it) != null }) add(TAG_TOP_RATED)
         CURATED_TAGS.forEach { tag ->
-            if (tagItems(tag).isNotEmpty()) tags += tag
+            if (tagItems(tag).isNotEmpty()) add(tag)
+        }
+        orderedSectionTags().forEach { tag ->
+            if (tagItems(tag).isNotEmpty()) add(tag)
         }
         FeedCategories.SMART_CATEGORIES.forEach { cat ->
-            if (pool.any { cat in categoriesOfEntry(it) }) tags += cat
+            if (pool.any { cat in categoriesOfEntry(it) }) add(cat)
         }
-        if (pool.any { emotionalMatchesEntry(it) }) tags += TAG_EMOTIONAL
+        if (pool.any { emotionalMatchesEntry(it) }) add(TAG_EMOTIONAL)
         genreTags.forEach { genre ->
-            if (pool.any { genreMatchesEntry(it, genre) }) tags += genre
+            if (pool.any { genreMatchesEntry(it, genre) }) add(genre)
         }
         return tags
     }
