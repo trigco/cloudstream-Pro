@@ -644,7 +644,7 @@
              for setSingleChoiceItems lists. Buttons are inherited from
              Theme.AlertDialog (red pill positive / plain-text negative). -->
         <item name="android:windowBackground">@drawable/dialog_card_background</item>
-        <item name="listChoiceIndicatorSingle">@drawable/radio_dialog_selector</item>
+        <item name="android:listChoiceIndicatorSingle">@drawable/radio_dialog_selector</item>
     </style>
 
     <style name="AlertDialogCustomTransparent" parent="Theme.AppCompat.Dialog.Alert">
