@@ -214,7 +214,8 @@ class StremioAddonsFragment : Fragment() {
             setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(context).apply {
-            val pad = (20 * resources.displayMetrics.density).toInt()
+            // 8.89: dialog content padding standard is 24dp sides.
+            val pad = (24 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
             addView(input)
         }

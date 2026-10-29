@@ -14,18 +14,47 @@
     android:background="@drawable/rounded_dialog"
     android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/switcher_title"
+    <!-- Phase 8.89: standard sheet chrome (Feed Filters reference) —
+         drag handle + title row with the circular close button; the
+         old bottom "Close" text row is gone, the ✕ replaces it. -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_feed_drag_handle" />
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingStart="20dp"
-        android:paddingTop="14dp"
+        android:paddingTop="10dp"
         android:paddingEnd="20dp"
-        android:paddingBottom="8dp"
-        android:text="@string/switcher_select_provider"
-        android:textColor="?attr/textColor"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/switcher_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:text="@string/switcher_select_provider"
+            android:textColor="?attr/textColor"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/switcher_close_btt"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_feed_circle_button"
+            android:contentDescription="@string/switcher_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_baseline_close_24"
+            app:tint="?attr/textColor" />
+    </LinearLayout>
 
     <HorizontalScrollView
         android:id="@+id/switcher_chips_scroll"
@@ -60,22 +89,7 @@
         android:clipToPadding="false"
         android:nestedScrollingEnabled="true"
         android:paddingTop="2dp"
-        android:paddingBottom="2dp"
+        android:paddingBottom="12dp"
         tools:listitem="@layout/home_provider_switcher_row" />
 
-    <TextView
-        android:id="@+id/switcher_close"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:clickable="true"
-        android:focusable="true"
-        android:paddingStart="20dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="14dp"
-        android:text="@string/switcher_close"
-        android:textColor="?attr/textColor"
-        android:textSize="14sp" />
 </LinearLayout>

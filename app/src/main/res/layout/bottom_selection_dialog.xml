@@ -1,33 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <FrameLayout
+    <!-- Phase 8.89: standard sheet chrome (Feed Filters reference).
+         The drag handle and the circular close button start gone:
+         this layout also backs centred AlertDialogs (showDialog /
+         showMultiDialog funnels), and SingleSelectionHelper only
+         reveals them when the host really is a phone BottomSheet. -->
+    <View
+        android:id="@+id/drag_handle"
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_feed_drag_handle"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="10dp">
-
-        <com.google.android.material.bottomsheet.BottomSheetDragHandleView
-            android:id="@+id/drag_handle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:visibility="gone" />
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
 
         <TextView
             android:id="@+id/text1"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:paddingStart="?android:attr/listPreferredItemPaddingStart"
-            android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
             android:textStyle="bold"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textColor="?attr/textColor"
             tools:text="Test" />
-    </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/close_btt"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_feed_circle_button"
+            android:contentDescription="@string/switcher_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_baseline_close_24"
+            app:tint="?attr/textColor"
+            android:visibility="gone"
+            tools:visibility="visible" />
+    </LinearLayout>
 
     <ListView
         android:id="@+id/listview1"
@@ -48,11 +74,18 @@
         android:gravity="center_vertical|end"
         android:orientation="horizontal">
 
+        <!-- Phase 8.89: Apply is the sheet's primary action, so it
+             takes the standard red pill; Cancel keeps the dark
+             BlackButton pill. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/apply_btt"
             android:layout_width="wrap_content"
             android:layout_gravity="center_vertical|end"
             android:text="@string/sort_apply"
+            android:textColor="@android:color/white"
+            app:backgroundTint="@color/colorPrimaryRed"
+            app:iconTint="@android:color/white"
+            app:strokeColor="@android:color/transparent"
             style="@style/WhiteButton" />
 
         <com.google.android.material.button.MaterialButton

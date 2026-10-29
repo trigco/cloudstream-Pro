@@ -808,7 +808,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             binding.switcherRecycler.layoutManager = LinearLayoutManager(this)
             binding.switcherRecycler.adapter = switcherAdapter
 
-            binding.switcherClose.setOnClickListener {
+            // Phase 8.89: dismissal moved to the title row's ✕
+            // (standard sheet chrome); the old bottom Close row
+            // was removed from the layout.
+            binding.switcherCloseBtt.setOnClickListener {
                 dialog.dismissSafe()
             }
 

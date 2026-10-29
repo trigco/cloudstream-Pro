@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.ui.settings.nuvio
 import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,6 +18,9 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.lagradost.cloudstream3.utils.SheetChrome
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -295,7 +299,8 @@ class NuvioPluginsFragment : Fragment() {
             setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(ctx).apply {
-            val padding = (20 * resources.displayMetrics.density).toInt()
+            // 8.89: dialog content padding standard is 24dp sides.
+            val padding = (24 * resources.displayMetrics.density).toInt()
             setPadding(padding, 0, padding, 0)
             addView(input)
         }
@@ -563,19 +568,62 @@ class NuvioPluginsFragment : Fragment() {
         }
         styleFormText(column)
 
+        // Phase 8.89: this form now opens as the standard bottom
+        // sheet (SheetChrome) instead of an AlertDialog — the same
+        // conversion the Sky settings form got in 8.81, so both
+        // bridge settings forms share one surface: drag handle,
+        // title row with ✕, dark Cancel pill, red Save pill. The
+        // save path is byte-for-byte the old positive button's.
+        // The sheet root carries the 20dp side padding, so the
+        // column drops its own (it was sized for the dialog).
+        column.setPadding(0, dp(4), 0, 0)
         val scroll = ScrollView(ctx).apply { addView(column) }
-        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
-            .setTitle(scraper.name)
-            .setView(scroll)
-            .setPositiveButton(R.string.nuvio_settings_save) { _, _ ->
-                getters.forEach { it() }
-                NuvioRepository.saveScraperSettings(
-                    ctx, repo.manifestUrl, scraper.id, values
-                )
-                toast(R.string.nuvio_settings_saved)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        val root = SheetChrome.sheetRoot(ctx)
+        root.addView(SheetChrome.dragHandle(ctx))
+        val (titleRow, closeButton) = SheetChrome.titleRow(ctx, scraper.name)
+        root.addView(titleRow)
+        root.addView(scroll)
+        val buttonRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12) }
+        }
+        val cancelButton = SheetChrome.secondaryButton(
+            ctx, android.R.string.cancel
+        )
+        val saveButton = MaterialButton(ctx).apply {
+            setText(R.string.nuvio_settings_save)
+            backgroundTintList = ContextCompat.getColorStateList(
+                ctx, R.color.colorPrimaryRed
+            )
+            setTextColor(Color.WHITE)
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dp(8) }
+        }
+        buttonRow.addView(cancelButton)
+        buttonRow.addView(saveButton)
+        root.addView(buttonRow)
+
+        val dialog = BottomSheetDialog(ctx, R.style.AppBottomSheetDialogTheme)
+        dialog.setContentView(root)
+        closeButton.setOnClickListener { dialog.dismiss() }
+        cancelButton.setOnClickListener { dialog.dismiss() }
+        saveButton.setOnClickListener {
+            getters.forEach { it() }
+            NuvioRepository.saveScraperSettings(
+                ctx, repo.manifestUrl, scraper.id, values
+            )
+            toast(R.string.nuvio_settings_saved)
+            dialog.dismiss()
+        }
+        dialog.show()
+        SheetChrome.transparentSheetFrame(dialog)
     }
 }
 

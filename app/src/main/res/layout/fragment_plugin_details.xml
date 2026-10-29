@@ -9,6 +9,18 @@
     android:orientation="vertical"
     tools:context=".ui.settings.extensions.PluginDetailsFragment">
 
+    <!-- Phase 8.89: standard sheet drag handle. The rest of the
+         standard title-row chrome is deliberately NOT applied here:
+         this single layout also serves the TV form factor (no
+         phone fork exists), and the header row below already acts
+         as the title row with its own action icons. -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_feed_drag_handle" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"

@@ -11,10 +11,19 @@
         android:id="@+id/resultview_preview_result"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bg_sheet_rounded_top"
+        android:background="@drawable/rounded_dialog"
         android:orientation="vertical"
         android:visibility="gone"
         tools:visibility="visible">
+
+        <!-- Phase 8.89: standard sheet surface (was the one-off
+             bg_sheet_rounded_top) + drag handle. -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_feed_drag_handle" />
 
         <LinearLayout
             android:layout_width="match_parent"

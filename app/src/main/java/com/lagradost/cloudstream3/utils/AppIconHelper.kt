@@ -123,6 +123,11 @@ object AppIconHelper {
         val dialog = BottomSheetDialog(activity)
         dialog.setContentView(binding.root)
 
+        // Phase 8.89: standard sheet close button.
+        binding.closeBtt.setOnClickListener {
+            dialog.dismissSafe()
+        }
+
         val cells: List<Pair<LinearLayout, ImageView>> = listOf(
             binding.iconCellDefault to binding.iconPreviewDefault,
             binding.iconCellMidnight to binding.iconPreviewMidnight,

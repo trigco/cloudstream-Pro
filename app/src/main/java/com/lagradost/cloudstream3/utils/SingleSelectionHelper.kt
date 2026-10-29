@@ -158,7 +158,14 @@ object SingleSelectionHelper {
 
         if (isLayout(PHONE or EMULATOR) && dialog is BottomSheetDialog) {
             binding.dragHandle.isVisible = true
+            // Phase 8.89: the standard sheet close button joins the
+            // drag handle — real bottom sheets only; the centred
+            // AlertDialog funnels sharing this layout keep it hidden.
+            binding.closeBtt.isVisible = true
             listView.isNestedScrollingEnabled = true
+        }
+        binding.closeBtt.setOnClickListener {
+            dialog.dismissSafe(this)
         }
 
         applyHolder.isVisible = realShowApply
@@ -242,6 +249,11 @@ object SingleSelectionHelper {
         val applyButton = binding.applyBtt
         val cancelButton = binding.cancelBtt
         val applyHolder = binding.applyBttHolder
+
+        // Phase 8.89: standard sheet close button.
+        binding.closeBtt.setOnClickListener {
+            dialog.dismissSafe(this)
+        }
 
         applyHolder.isVisible = true
         textView.text = name
@@ -439,6 +451,11 @@ object SingleSelectionHelper {
 
         binding.dialogTitle.text = title
         binding.dialogText.text = text
+        // Phase 8.89: standard sheet close button (dismiss runs the
+        // same dismissCallback as an outside tap / swipe).
+        binding.closeBtt.setOnClickListener {
+            dialog.dismiss()
+        }
 
         dialog.setOnDismissListener {
             dismissCallback.invoke()

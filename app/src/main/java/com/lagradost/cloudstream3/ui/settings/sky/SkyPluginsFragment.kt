@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.settings.sky
 
 import android.content.res.ColorStateList
+import androidx.core.content.ContextCompat
 import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
@@ -28,6 +29,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.lagradost.cloudstream3.utils.SheetChrome
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.tabs.TabLayout
@@ -283,7 +285,8 @@ class SkyPluginsFragment : Fragment() {
             setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(ctx).apply {
-            val pad = (20 * resources.displayMetrics.density).toInt()
+            // 8.89: dialog content padding standard is 24dp sides.
+            val pad = (24 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
             addView(input)
         }
@@ -634,16 +637,21 @@ class SkyPluginsFragment : Fragment() {
         // instead of an AlertDialog. 8.82: the app's own bottom-sheet
         // theme plus the app modal surface (rounded_dialog) on the
         // sheet root, so no light frame can show through.
+        // 8.89: standard sheet chrome (SheetChrome) — drag handle +
+        // title row with the circular close button; the form column
+        // keeps carrying the 20dp side padding.
         val scroll = ScrollView(ctx).apply { addView(column) }
+        val (skyTitleRow, skyCloseButton) = SheetChrome.titleRow(
+            ctx, plugin.manifest()?.name ?: plugin.name
+        ).apply {
+            first.setPadding(dp(20), 0, dp(20), 0)
+        }
         val sheetRoot = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.rounded_dialog)
-            addView(TextView(ctx).apply {
-                text = plugin.manifest()?.name ?: plugin.name
-                textSize = 18f
-                setTextColor(Color.WHITE)
-                setPadding(dp(20), dp(16), dp(20), 0)
-            })
+            setPadding(0, dp(8), 0, 0)
+            addView(SheetChrome.dragHandle(ctx))
+            addView(skyTitleRow)
             addView(scroll)
         }
         val buttonRow = LinearLayout(ctx).apply {
@@ -656,17 +664,23 @@ class SkyPluginsFragment : Fragment() {
             setText(android.R.string.cancel)
             backgroundTintList = chipTint
             setTextColor(Color.WHITE)
+            cornerRadius = dp(20)
         }
+        // 8.89: Save is the primary action — standard red pill.
         val saveButton = MaterialButton(ctx).apply {
             setText(R.string.nuvio_settings_save)
-            backgroundTintList = chipTint
+            backgroundTintList = ContextCompat.getColorStateList(
+                ctx, R.color.colorPrimaryRed
+            )
             setTextColor(Color.WHITE)
+            cornerRadius = dp(20)
         }
         buttonRow.addView(cancelButton)
         buttonRow.addView(saveButton)
         sheetRoot.addView(buttonRow)
         val dialog = BottomSheetDialog(ctx, R.style.AppBottomSheetDialogTheme)
         dialog.setContentView(sheetRoot)
+        skyCloseButton.setOnClickListener { dialog.dismiss() }
         cancelButton.setOnClickListener { dialog.dismiss() }
         saveButton.setOnClickListener {
             getters.forEach { it() }
@@ -683,9 +697,7 @@ class SkyPluginsFragment : Fragment() {
         dialog.show()
         // The dialog's own sheet frame stays transparent — the
         // sheet root's rounded_dialog background is the only surface.
-        dialog.findViewById<View>(
-            com.google.android.material.R.id.design_bottom_sheet
-        )?.setBackgroundColor(Color.TRANSPARENT)
+        SheetChrome.transparentSheetFrame(dialog)
     }
 }
 
