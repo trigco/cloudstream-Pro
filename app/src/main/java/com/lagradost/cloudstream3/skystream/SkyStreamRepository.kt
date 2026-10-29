@@ -5,8 +5,14 @@ import androidx.preference.PreferenceManager
 import com.lagradost.cloudstream3.app
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+import java.util.zip.ZipInputStream
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 data class StoredSkyStreamPlugin(
     val packageName: String,
@@ -157,22 +163,31 @@ object SkyStreamRepository {
         for ((id, pair) in discovered) {
             require(SAFE_PACKAGE.matches(id)) { "Invalid plugin package name" }
             val parsed = SkyStreamManifestParser.parsePlugin(pair.first, pair.second) ?: continue
-            val sourceResponse = app.get(parsed.sourceUrl)
-            check(sourceResponse.code in 200..299) {
-                "Could not download " + parsed.name + ": HTTP " + sourceResponse.code
+            val archive = downloadSkyPlugin(parsed.sourceUrl, id)
+            val embeddedManifest = archive.manifest
+            val archiveId = embeddedManifest.optString("packageName", embeddedManifest.optString("id"))
+            check(archiveId == id) {
+                "Plugin archive ID does not match repository listing: " + parsed.name
             }
-            val script = sourceResponse.text
-            check(script.isNotBlank()) { "Downloaded script is empty: " + parsed.name }
+            // Preserve repository-provided defaults such as baseUrl while taking the
+            // executable provider contract from the archive's plugin.json.
+            listOf("baseUrl", "description", "authors", "categories", "languages", "iconUrl").forEach { key ->
+                if (!embeddedManifest.has(key) && parsed.raw.has(key)) {
+                    embeddedManifest.put(key, parsed.raw.opt(key))
+                }
+            }
+            embeddedManifest.put("packageName", id)
+            embeddedManifest.put("name", embeddedManifest.optString("name", parsed.name).ifBlank { parsed.name })
             val file = pluginFile(ctx, rootUrl, id)
             file.parentFile?.mkdirs()
-            file.writeText(script)
+            file.writeText(archive.script)
             installed.add(
                 JSONObject()
                     .put("packageName", id)
-                    .put("name", parsed.name)
+                    .put("name", embeddedManifest.optString("name", parsed.name))
                     .put("sourceUrl", parsed.sourceUrl)
-                    .put("version", parsed.version)
-                    .put("manifest", parsed.raw)
+                    .put("version", embeddedManifest.optInt("version", parsed.version))
+                    .put("manifest", embeddedManifest)
             )
         }
         require(installed.isNotEmpty()) { "No valid plugin scripts could be installed" }
@@ -217,6 +232,78 @@ object SkyStreamRepository {
         require(url.startsWith("https://")) { "Use HTTPS for repository URLs" }
         return url
     }
+
+    private data class SkyPluginArchive(val manifest: JSONObject, val script: String)
+
+    private fun downloadSkyPlugin(url: String, listedPackageName: String): SkyPluginArchive {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "CloudStream-Pro SkyStream integration")
+            .get()
+            .build()
+        archiveClient.newCall(request).execute().use { response ->
+            check(response.isSuccessful) { "Plugin download returned HTTP " + response.code }
+            val body = response.body ?: throw IllegalStateException("Plugin download body is empty")
+            val length = body.contentLength()
+            require(length <= MAX_ARCHIVE_BYTES || length < 0) { "SkyStream plugin archive is too large" }
+            val bytes = body.bytes()
+            require(bytes.size <= MAX_ARCHIVE_BYTES) { "SkyStream plugin archive exceeds the size limit" }
+            var manifestText: String? = null
+            var scriptText: String? = null
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (!entry.isDirectory) {
+                        when (entry.name) {
+                            "plugin.json" -> manifestText = readEntryLimited(zip, MAX_MANIFEST_BYTES).toString(Charsets.UTF_8)
+                            "plugin.js" -> scriptText = readEntryLimited(zip, MAX_SCRIPT_BYTES).toString(Charsets.UTF_8)
+                        }
+                    }
+                    zip.closeEntry()
+                }
+            }
+            val rawManifest = manifestText ?: throw IllegalStateException(
+                "Invalid .sky archive: plugin.json is missing"
+            )
+            val manifest = JSONObject(rawManifest)
+            val packageName = manifest.optString("packageName", manifest.optString("id"))
+            require(packageName == listedPackageName) {
+                "Plugin archive packageName does not match the repository entry"
+            }
+            val script = scriptText ?: throw IllegalStateException(
+                "Invalid .sky archive: plugin.js is missing"
+            )
+            require(script.isNotBlank()) { "SkyStream plugin.js is empty" }
+            return SkyPluginArchive(manifest, script)
+        }
+    }
+
+    private fun readEntryLimited(input: java.io.InputStream, limit: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            require(total <= limit) { "SkyStream archive entry exceeds size limit" }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
+    }
+
+    private val archiveClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .callTimeout(35, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+    }
+
+    private const val MAX_ARCHIVE_BYTES = 25 * 1024 * 1024
+    private const val MAX_MANIFEST_BYTES = 1024 * 1024
+    private const val MAX_SCRIPT_BYTES = 8 * 1024 * 1024
 
     private fun persist(ctx: Context, repos: List<StoredSkyStreamRepo>) {
         val arr = JSONArray()
