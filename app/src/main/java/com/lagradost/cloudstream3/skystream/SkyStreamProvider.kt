@@ -502,12 +502,21 @@ class SkyStreamProvider(
 
 /** Keeps SkyStream providers registered for enabled extensions only. */
 object SkyStreamProviders {
+    private data class Registration(
+        val repo: StoredSkyStreamRepo,
+        val plugin: StoredSkyStreamPlugin,
+        /** SkyStream passes providerId only when this provider has no custom base URL. */
+        val providerId: String?,
+        val displayName: String,
+        val customBaseUrl: String?,
+    )
+
     private val registered = ConcurrentHashMap<String, SkyStreamProvider>()
     private val registeredSignatures = ConcurrentHashMap<String, String>()
 
     @Synchronized
     fun sync(context: Context) {
-        val wanted = linkedMapOf<String, Triple<StoredSkyStreamRepo, StoredSkyStreamPlugin, Pair<String?, String>>>()
+        val wanted = linkedMapOf<String, Registration>()
         for (repo in SkyStreamRepository.getRepos(context)) {
             for (plugin in repo.plugins.filter { it.enabled }) {
                 val manifest = plugin.manifest()
@@ -516,40 +525,70 @@ object SkyStreamProviders {
                     for (i in 0 until subProviders.length()) {
                         val p = subProviders.optJSONObject(i) ?: continue
                         val id = p.optString("id").takeIf { it.isNotBlank() } ?: continue
-                        val name = p.optString("name", id).ifBlank { id }
-                        wanted[plugin.packageName + "|" + id] = Triple(repo, plugin, id to name)
+                        val displayName = p.optString("name", id).ifBlank { id }
+                        val baseUrl = p.optString("baseUrl").takeIf { it.isNotBlank() }
+                        val providerId = if (baseUrl == null) id else null
+                        wanted[plugin.packageName + "|" + id] = Registration(
+                            repo = repo,
+                            plugin = plugin,
+                            providerId = providerId,
+                            displayName = displayName,
+                            customBaseUrl = baseUrl,
+                        )
                     }
                 } else {
-                    wanted[plugin.packageName] = Triple(repo, plugin, null to plugin.name)
+                    val customBaseUrl = manifest.optString("baseUrl").takeIf { it.isNotBlank() }
+                wanted[plugin.packageName] = Registration(
+                        repo = repo,
+                        plugin = plugin,
+                        providerId = null,
+                        displayName = plugin.name,
+                        customBaseUrl = customBaseUrl,
+                    )
                 }
             }
         }
+
         val signatures = wanted.mapValues { (_, entry) ->
-            val (repo, plugin, providerInfo) = entry
             listOf(
-                repo.url, plugin.packageName, plugin.version.toString(), plugin.sourceUrl,
-                plugin.manifestJson, providerInfo.first.orEmpty(), providerInfo.second
+                entry.repo.url,
+                entry.plugin.packageName,
+                entry.plugin.version.toString(),
+                entry.plugin.sourceUrl,
+                entry.plugin.manifestJson,
+                entry.providerId.orEmpty(),
+                entry.displayName,
+                entry.customBaseUrl.orEmpty(),
             ).joinToString("|")
         }
-        val ids = wanted.keys
-        registered.keys.toList().filter { it !in ids || registeredSignatures[it] != signatures[it] }
-            .forEach { id ->
-                registered.remove(id)?.let { provider ->
+        val desiredKeys = wanted.keys
+        registered.keys.toList()
+            .filter { it !in desiredKeys || registeredSignatures[it] != signatures[it] }
+            .forEach { key ->
+                registered.remove(key)?.let { provider ->
                     APIHolder.allProviders.remove(provider)
                     APIHolder.removePluginMapping(provider)
                 }
-                registeredSignatures.remove(id)
+                registeredSignatures.remove(key)
             }
+
         wanted.forEach { (key, entry) ->
             if (registered.containsKey(key)) return@forEach
             runCatching {
-                val (repo, plugin, providerInfo) = entry
-                val provider = SkyStreamProvider(repo.url, plugin, providerInfo.first, providerInfo.second)
-                if (APIHolder.getApiFromNameNull(provider.name) != null) provider.name += " (SkyStream)"
+                val provider = SkyStreamProvider(
+                    rootRepoUrl = entry.repo.url,
+                    storedPlugin = entry.plugin,
+                    skyProviderId = entry.providerId,
+                    displayName = entry.displayName,
+                    customBaseUrl = entry.customBaseUrl,
+                )
+                if (APIHolder.getApiFromNameNull(provider.name) != null) {
+                    provider.name += " (SkyStream)"
+                }
                 APIHolder.allProviders.add(provider)
                 APIHolder.addPluginMapping(provider)
                 registered[key] = provider
-                signatures[key]?.let { registeredSignatures[key] = it }
+                registeredSignatures[key] = signatures[key].orEmpty()
             }
         }
     }
