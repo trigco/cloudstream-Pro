@@ -504,7 +504,6 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 this.text = text?.asStringNull(ctx) ?: ""
                 isCheckable = true
                 isChecked = index == seasonChipSelected
-                ensureMinTouchTargetSize = false
                 chipBackgroundColor = ColorStateList(
                     arrayOf(
                         intArrayOf(android.R.attr.state_checked),
