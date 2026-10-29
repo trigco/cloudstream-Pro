@@ -44,6 +44,7 @@ object SkyStreamEngine {
         providerId: String?,
         functionName: String,
         args: List<Any?> = emptyList(),
+        customBaseUrl: String? = null,
         timeoutMs: Long = TIMEOUT_MS,
     ): Any? {
         val code = SkyStreamRepository.script(context, repoUrl, plugin.packageName)
@@ -52,6 +53,7 @@ object SkyStreamEngine {
         val bridge = SkyStreamHostBridge(context.applicationContext, plugin, repoUrl)
         val manifest = plugin.manifest().apply {
             if (!providerId.isNullOrBlank()) put("providerId", providerId)
+            if (!customBaseUrl.isNullOrBlank()) put("baseUrl", customBaseUrl)
         }
         val argArray = JSONArray()
         args.forEach { arg ->
