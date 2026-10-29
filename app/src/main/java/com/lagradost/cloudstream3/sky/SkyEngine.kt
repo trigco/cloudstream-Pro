@@ -71,6 +71,7 @@ class SkyHostBridge(
         val builder = Request.Builder().url(url)
         var contentType: String? = null
         var hasUserAgent = false
+        var hasAcceptEncoding = false
         var sawCookie = false
         val headers = p.optJSONObject("headers")
         if (headers != null) {
@@ -80,11 +81,16 @@ class SkyHostBridge(
                 val value = headers.optString(key)
                 if (key.equals("content-type", ignoreCase = true)) contentType = value
                 if (key.equals("user-agent", ignoreCase = true)) hasUserAgent = true
+                if (key.equals("accept-encoding", ignoreCase = true)) hasAcceptEncoding = true
                 if (key.equals("cookie", ignoreCase = true)) sawCookie = true
                 builder.header(key, value)
             }
         }
         if (!hasUserAgent) builder.header("User-Agent", SkyHttp.SKY_USER_AGENT)
+        // SkyStream parity (8.80): the reference bridge forces
+        // Accept-Encoding: identity unless the plugin set one, so
+        // responses are never gzip-wrapped behind the plugin's back.
+        if (!hasAcceptEncoding) builder.header("Accept-Encoding", "identity")
         synchronized(cookies) {
             val jar = cookies[host]
             if (!jar.isNullOrEmpty() && !sawCookie) {
@@ -109,8 +115,17 @@ class SkyHostBridge(
                 }
             }
             else -> {
+                // SkyStream parity (8.80): POST/PUT default to
+                // application/x-www-form-urlencoded when the plugin
+                // did not send a Content-Type.
+                val effectiveType = contentType
+                    ?: if (method == "POST" || method == "PUT") {
+                        "application/x-www-form-urlencoded"
+                    } else {
+                        null
+                    }
                 val body = (bodyText ?: "")
-                    .toRequestBody(contentType?.toMediaTypeOrNull())
+                    .toRequestBody(effectiveType?.toMediaTypeOrNull())
                 when (method) {
                     "POST" -> builder.post(body)
                     "PUT" -> builder.put(body)
@@ -121,7 +136,13 @@ class SkyHostBridge(
         }
         val response = SkyHttp.client.newCall(builder.build()).execute()
         return response.use { resp ->
-            resp.headers.values("Set-Cookie").forEach { setCookie ->
+            // SkyStream parity (8.80): the reference bridge exposes
+            // Set-Cookie to plugins as a header list — plugins keep
+            // their own cookie store from it (katdrama's locker chain
+            // silently stalls without it) — while ALSO feeding the
+            // host-side jar below.
+            val setCookies = resp.headers.values("Set-Cookie")
+            setCookies.forEach { setCookie ->
                 val pair = setCookie.substringBefore(';').trim()
                 if (pair.contains('=')) {
                     synchronized(cookies) {
@@ -153,10 +174,21 @@ class SkyHostBridge(
                     }
                 )
             }
+            if (setCookies.isNotEmpty()) {
+                headersOut.put("set-cookie", JSONArray(setCookies.toList()))
+            }
+            // SkyStream parity (8.80): plugins read finalUrl to learn
+            // where a redirect landed (the kmhd /file/ -> /locked
+            // hop); without it their chain-walkers stall.
+            val finalUrl = resp.request.url.toString()
             JSONObject()
                 .put("status", resp.code)
+                .put("code", resp.code)
+                .put("statusCode", resp.code)
                 .put("body", String(capped, charset))
                 .put("headers", headersOut)
+                .put("finalUrl", finalUrl)
+                .put("url", finalUrl)
         }
     }
 
