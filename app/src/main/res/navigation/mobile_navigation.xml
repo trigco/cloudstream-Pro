@@ -271,6 +271,16 @@
         app:popExitAnim="@anim/feel_slide_out_right"
         tools:layout="@layout/fragment_nuvio_plugins" />
     <fragment
+        android:id="@+id/navigation_settings_skystream"
+        android:name="com.lagradost.cloudstream3.ui.settings.skystream.SkyStreamPluginsFragment"
+        android:label="@string/skystream_plugins_title"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right"
+        tools:layout="@layout/fragment_skystream_plugins" />
+
+    <fragment
         android:id="@+id/navigation_settings_plugins"
         android:name="com.lagradost.cloudstream3.ui.settings.extensions.PluginsFragment"
         android:label="@string/title_settings"
@@ -516,6 +526,14 @@
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_nuvio"
         app:destination="@id/navigation_settings_nuvio"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
+
+    <action
+        android:id="@+id/action_navigation_global_to_navigation_settings_skystream"
+        app:destination="@id/navigation_settings_skystream"
         app:enterAnim="@anim/feel_slide_in_right"
         app:exitAnim="@anim/feel_slide_out_left"
         app:popEnterAnim="@anim/feel_slide_in_left"
