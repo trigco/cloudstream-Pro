@@ -66,6 +66,10 @@ class SkyStreamProvider(
             return null
         }
         val home = result as? JSONObject ?: return null
+        if (home.has("__sky_error")) {
+            SkyStreamRepository.setError(context, storedPlugin.packageName, home.optString("__sky_error"))
+            return null
+        }
         val items = mutableListOf<SearchResponse>()
         val keys = home.keys()
         while (keys.hasNext() && items.size < MAX_HOME_ITEMS) {
@@ -84,6 +88,10 @@ class SkyStreamProvider(
             SkyStreamEngine.invoke(context, rootRepoUrl, storedPlugin, skyProviderId, "search", listOf(query))
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, storedPlugin.packageName, error.message ?: "search failed")
+            return null
+        }
+        if (result is JSONObject && result.has("__sky_error")) {
+            SkyStreamRepository.setError(context, storedPlugin.packageName, result.optString("__sky_error"))
             return null
         }
         val array = result as? JSONArray ?: return null
@@ -236,6 +244,10 @@ class SkyStreamProvider(
             )
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, payload.plugin.packageName, error.message ?: "loadStreams failed")
+            return false
+        }
+        if (result is JSONObject && result.has("__sky_error")) {
+            SkyStreamRepository.setError(context, payload.plugin.packageName, result.optString("__sky_error"))
             return false
         }
         val streams = when (result) {
