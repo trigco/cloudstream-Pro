@@ -99,6 +99,14 @@ class FeedAdapter(
             if (rating == null && response.score == null) {
                 MetadataResolver.resolve(context, response)
             }
+            // Phase 8.88: metadata (genres / language / country)
+            // for the Feed's categories — the fragment pre-kicks
+            // the pool's head; cards deeper in the pool resolve
+            // here on bind. Self-guarded (cached / missed /
+            // in-flight items skip instantly).
+            if (MetadataResolver.metaCachedFor(context, response) == null) {
+                MetadataResolver.resolveMeta(context, response)
+            }
             // dubStatus is declared on AnimeSearchResponse only.
             val declaredDub = (response as? AnimeSearchResponse)?.dubStatus
             val dubSub = when {

@@ -140,9 +140,55 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private var filterRatingMin: Double? = null
     private var filterSource: String? = null
 
+    /** Phase 8.88: the smart category chosen on the tile row. */
+    private var filterCategory: String? = null
+
     private val filtersActive: Boolean
         get() = filterGenre != null || filterYear != null ||
-            filterRatingMin != null || filterSource != null
+            filterRatingMin != null || filterSource != null ||
+            filterCategory != null
+
+    /** Phase 8.88: the Categories tile row, a ConcatAdapter item
+     *  between the hero header and the cards. */
+    private val categoriesAdapter = FeedCategoriesAdapter { category ->
+        filterCategory =
+            if (filterCategory == category) null else category
+        updateFilterButtonState()
+        binding?.let { updateCategoriesRow(it) }
+        val query = binding?.feedSearchInput?.text
+            ?.toString()?.trim().orEmpty()
+        applySearch(query)
+    }
+
+    /** Phase 8.88: resolved metadata lands here — queue a calm
+     *  refresh of the category surfaces (same debounce-until-idle
+     *  pattern as resolved titles, so a burst of resolutions
+     *  never shakes the grid). */
+    private val metaListener: (String) -> Unit = {
+        searchHandler.removeCallbacks(metaApplyRunnable)
+        searchHandler.postDelayed(metaApplyRunnable, 900L)
+    }
+
+    private val metaApplyRunnable = object : Runnable {
+        override fun run() {
+            val rv = binding?.feedRecycler
+            if (rv != null &&
+                rv.scrollState != RecyclerView.SCROLL_STATE_IDLE
+            ) {
+                searchHandler.postDelayed(this, 600L)
+                return
+            }
+            val b = binding ?: return
+            updateCategoriesRow(b)
+            refreshChipAlphas(b)
+            // An active genre/category filter may match more (or
+            // fewer) items now that real genres are known.
+            if (filterGenre != null || filterCategory != null) {
+                val query = b.feedSearchInput.text.toString().trim()
+                applySearch(query)
+            }
+        }
+    }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
@@ -182,11 +228,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val gridLayoutManager = GridLayoutManager(context, 3)
         gridLayoutManager.spanSizeLookup =
             object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int =
-                    if (position == 0 && heroHeaderAdapter.isShowing()) 3 else 1
+                // Phase 8.88: both header items (hero, categories)
+                // span the full grid width; cards take one column.
+                override fun getSpanSize(position: Int): Int {
+                    val headers = heroHeaderAdapter.itemCount +
+                        categoriesAdapter.itemCount
+                    return if (position < headers) 3 else 1
+                }
             }
         binding.feedRecycler.layoutManager = gridLayoutManager
-        binding.feedRecycler.adapter = ConcatAdapter(heroHeaderAdapter, adapter)
+        binding.feedRecycler.adapter =
+            ConcatAdapter(heroHeaderAdapter, categoriesAdapter, adapter)
         // Fixed size + no change animations: the grid must never
         // relayout or flash mid-scroll (Phase 8.23 jitter fix).
         binding.feedRecycler.setHasFixedSize(true)
@@ -213,6 +265,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
         TitleResolver.addListener(titleListener)
         MetadataResolver.addListener(ratingListener)
+        MetadataResolver.addMetaListener(metaListener)
 
         // Phase 8.37: the refresh ring used to hide behind the
         // floating header — rest it below the search bar + chips.
@@ -258,6 +311,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
                     pool = resource.value.filterNot { it.response.url in hidden }
                     updateHeroItems()
+                    // Phase 8.88: kick background metadata
+                    // resolution for the pool's head — the
+                    // Categories row counts grow as results land
+                    // (cards deeper in the pool resolve on bind).
+                    // Bounded by the resolver's own semaphore;
+                    // cached/missed/in-flight items self-skip.
+                    context?.let { ctx ->
+                        pool.take(60).forEach {
+                            MetadataResolver.resolveMeta(ctx, it.response)
+                        }
+                    }
                     val query = binding.feedSearchInput.text.toString().trim()
                     if (query.isEmpty()) {
                         val filtered = applyFeedFilters(pool)
@@ -325,6 +389,8 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         FeedPlayer.removeListener(miniListener)
         TitleResolver.removeListener(titleListener)
         MetadataResolver.removeListener(ratingListener)
+        MetadataResolver.removeMetaListener(metaListener)
+        searchHandler.removeCallbacks(metaApplyRunnable)
         super.onDestroyView()
     }
 
@@ -379,22 +445,25 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 continue
             }
             val any = pool.any {
-                genreMatches(it.response.name, tag)
+                genreMatchesEntry(it, tag)
             }
             chip.alpha = if (any) 1f else 0.45f
         }
     }
 
     /**
-     * Phase 8.85: the feed's genre vocabulary. SearchResponse has
-     * no genre field, so genres have always been title-keyword
-     * matches — the chip row and the Filters sheet's Genre tab
-     * share this one list and this one matching rule.
+     * Phase 8.85: the feed's genre vocabulary. SearchResponse
+     * itself carries no genre field, so genres started as
+     * title-keyword matches — the chip row and the Filters
+     * sheet's Genre tab share this one list.
      * Phase 8.87: widened from 9 to the standard 18 genres, each
      * with the title keywords that mark it. A genre matches when
      * ANY of its keywords appears in the title (case-insensitive
      * contains — the rule as it always was, now with spelling
      * variants like "Sci Fi" / "Science Fiction" covered).
+     * Phase 8.88: keyword matching is now the FALLBACK half of
+     * the entry-level rule (genreMatchesEntry) — resolved
+     * metadata genres win first where they exist.
      */
     private val genreKeywords: List<Pair<String, List<String>>> = listOf(
         "Action" to listOf("Action"),
@@ -426,6 +495,63 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val keywords = genreKeywords.firstOrNull { it.first == genre }?.second
             ?: return false
         return keywords.any { title.contains(it, ignoreCase = true) }
+    }
+
+    // ---------- Phase 8.88: resolved-metadata categories ----------
+
+    /** The item's resolved metadata (genres / language /
+     *  country), when MetadataResolver has it cached. */
+    private fun metaOf(entry: FeedEntry): MetadataResolver.Meta? =
+        context?.let { MetadataResolver.metaCachedFor(it, entry.response) }
+
+    /** All categories an item belongs to: the smart categories
+     *  (K-Drama, Anime, …) plus each resolved genre by name.
+     *  The type is the details-page type where one was learned
+     *  (the same preference the cards use), else the listing's. */
+    private fun categoriesOfEntry(entry: FeedEntry): Set<String> {
+        val type = context?.let {
+            TitleResolver.cachedType(it, entry.response.url)
+        } ?: entry.response.type
+        return FeedCategories.categoriesOf(type, metaOf(entry))
+    }
+
+    /**
+     * The genre rule for entries, UNION of both worlds: an item
+     * matches a genre when its RESOLVED genres (canonicalised
+     * onto the chip vocabulary) contain it, OR the 8.87
+     * title-keyword match hits. Resolved data is checked first —
+     * it is real metadata; keywords remain the fallback for
+     * items no source could resolve.
+     */
+    private fun genreMatchesEntry(entry: FeedEntry, genre: String): Boolean {
+        val resolved = FeedCategories.canonicalGenres(metaOf(entry))
+        if (resolved.any { it.equals(genre, ignoreCase = true) }) {
+            return true
+        }
+        return genreMatches(entry.response.name, genre)
+    }
+
+    /**
+     * Recompute the Categories tile row from the current pool:
+     * smart categories with at least 3 resolved items get a
+     * tile (the selected one stays from 1, so it can always be
+     * tapped off). Counts run over the fragment pool, which the
+     * ViewModel already Family-Mode/hidden filtered. Hidden
+     * while searching — like the hero, it belongs to browsing.
+     */
+    private fun updateCategoriesRow(binding: FragmentFeedBinding) {
+        val searching = binding.feedSearchInput.text
+            .toString().trim().isNotEmpty()
+        if (searching || pool.isEmpty()) {
+            categoriesAdapter.submit(emptyList(), filterCategory)
+            return
+        }
+        val tiles = FeedCategories.SMART_CATEGORIES.mapNotNull { cat ->
+            val count = pool.count { cat in categoriesOfEntry(it) }
+            val min = if (cat == filterCategory) 1 else 3
+            if (count >= min) cat to count else null
+        }
+        categoriesAdapter.submit(tiles, filterCategory)
     }
 
     private fun buildChips(binding: FragmentFeedBinding) {
@@ -724,6 +850,9 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             binding.feedSearchInput.text.toString().trim().isEmpty() &&
             !filtersActive
         heroHeaderAdapter.submit(heroEntries, heroVisible)
+        // Phase 8.88: the Categories row refreshes on the same
+        // chrome passes (pool changes, query changes, filters).
+        updateCategoriesRow(binding)
         if (headerFullHeight > 0) {
             val topPad = headerFullHeight + dp(6)
             binding.feedRecycler.setPadding(
@@ -761,9 +890,14 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     private fun applyFeedFilters(list: List<FeedEntry>): List<FeedEntry> {
         var out = list
+        // Phase 8.88: a tapped category tile filters through
+        // this same path, ahead of the sheet's filters.
+        filterCategory?.let { category ->
+            out = out.filter { category in categoriesOfEntry(it) }
+        }
         filterGenre?.let { genre ->
             out = out.filter {
-                genreMatches(it.response.name, genre)
+                genreMatchesEntry(it, genre)
             }
         }
         filterYear?.let { year ->
@@ -783,6 +917,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         filterYear = null
         filterRatingMin = null
         filterSource = null
+        filterCategory = null
         updateFilterButtonState()
     }
 
@@ -800,9 +935,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * in the loaded feed, applied together by Done. The reference's
      * 4th tab is Lang — feed items carry no reliable content
      * language, so the 4th tab is the item's provider (Source).
-     * Genre matching reuses the chip row's title-keyword rule;
-     * Year reads the response's year field where the class has
-     * one; Rating reads the provider score / resolved rating.
+     * Genre matching is the union rule (genreMatchesEntry):
+     * resolved metadata genres first, title keywords as the
+     * fallback; Year reads the response's year field where the
+     * class has one; Rating reads the provider score / resolved
+     * rating.
      */
     private fun showFeedFilters() {
         val ctx = context ?: return
@@ -920,10 +1057,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             }
-            val present = genreTags.filter { tag ->
-                pool.any { genreMatches(it.response.name, tag) }
-            }
-            (listOf("") + present).forEach { genre ->
+            // Phase 8.88: the tab lists the FULL genre vocabulary
+            // like the chip row does — it used to list only
+            // keyword-"present" genres, which with real-world
+            // titles (they rarely contain genre words) left the
+            // tab showing nothing but "All". Presence still
+            // drives the dimming (Phase 8.36 rule), now computed
+            // from resolved metadata first, keywords as fallback
+            // (genreMatchesEntry's union).
+            (listOf("") + genreTags).forEach { genre ->
                 val chip = makeChip(
                     if (genre.isEmpty()) getString(R.string.all) else genre,
                     genre
@@ -935,6 +1077,18 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 grid.addView(chip)
             }
             styleChips(grid, selGenre ?: "")
+            for (i in 0 until grid.childCount) {
+                val chip = grid.getChildAt(i) as? TextView ?: continue
+                val tag = chip.tag as? String
+                chip.alpha = if (tag.isNullOrEmpty() || pool.any {
+                        genreMatchesEntry(it, tag)
+                    }
+                ) {
+                    1f
+                } else {
+                    0.45f
+                }
+            }
             return grid
         }
 
