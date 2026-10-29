@@ -128,7 +128,9 @@ class SkyStreamProvider(
         val title = mediaTitle(detail).ifBlank { mediaTitle(payload.item) }.ifBlank { return null }
         val type = mediaType(detail, mediaType(payload.item))
         val poster = mediaPoster(detail) ?: mediaPoster(payload.item)
-        val background = detail.optString("backgroundPosterUrl", detail.optString("backdrop"))
+        val background = detail.optString("backgroundPosterUrl")
+            .ifBlank { detail.optString("bannerUrl") }
+            .ifBlank { detail.optString("backdrop") }
             .takeIf { it.startsWith("http") }
         val plot = detail.optString("description", detail.optString("plot", detail.optString("overview")))
             .takeIf { it.isNotBlank() }
@@ -147,8 +149,9 @@ class SkyStreamProvider(
                 this.backgroundPosterUrl = background
                 this.plot = plot
                 this.year = year
-                this.tags = stringList(detail.optJSONArray("genres")).ifEmpty { stringList(detail.optJSONArray("tags")) }.takeIf { it.isNotEmpty() }
-                this.score = Score.from(detail.optDouble("rating").takeIf { it > 0 }, 10)
+                this.tags = stringList(detail.optJSONArray("tags")).ifEmpty { stringList(detail.optJSONArray("genres")) }.takeIf { it.isNotEmpty() }
+                this.score = Score.from(detail.optDouble("score").takeIf { it > 0 }
+                    ?: detail.optDouble("rating").takeIf { it > 0 }, 10)
             }
         } else {
             newMovieLoadResponse(title, payloadJson, TvType.Movie, payloadJson) {
@@ -156,9 +159,11 @@ class SkyStreamProvider(
                 this.backgroundPosterUrl = background
                 this.plot = plot
                 this.year = year
-                this.tags = stringList(detail.optJSONArray("genres")).ifEmpty { stringList(detail.optJSONArray("tags")) }.takeIf { it.isNotEmpty() }
-                this.score = Score.from(detail.optDouble("rating").takeIf { it > 0 }, 10)
+                this.tags = stringList(detail.optJSONArray("tags")).ifEmpty { stringList(detail.optJSONArray("genres")) }.takeIf { it.isNotEmpty() }
+                this.score = Score.from(detail.optDouble("score").takeIf { it > 0 }
+                    ?: detail.optDouble("rating").takeIf { it > 0 }, 10)
                 this.duration = detail.optInt("duration").takeIf { it > 0 }
+                    ?: detail.optInt("runtime").takeIf { it > 0 }
             }
         }
     }
@@ -355,7 +360,9 @@ class SkyStreamProvider(
 
         private fun mediaType(item: JSONObject, fallback: String = "movie"): String {
             val raw = item.optString("type").ifBlank {
-                item.optString("mediaType").ifBlank { fallback }
+                item.optString("contentType").ifBlank {
+                    item.optString("mediaType").ifBlank { fallback }
+                }
             }.lowercase()
             return when (raw) {
                 "tv", "show", "series", "episode" -> "series"
