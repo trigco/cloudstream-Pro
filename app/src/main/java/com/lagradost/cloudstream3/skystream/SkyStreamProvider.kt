@@ -193,37 +193,46 @@ class SkyStreamProvider(
                 val epUrl = episodeItem.optString("url", episodeItem.optString("id"))
                 if (epUrl.isBlank()) continue
                 val epTitle = mediaTitle(episodeItem).ifBlank { "Episode " + (i + 1) }
-                val season = episodeItem.optInt("season", 1).takeIf { it >= 0 }
-                val episodeNo = episodeItem.optInt("episode", i + 1).takeIf { it > 0 }
+                val seasonNumber = episodeItem.optInt("season", 1).coerceAtLeast(0)
+                val episodeNumber = episodeItem.optInt("episode", i + 1).coerceAtLeast(1)
                 val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
-                output += newEpisode(epPayload, fix = false) {
-                    name = epTitle
-                    this.season = season
-                    this.episode = episodeNo
-                    posterUrl = mediaPoster(episodeItem)
-                    description = episodeItem.optString("description").takeIf { it.isNotBlank() }
-                    addDate(episodeItem.optString("releaseDate"))
-                }
+                output += newEpisode(
+                    url = epPayload,
+                    initializer = {
+                        name = epTitle
+                        this.season = seasonNumber
+                        this.episode = episodeNumber
+                        posterUrl = mediaPoster(episodeItem)
+                        description = episodeItem.optString("description").takeIf { it.isNotBlank() }
+                        addDate(episodeItem.optString("airDate").ifBlank { episodeItem.optString("releaseDate") })
+                    },
+                    fix = false,
+                )
             }
         }
         val seasons = detail.optJSONArray("seasons")
         if (output.isEmpty() && seasons != null) {
             for (si in 0 until seasons.length()) {
-                val season = seasons.optJSONObject(si) ?: continue
-                val eps = season.optJSONArray("episodes") ?: continue
-                for (ei in 0 until eps.length()) {
-                    val episodeItem = eps.optJSONObject(ei) ?: continue
+                val seasonObj = seasons.optJSONObject(si) ?: continue
+                val episodes = seasonObj.optJSONArray("episodes") ?: continue
+                for (ei in 0 until episodes.length()) {
+                    val episodeItem = episodes.optJSONObject(ei) ?: continue
                     val epUrl = episodeItem.optString("url", episodeItem.optString("id"))
                     if (epUrl.isBlank()) continue
-                    val number = episodeItem.optInt("episode", ei + 1)
+                    val episodeNumber = episodeItem.optInt("episode", ei + 1).coerceAtLeast(1)
                     val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
-                    output += newEpisode(epPayload, fix = false) {
-                        name = mediaTitle(episodeItem).ifBlank { "Episode " + number }
-                        this.season = season.optInt("season", season.optInt("number", si + 1))
-                        this.episode = number
-                        posterUrl = mediaPoster(episodeItem)
-                        description = episodeItem.optString("description").takeIf { it.isNotBlank() }
-                    }
+                    output += newEpisode(
+                        url = epPayload,
+                        initializer = {
+                            name = mediaTitle(episodeItem).ifBlank { "Episode " + episodeNumber }
+                            this.season = seasonObj.optInt("season", seasonObj.optInt("number", si + 1)).coerceAtLeast(0)
+                            this.episode = episodeNumber
+                            posterUrl = mediaPoster(episodeItem)
+                            description = episodeItem.optString("description").takeIf { it.isNotBlank() }
+                            addDate(episodeItem.optString("airDate").ifBlank { episodeItem.optString("releaseDate") })
+                        },
+                        fix = false,
+                    )
                 }
             }
         }
