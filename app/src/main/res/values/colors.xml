@@ -31,7 +31,7 @@
 
     <color name="dubColorText">#121950</color> <!--3b65f5 f18c82 8294F1-->
     <color name="amoledModeLight">#1F1F1F</color>
-    <color name="darkThemeBackground">#121212</color> <!-- Phase 8.61: Dark theme background - gray, not pure black -->
+    <color name="darkThemeBackground">#000000</color> <!-- Phase 8.61: Dark theme background. Phase 8.84: pure black #000000 (was #121212 gray) — his SkyStream comparison; AmoledModeLight paints primaryBlackBackground from this, card surfaces stay on amoledModeLight. -->
 
     <color name="dubColorBg">#3B65F5</color>
     <color name="subColorText">#571711</color> <!--F53B66 FA3D79-->

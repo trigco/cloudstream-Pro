@@ -124,7 +124,7 @@
                 android:editTextColor="@color/white"
                 android:gravity="center_vertical"
                 android:iconifiedByDefault="true"
-                android:nextFocusRight="@id/home_head_profile_padding"
+                android:nextFocusRight="@id/home_provider_pill"
                 android:padding="0dp"
                 android:textColor="@color/white"
                 android:textColorHint="@color/white"
@@ -135,6 +135,57 @@
                 app:searchIcon="@drawable/search_icon"
                 tools:ignore="RtlSymmetry" />
 
+            <!-- Phase 8.84: the provider switcher moved up here from
+                 the floating funnel pill (removed — too big/crowded
+                 over the nav). Compact dark pill beside the avatar,
+                 SkyStream-style: puzzle icon + current provider name
+                 + chevron. Wired in HeaderViewHolder (phone head
+                 only); the name follows viewModel.apiName. -->
+            <LinearLayout
+                android:id="@+id/home_provider_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_home_provider_pill"
+                android:clickable="true"
+                android:contentDescription="@string/home_source"
+                android:focusable="true"
+                android:foreground="@drawable/rounded_select_ripple"
+                android:gravity="center_vertical"
+                android:nextFocusLeft="@id/home_search"
+                android:nextFocusRight="@id/home_head_profile_padding"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_baseline_extension_24" />
+
+                <TextView
+                    android:id="@+id/home_provider_pill_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:ellipsize="end"
+                    android:maxWidth="150dp"
+                    android:singleLine="true"
+                    android:textColor="@color/white"
+                    android:textSize="13sp"
+                    tools:text="Hotstar" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginStart="2dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_baseline_keyboard_arrow_down_24"
+                    app:tint="@color/white" />
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/home_head_profile_padding"
                 android:layout_width="50dp"
@@ -143,7 +194,7 @@
                 android:focusable="true"
                 android:foreground="@drawable/rounded_select_ripple"
                 android:gravity="center"
-                android:nextFocusLeft="@id/home_search"
+                android:nextFocusLeft="@id/home_provider_pill"
                 android:orientation="horizontal">
 
                 <androidx.cardview.widget.CardView
@@ -254,6 +305,52 @@
         android:gravity="end"
         android:orientation="horizontal"
         android:paddingHorizontal="0dp">
+
+        <!-- Phase 8.84: same provider pill as the hero row, for the
+             no-hero state (e.g. the None provider) where the hero
+             frame — and its top row — is hidden. Same wiring. -->
+        <LinearLayout
+            android:id="@+id/home_provider_pill_alt"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_home_provider_pill"
+            android:clickable="true"
+            android:contentDescription="@string/home_source"
+            android:focusable="true"
+            android:foreground="@drawable/rounded_select_ripple"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_baseline_extension_24" />
+
+            <TextView
+                android:id="@+id/home_provider_pill_text_alt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:ellipsize="end"
+                android:maxWidth="150dp"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                tools:text="Hotstar" />
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginStart="2dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_baseline_keyboard_arrow_down_24"
+                app:tint="@color/white" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/alternate_home_head_profile_padding"

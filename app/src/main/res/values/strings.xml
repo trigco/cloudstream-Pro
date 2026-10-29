@@ -126,6 +126,7 @@
     <string name="popup_resume_download">Resume Download</string>
     <string name="popup_pause_download">Pause Download</string>
     <string name="home_more_info">More info</string>
+    <string name="home_view_all">View All</string>
     <string name="home_expanded_hide">Hide</string>
     <string name="home_play">Play</string>
     <string name="home_info">Info</string>

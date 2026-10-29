@@ -244,31 +244,12 @@
             android:layout_height="wrap_content"
             android:visibility="gone" />
 
-    <!-- Phase 7.5 FIX-5: bottom margin = style margin 16dp + 88dp nav zone,
-         so the FAB keeps its pre-overlay on-screen position above the
-         floating nav (the fragment now extends full height).
-         Phase 8C: layout_gravity is now EXPLICIT in the layout (bottom|end,
-         marginBottom 104dp = 88dp nav zone + 16dp gap, marginEnd 16dp).
-         Phase 8.5C: these XML values are now only the pre-layout FALLBACK.
-         On device the FAB's position measured exactly right whenever it
-         was drawn — the real failure was it not being drawn at all in the
-         top-of-home state. HomeFragment.anchorHomeApiFab() now recomputes
-         the bottom margin from the activity's measured nav view at runtime
-         and the FAB no longer shrink()es on scroll (see PHASE85C_CHANGES.md).
-         Phase 8.83: gap above the floating nav widened 16dp -> 24dp
-         (marginBottom 112dp) — the pill crowded the nav bar. -->
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/home_api_fab"
-        style="@style/ExtendedFloatingActionButton"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="112dp"
-        android:text="@string/home_source"
-        android:textColor="?attr/textColor"
-        android:visibility="gone"
-        app:icon="@drawable/ic_baseline_filter_list_24"
-        tools:ignore="ContentDescription"
-        tools:visibility="visible" />
+    <!-- Phase 8.84: the floating provider pill (home_api_fab) is
+         REMOVED — too big and crowded over the nav. Provider switching
+         now lives on the compact pill in the Home top bar beside the
+         avatar (fragment_home_head, wired in HeaderViewHolder). The
+         Random FAB below is untouched (still bottom-start; its 112dp
+         bottom margin was the 8.83 nav-clearance value and stays). -->
 
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/home_random"

@@ -9,11 +9,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.EdgeEffect
 import android.widget.ImageView
@@ -432,6 +430,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     false
                 )
             dialog.setContentView(binding.root)
+            // Phase 8.84: the sheet opened STATE_EXPANDED to the full
+            // screen and read as "too big" — cap it at ~72% of the
+            // screen height. The list is wrap_content and scrolls
+            // internally past the cap; the filter chips stay pinned
+            // above it (they are outside the RecyclerView).
+            dialog.behavior.maxHeight =
+                (resources.displayMetrics.heightPixels * 0.72).toInt()
             dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
 
             // Phase 8.47: his custom lists are appended to this
@@ -979,14 +984,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         MetadataResolver.removeListener(metadataResolveListener)
         homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
         // Phase 8.73: never leave the activity's bottom nav translated
-        // away (or the switcher either) when Home's view goes away.
+        // away when Home's view goes away.
         homeChromeHidden = false
         homeChromeDy = 0
         activity?.findViewById<View>(R.id.nav_view)?.let {
-            it.animate().cancel()
-            it.translationY = 0f
-        }
-        binding?.homeApiFab?.let {
             it.animate().cancel()
             it.translationY = 0f
         }
@@ -1246,42 +1247,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
         // Fix grid
         configEvent.invoke()
-
-        // Phase 8.5C: re-anchor the provider switcher (rotation lands here)
-        anchorHomeApiFab()
-    }
-
-    /** Phase 8.5C: anchor the provider switcher (home_api_fab) from the
-     * activity's REAL bottom-nav view instead of a hand-computed dp constant.
-     * The switcher's XML margins were already right on paper twice (7.5, 8C)
-     * and the on-device failure turned out not to be the margin at all: in
-     * the top-of-home state the FAB was not drawn at all (pixel-verified in
-     * PHASE85C_CHANGES.md). This makes the placement self-correcting:
-     * bottom margin = the nav view's measured height + the nav's own bottom
-     * margin + the original 16dp gap, recomputed on binding creation, on
-     * every successful page load, and on every fixLayout (rotation) — so it
-     * also tracks the API 30+ inset growth MainActivity applies to the pill.
-     * The XML 104dp margin remains as the pre-layout fallback.
-     * Phase 8.83: the gap is 24dp now — the pill crowded the nav bar. */
-    private fun anchorHomeApiFab() {
-        if (!isLayout(PHONE)) return
-        val fab = binding?.homeApiFab ?: return
-        val nav = activity?.findViewById<View>(R.id.nav_view) ?: return
-        val apply = {
-            if (nav.isVisible && nav.height > 0) {
-                val navBottomMargin =
-                    (nav.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
-                val desired = nav.height + navBottomMargin + 24.toPx
-                val lp = fab.layoutParams as? FrameLayout.LayoutParams
-                if (lp != null && lp.bottomMargin != desired) {
-                    lp.gravity = Gravity.BOTTOM or Gravity.END
-                    lp.bottomMargin = desired
-                    lp.marginEnd = 16.toPx
-                    fab.layoutParams = lp
-                }
-            }
-        }
-        if (nav.height > 0) apply() else nav.post { apply() }
     }
 
     /**
@@ -1297,19 +1262,23 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      * are untouched.
      *
      * This never fights [HomeScrollTransformer]: the transformer runs on
-     * the pager's *horizontal* page changes and only writes page padding,
-     * while this writes scale/alpha/translationY on the outer frame from
-     * the *vertical* list scroll — disjoint properties on disjoint views.
+     * the pager's *horizontal* page changes and only writes page
+     * alpha/translationX, while this writes scale/alpha/translationY on
+     * the outer frame from the *vertical* list scroll — disjoint
+     * properties on disjoint views.
      */
-    // Phase 8.73: provider-switcher + bottom-nav auto-hide state.
+    // Phase 8.73: bottom-nav auto-hide state (8.84: the provider
+    // switcher left the chrome — it is the top-bar pill now).
     private var homeChromeHidden = false
     private var homeChromeDy = 0
 
     /**
      * Phase 8.73 (his request): while scrolling down through Home, the
-     * provider switcher and the bottom navigation slide away; a slight
-     * scroll back up brings both back. Accumulated-delta thresholds so
-     * slow drags count too, not just flings. Transforms only.
+     * bottom navigation slides away; a slight scroll back up brings it
+     * back. Accumulated-delta thresholds so slow drags count too, not
+     * just flings. Transforms only. (8.84: the provider switcher is no
+     * longer floating chrome — it moved to the top bar — so only the
+     * nav is animated here.)
      */
     private fun setupHomeChromeAutoHide(recyclerView: RecyclerView) {
         if (!isLayout(PHONE)) return
@@ -1342,15 +1311,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private fun applyHomeChromeVisibility() {
-        val fab = binding?.homeApiFab
         val nav = activity?.findViewById<View>(R.id.nav_view)
         if (homeChromeHidden) {
-            if (fab != null) {
-                val lp = fab.layoutParams as? ViewGroup.MarginLayoutParams
-                val shift = fab.height + (lp?.bottomMargin ?: 0) + 8.toPx
-                fab.animate().translationY(shift.toFloat())
-                    .setDuration(150).start()
-            }
             if (nav != null) {
                 val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
                 val shift = nav.height + (lp?.bottomMargin ?: 0) + 8.toPx
@@ -1358,7 +1320,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     .setDuration(150).start()
             }
         } else {
-            fab?.animate()?.translationY(0f)?.setDuration(150)?.start()
             nav?.animate()?.translationY(0f)?.setDuration(150)?.start()
         }
     }
@@ -1503,13 +1464,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         binding.apply {
             //homeChangeApiLoading.setOnClickListener(apiChangeClickListener)
             //homeChangeApiLoading.setOnClickListener(apiChangeClickListener)
-            homeApiFab.setOnClickListener(apiChangeClickListener)
-            homeApiFab.setOnLongClickListener {
-                if (currentApiName == noneApi.name) return@setOnLongClickListener false
-                homeViewModel.loadAndCancel(currentApiName, forceReload = true, fromUI = true)
-                showToast(R.string.action_reload, Toast.LENGTH_SHORT)
-                true
-            }
+            // Phase 8.84: the floating provider pill (home_api_fab) is
+            // gone — switching lives on the top-bar pill in the head
+            // (HeaderViewHolder) and homeChangeApi below. Its FAB-only
+            // reload-on-long-press went with it.
             homeChangeApi.setOnClickListener(apiChangeClickListener)
             homeSwitchAccount.setOnClickListener {
                 activity?.showAccountSelectLinear()
@@ -1628,8 +1586,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 60_000L)
             }
 
-            homeApiFab.isVisible = isLayout(PHONE)
-            anchorHomeApiFab()
 
             homePreviewReloadProvider.setOnClickListener { view ->
                 view.hapticTick()
@@ -1716,16 +1672,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             homeMasterRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (isLayout(PHONE)) {
-                        // Fab is only relevant to Phone
-                        // Phase 8.5C: the provider switcher (homeApiFab) no
-                        // longer shrink()es. The RecyclerView also reports
-                        // dy > 0 while it first populates, so a shrink could
-                        // land before the FAB's extended size was ever
-                        // measured — leaving the switcher undrawn at the top
-                        // of the feed until a scroll-up happened to extend()
-                        // it (see PHASE85C_CHANGES.md). As the primary
-                        // provider control it now stays extended; the Random
-                        // FAB keeps the original shrink/extend behaviour.
+                        // Fab is only relevant to Phone. Phase 8.84:
+                        // only the Random FAB remains floating (the
+                        // provider switcher is the top-bar pill now);
+                        // it keeps its shrink/extend on scroll.
                         if (dy > 0) { //check for scroll down
                             homeRandom.shrink()
                         } else if (dy < -5) {
@@ -1794,7 +1744,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             currentApiName = apiName
             val displayApiName = context?.getDisplayName(apiName) ?: apiName
             binding.apply {
-                homeApiFab.text = displayApiName
                 homeChangeApi.text = displayApiName
                 homePreviewReloadProvider.isGone = (apiName == noneApi.name)
                 homePreviewSearchButton.isGone = (apiName == noneApi.name)
@@ -1857,22 +1806,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoadingShimmer.stopShimmer()
                         homeSwipeRefresh.isRefreshing = false
 
-                        // Phase 8.5C: whenever content is on screen the
-                        // provider switcher must be too — re-assert its
-                        // visibility and re-anchor it above the real nav
-                        // view on every successful load, so no earlier
-                        // state can leave it missing (see PHASE85C_CHANGES.md).
-                        homeApiFab.isVisible = isLayout(PHONE)
-                        anchorHomeApiFab()
-                        // Phase 8.73: re-assert the switcher label from
-                        // the actually-loaded provider on every load —
-                        // after switching back to the default it could
-                        // keep showing the previous provider's name.
+                        // Phase 8.73: re-assert the switcher label
+                        // (homeChangeApi; 8.84: the head's top-bar pill
+                        // labels itself from the same apiName stream)
+                        // from the actually-loaded provider on every
+                        // load — after switching back to the default it
+                        // could keep showing the previous provider's name.
                         val loadedApiName = homeViewModel.apiName.value
                         val loadedDisplay =
                             context?.getDisplayName(loadedApiName)
                                 ?: loadedApiName
-                        homeApiFab.text = loadedDisplay
                         homeChangeApi.text = loadedDisplay
 
                         //home_loaded?.isVisible = true

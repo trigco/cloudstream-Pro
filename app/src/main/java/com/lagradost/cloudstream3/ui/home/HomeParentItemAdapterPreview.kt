@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
@@ -65,6 +66,8 @@ import com.lagradost.cloudstream3.utils.UIHelper.fixPaddingStatusbarMargin
 import com.lagradost.cloudstream3.utils.UIHelper.fixPaddingStatusbarView
 import com.lagradost.cloudstream3.utils.UIHelper.populateChips
 import androidx.core.graphics.toColorInt
+import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.getDisplayName
+import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.selectHomepage
 import com.lagradost.cloudstream3.ui.setRecycledViewPool
 
 class HomeParentItemAdapterPreview(
@@ -335,6 +338,18 @@ class HomeParentItemAdapterPreview(
         private val headProfilePicCard: View? =
             itemView.findViewById(R.id.home_head_profile_padding)
 
+        // Phase 8.84: top-bar provider pills (phone head only; null
+        // on the TV head). They replace the removed floating funnel
+        // pill: name follows viewModel.apiName, tap opens the same
+        // selectHomepage sheet HomeFragment's FAB used to open.
+        private val providerPill: View? = itemView.findViewById(R.id.home_provider_pill)
+        private val providerPillText: TextView? =
+            itemView.findViewById(R.id.home_provider_pill_text)
+        private val providerPillAlt: View? =
+            itemView.findViewById(R.id.home_provider_pill_alt)
+        private val providerPillTextAlt: TextView? =
+            itemView.findViewById(R.id.home_provider_pill_text_alt)
+
         private val alternateHeadProfilePic: ImageView? =
             itemView.findViewById(R.id.alternate_home_head_profile_pic)
         private val alternateHeadProfilePicCard: View? =
@@ -603,6 +618,28 @@ class HomeParentItemAdapterPreview(
                 activity?.showAccountSelectLinear()
             }
 
+            // Phase 8.84: provider pills — identical selection
+            // semantics to HomeFragment's old floating-pill listener
+            // (custom lists activate custom mode; picking a provider
+            // exits it and reloads).
+            val providerPillClick = View.OnClickListener { view ->
+                view.context.selectHomepage(
+                    viewModel.apiName.value,
+                    onCustomSelect = { list ->
+                        viewModel.activateCustomList(list)
+                    }
+                ) { api ->
+                    viewModel.exitCustomMode()
+                    viewModel.loadAndCancel(api, forceReload = true, fromUI = true)
+                }
+            }
+            providerPill?.setOnClickListener(providerPillClick)
+            providerPillAlt?.setOnClickListener(providerPillClick)
+            itemView.context.getDisplayName(viewModel.apiName.value)?.let { display ->
+                providerPillText?.text = display
+                providerPillTextAlt?.text = display
+            }
+
             fun showAccountEditBox(context: Context): Boolean {
                 val currentAccount = DataStoreHelper.getCurrentAccount()
                 return if (currentAccount != null) {
@@ -851,6 +888,13 @@ class HomeParentItemAdapterPreview(
             previewViewpager.apply {
                 observe(viewModel.preview) {
                     updatePreview(it)
+                }
+                // Phase 8.84: keep the top-bar provider pills' labels
+                // on the actually-selected provider.
+                observe(viewModel.apiName) { name ->
+                    val display = itemView.context.getDisplayName(name) ?: name
+                    providerPillText?.text = display
+                    providerPillTextAlt?.text = display
                 }
                 /*if (binding is FragmentHomeHeadTvBinding) {
                     observe(viewModel.apiName) { name ->

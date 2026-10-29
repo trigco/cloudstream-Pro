@@ -3,6 +3,10 @@
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
     <dimen name="rounded_image_radius">20dp</dimen>
+    <!-- Phase 8.84: home-row posters get a tighter corner than the
+         shared rounded_image_radius (20dp) — ~65% of it. Home-specific
+         child layouts only (home_result_grid*, home_result_big_grid). -->
+    <dimen name="home_poster_radius">13dp</dimen>
     <dimen name="rounded_button_radius">10dp</dimen>
 
     <dimen name="navbar_height">0dp</dimen>

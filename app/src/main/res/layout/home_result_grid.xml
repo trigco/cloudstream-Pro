@@ -14,7 +14,7 @@
     android:stateListAnimator="@animator/feel_card_press"
     android:foreground="@drawable/outline_drawable"
     app:cardBackgroundColor="?attr/primaryGrayBackground"
-    app:cardCornerRadius="@dimen/rounded_image_radius">
+    app:cardCornerRadius="@dimen/home_poster_radius">
 
     <ImageView
         android:id="@+id/imageView"
