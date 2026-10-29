@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.77: top segment of a grouped card (SkyStream-style
+     expandable group): rounded top corners, square bottom, outline
+     stroke — used for a Nuvio repo header while its group is open,
+     so the header and its scraper rows read as ONE card. Ripple
+     variant of bg_group_mid for the tappable header. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="20dp"
+                android:topRightRadius="20dp" />
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="20dp"
+                android:topRightRadius="20dp" />
+            <solid android:color="?attr/primaryGrayBackground" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/skyOutline" />
+        </shape>
+    </item>
+</ripple>
