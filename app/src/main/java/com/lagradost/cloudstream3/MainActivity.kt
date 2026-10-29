@@ -1899,6 +1899,11 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             runCatching {
                 com.lagradost.cloudstream3.nuvio.NuvioProviders.sync(this@MainActivity)
             }
+            // Same isolation for the SkyStream plugin providers (8.78):
+            // one MainAPI per installed+enabled plugin (or sub-provider).
+            runCatching {
+                com.lagradost.cloudstream3.sky.SkyProviders.sync(this@MainActivity)
+            }
         }
 
         //  val navView: BottomNavigationView = findViewById(R.id.nav_view)
