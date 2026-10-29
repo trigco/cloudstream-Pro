@@ -171,7 +171,10 @@ object SkyStreamRepository {
             }
             // Preserve repository-provided defaults such as baseUrl while taking the
             // executable provider contract from the archive's plugin.json.
-            listOf("baseUrl", "description", "authors", "categories", "languages", "iconUrl").forEach { key ->
+            listOf(
+                "baseUrl", "description", "authors", "categories", "languages", "iconUrl",
+                "providers", "domains", "customBaseUrl", "settings", "status"
+            ).forEach { key ->
                 if (!embeddedManifest.has(key) && parsed.raw.has(key)) {
                     embeddedManifest.put(key, parsed.raw.opt(key))
                 }
