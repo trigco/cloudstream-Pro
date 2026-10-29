@@ -23,6 +23,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * The SkyStream host bridge: executes a plugin's http_get/http_post/
@@ -292,6 +298,26 @@ class SkyPluginSession(
                         }
                     }
                 )
+                defineBinding(
+                    "skyNativeSync",
+                    object : FunctionBinding<String?> {
+                        override fun invoke(args: Array<Any?>): String? =
+                            SkyNative.sync(
+                                args.getOrNull(0) as? String ?: "",
+                                args.getOrNull(1) as? String ?: "",
+                            )
+                    }
+                )
+                defineBinding(
+                    "skyNativeAsync",
+                    object : AsyncFunctionBinding<String> {
+                        override suspend fun invoke(args: Array<Any?>): String =
+                            SkyNative.asyncOp(
+                                args.getOrNull(0) as? String ?: "",
+                                args.getOrNull(1) as? String ?: "",
+                            )
+                    }
+                )
                 evaluate<Any?>(SkyPolyfill.CODE, "sky-polyfill.js")
                 evaluate<Any?>(
                     "globalThis.manifest = " + manifestForJs() + ";",
@@ -475,5 +501,137 @@ object SkyEngine {
     fun retainOnly(wantedKeys: Set<String>) {
         val keys = sessions.keys.filter { it !in wantedKeys }
         keys.forEach { key -> sessions.remove(key)?.close() }
+    }
+}
+
+/**
+ * Native-assist operations behind the polyfill's sendMessage /
+ * crypto.* surface, with SkyStream's own semantics
+ * (lib/core/extensions/engine/aes_decrypt.dart + the worker's
+ * channel handlers): base64 payloads are whitespace-stripped and
+ * re-padded before decoding (URL-safe tolerated), AES is CBC with
+ * PKCS7 for any mode except "gcm" (GCM, 128-bit tag appended) and
+ * "ecb", hashes are lowercase hex of the UTF-8 input, and PBKDF2 is
+ * HMAC-SHA256 (hand-rolled: SecretKeyFactory's PBKDF2WithHmacSHA256
+ * only exists on API 26+, we target 23). Verified in the spike
+ * against CastleTV's encrypted payloads.
+ */
+object SkyNative {
+
+    fun b64DecodeTolerant(s: String): ByteArray {
+        var cleaned = s.replace(Regex("\\s"), "").replace('-', '+').replace('_', '/')
+        while (cleaned.length % 4 != 0) cleaned += "="
+        return android.util.Base64.decode(cleaned, android.util.Base64.DEFAULT)
+    }
+
+    private fun payloadString(payload: String): String =
+        runCatching { JSONArray("[$payload]").optString(0) }.getOrDefault(payload)
+
+    private fun hex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
+
+    fun sync(channel: String, payload: String): String? {
+        return try {
+            when (channel) {
+                "base64_encode" -> android.util.Base64.encodeToString(
+                    payloadString(payload).toByteArray(Charsets.UTF_8),
+                    android.util.Base64.NO_WRAP,
+                )
+                "base64_decode" -> String(b64DecodeTolerant(payloadString(payload)), Charsets.UTF_8)
+                "crypto_md5" -> hex(
+                    MessageDigest.getInstance("MD5")
+                        .digest(payloadString(payload).toByteArray(Charsets.UTF_8))
+                )
+                "crypto_sha256" -> hex(
+                    MessageDigest.getInstance("SHA-256")
+                        .digest(payloadString(payload).toByteArray(Charsets.UTF_8))
+                )
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun asyncOp(channel: String, payload: String): String {
+        val data = JSONObject(payload)
+        return when (channel) {
+            "crypto_decrypt_aes" -> aesDecrypt(
+                data.optString("data"),
+                data.optString("key"),
+                data.optString("iv"),
+                data.optString("mode", "cbc"),
+            )
+            "crypto_pbkdf2" -> android.util.Base64.encodeToString(
+                pbkdf2Sha256(
+                    data.optString("password"),
+                    b64DecodeTolerant(data.optString("salt")),
+                    data.optInt("iterations", 10000),
+                    data.optInt("keyLength", 32),
+                ),
+                android.util.Base64.NO_WRAP,
+            )
+            else -> throw IllegalArgumentException("unknown channel $channel")
+        }
+    }
+
+    private fun aesDecrypt(dataB64: String, keyB64: String, ivB64: String, mode: String): String {
+        val keyBytes = b64DecodeTolerant(keyB64)
+        val cipher = when (mode.lowercase()) {
+            "gcm" -> Cipher.getInstance("AES/GCM/NoPadding").apply {
+                init(
+                    Cipher.DECRYPT_MODE,
+                    SecretKeySpec(keyBytes, "AES"),
+                    GCMParameterSpec(128, b64DecodeTolerant(ivB64)),
+                )
+            }
+            "ecb" -> Cipher.getInstance("AES/ECB/PKCS5Padding").apply {
+                init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"))
+            }
+            else -> Cipher.getInstance("AES/CBC/PKCS5Padding").apply {
+                init(
+                    Cipher.DECRYPT_MODE,
+                    SecretKeySpec(keyBytes, "AES"),
+                    IvParameterSpec(b64DecodeTolerant(ivB64)),
+                )
+            }
+        }
+        // String(bytes, UTF_8) replaces malformed sequences instead of
+        // throwing — the reference's allowMalformed behaviour.
+        return String(cipher.doFinal(b64DecodeTolerant(dataB64)), Charsets.UTF_8)
+    }
+
+    private fun pbkdf2Sha256(
+        password: String,
+        salt: ByteArray,
+        iterations: Int,
+        keyLen: Int,
+    ): ByteArray {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(password.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        val out = ByteArray(keyLen)
+        var offset = 0
+        var block = 1
+        while (offset < keyLen) {
+            mac.update(salt)
+            var u = mac.doFinal(
+                byteArrayOf(
+                    (block ushr 24).toByte(),
+                    (block ushr 16).toByte(),
+                    (block ushr 8).toByte(),
+                    block.toByte(),
+                )
+            )
+            val t = u.copyOf()
+            for (i in 1 until iterations) {
+                u = mac.doFinal(u)
+                for (j in t.indices) t[j] = (t[j].toInt() xor u[j].toInt()).toByte()
+            }
+            val len = minOf(t.size, keyLen - offset)
+            System.arraycopy(t, 0, out, offset, len)
+            offset += len
+            block++
+        }
+        return out
     }
 }
