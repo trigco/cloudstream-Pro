@@ -250,13 +250,6 @@
                     android:alpha="0.15"
                     android:background="?attr/colorPrimaryDark" />
 
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="58dp"
-                    android:alpha="0.15"
-                    android:background="?attr/colorPrimaryDark" />
-
                 <TextView
                     android:id="@+id/settings_sky_plugins"
                     style="@style/SettingsItem"
@@ -265,6 +258,13 @@
                     android:nextFocusDown="@id/settings_categories"
                     android:text="@string/skystream_plugins_title"
                     app:drawableStartCompat="@drawable/ic_settings_extensions" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="58dp"
+                    android:alpha="0.15"
+                    android:background="?attr/colorPrimaryDark" />
 
                 <TextView
                     android:id="@+id/settings_categories"
