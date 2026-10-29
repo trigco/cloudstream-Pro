@@ -123,7 +123,7 @@ object SkyStreamEngine {
                     bridge.resultJson != null -> bridge.resultJson
                     !evalText.isNullOrBlank() && evalText.trimStart().startsWith("{") -> evalText
                     !evalText.isNullOrBlank() && evalText.trimStart().startsWith("[") -> evalText
-                    else -> withTimeoutOrNull(5_000L) { bridge.resultDeferred.await() }
+                    else -> bridge.resultDeferred.await()
                 }
             }
         } ?: throw IllegalStateException("SkyStream plugin timed out in " + functionName)
