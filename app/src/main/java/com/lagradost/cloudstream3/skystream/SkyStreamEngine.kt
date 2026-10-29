@@ -244,9 +244,10 @@ globalThis.__skyStreamExports = (function() {
             .build()
 
         fun callSync(requestJson: String): String? = runCatching {
-            val req = JSONObject(requestJson)
+            val outer = JSONObject(requestJson)
+            val req = outer.optJSONObject("payload") ?: outer
             val key = req.optString("key")
-            when (req.optString("op")) {
+            when (outer.optString("op").ifBlank { req.optString("op") }) {
                 "result" -> {
                     val data = req.optString("data", "null")
                     resultJson = data
@@ -261,29 +262,101 @@ globalThis.__skyStreamExports = (function() {
                     prefs.getString(plugin.packageName + ":" + key, null) ?: JSONObject.NULL).toString()
                 "set_preference" -> {
                     val value = req.opt("value")
-                    prefs.edit().putString(plugin.packageName + ":" + key,
+                    prefs.edit().putString(
+                        plugin.packageName + ":" + key,
                         if (value == null || value === JSONObject.NULL) null else if (value is String) value else value.toString()
                     ).apply()
                     "{}"
                 }
-                "storage_get" -> JSONObject().put("value", prefs.getString(storageKey(key), null) ?: JSONObject.NULL).toString()
-                "storage_set" -> {
-                    val value = req.optString("value")
-                    prefs.edit().putString(storageKey(key), value).apply()
+                "storage_get", "storageGet" -> JSONObject().put(
+                    "value", prefs.getString(storageKey(key), null) ?: JSONObject.NULL
+                ).toString()
+                "storage_set", "storageSet" -> {
+                    val value = req.opt("value")
+                    prefs.edit().putString(
+                        storageKey(key),
+                        if (value == null || value === JSONObject.NULL) null else if (value is String) value else value.toString()
+                    ).apply()
                     "{}"
                 }
                 "storage_remove" -> {
                     prefs.edit().remove(storageKey(key)).apply()
                     "{}"
                 }
-                "storage_clear" -> {
+                "storage_clear", "storageClear" -> {
                     val allKeys = prefs.all.keys.filter { it.startsWith(plugin.packageName + ":storage:") }
                     prefs.edit().also { edit -> allKeys.forEach { edit.remove(it) } }.apply()
                     "{}"
                 }
-                else -> JSONObject().put("error", "Unsupported bridge operation").toString()
+                "crypto" -> doCrypto(req).toString()
+                else -> JSONObject().put("error", "Unsupported bridge operation: " + outer.optString("op")).toString()
             }
         }.getOrElse { JSONObject().put("error", it.message ?: "bridge error").toString() }
+
+        private fun b64Decode(value: String?): ByteArray =
+            runCatching { Base64.decode(value ?: "", Base64.DEFAULT) }.getOrElse { ByteArray(0) }
+
+        private fun b64Encode(bytes: ByteArray): String =
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+
+        private fun doCrypto(payload: JSONObject): JSONObject {
+            val out = JSONObject()
+            when (val algo = payload.optString("algo")) {
+                "md5", "sha1", "sha256", "sha512" -> {
+                    val digest = when (algo) {
+                        "md5" -> "MD5"
+                        "sha1" -> "SHA-1"
+                        "sha256" -> "SHA-256"
+                        else -> "SHA-512"
+                    }
+                    out.put("dataB64", b64Encode(
+                        MessageDigest.getInstance(digest).digest(b64Decode(payload.optString("dataB64")))
+                    ))
+                }
+                "hmac-sha1", "hmac-sha256" -> {
+                    val mac = Mac.getInstance(if (algo == "hmac-sha1") "HmacSHA1" else "HmacSHA256")
+                    mac.init(SecretKeySpec(b64Decode(payload.optString("keyB64")), mac.algorithm))
+                    out.put("dataB64", b64Encode(mac.doFinal(b64Decode(payload.optString("dataB64")))))
+                }
+                "random" -> {
+                    val bytes = ByteArray(payload.optInt("n", 16).coerceIn(1, 1024))
+                    SecureRandom().nextBytes(bytes)
+                    out.put("dataB64", b64Encode(bytes))
+                }
+                "aes-encrypt", "aes-decrypt" -> {
+                    val encrypt = algo == "aes-encrypt"
+                    val mode = payload.optString("mode", "CBC")
+                    val padding = payload.optString("padding", "Pkcs7")
+                    var bytes = b64Decode(payload.optString("dataB64"))
+                    val cipherPadding = if (padding == "NoPadding" || padding == "ZeroPadding") "NoPadding" else "PKCS5Padding"
+                    if (padding == "ZeroPadding" && encrypt) {
+                        val remainder = bytes.size % 16
+                        if (remainder != 0) bytes += ByteArray(16 - remainder)
+                    }
+                    val cipher = Cipher.getInstance("AES/" + mode + "/" + cipherPadding)
+                    val keyBytes = b64Decode(payload.optString("keyB64"))
+                    val secretKey = SecretKeySpec(keyBytes, "AES")
+                    if (mode == "ECB") {
+                        cipher.init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, secretKey)
+                    } else {
+                        cipher.init(
+                            if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE,
+                            secretKey,
+                            IvParameterSpec(b64Decode(payload.optString("ivB64")))
+                        )
+                    }
+                    var result = cipher.doFinal(bytes)
+                    if (padding == "ZeroPadding" && !encrypt) {
+                        var end = result.size
+                        while (end > 0 && result[end - 1] == 0.toByte()) end--
+                        result = result.copyOf(end)
+                    }
+                    out.put("dataB64", b64Encode(result))
+                }
+                else -> out.put("error", "Unsupported crypto operation: " + algo)
+            }
+            return out
+        }
 
         private fun storageKey(key: String) = plugin.packageName + ":storage:" + key
 
@@ -313,7 +386,12 @@ globalThis.__skyStreamExports = (function() {
                     if (!saved.isNullOrEmpty() && !headers.has("Cookie")) builder.header("Cookie", saved.joinToString("; "))
                 }
                 val bodyString = req.optString("body")
-                val body = bodyString.toRequestBody(contentType.toMediaTypeOrNull())
+                val bodyBytes = if (req.has("bodyB64") && !req.isNull("bodyB64")) {
+                    b64Decode(req.optString("bodyB64"))
+                } else {
+                    bodyString.toByteArray(Charsets.UTF_8)
+                }
+                val body = bodyBytes.toRequestBody(contentType.toMediaTypeOrNull())
                 val request = when (method) {
                     "POST" -> builder.post(body).build()
                     "PUT" -> builder.put(body).build()
@@ -323,8 +401,15 @@ globalThis.__skyStreamExports = (function() {
                     else -> builder.get().build()
                 }
                 client.newCall(request).execute().use { response ->
-                    val bytes = response.body?.bytes() ?: ByteArray(0)
-                    require(bytes.size <= MAX_HTTP_BODY_BYTES) { "HTTP response exceeds the 8 MB limit" }
+                    val responseBody = response.body
+                    val bytes = if (responseBody == null) {
+                        ByteArray(0)
+                    } else {
+                        val source = responseBody.source()
+                        source.request((MAX_HTTP_BODY_BYTES + 1).toLong())
+                        require(source.buffer.size <= MAX_HTTP_BODY_BYTES) { "HTTP response exceeds the 8 MB limit" }
+                        source.buffer.readByteArray()
+                    }
                     val bodyText = bytes.toString(Charsets.UTF_8)
                     val responseHeaders = JSONObject()
                     response.headers.names().forEach { name ->
@@ -343,7 +428,9 @@ globalThis.__skyStreamExports = (function() {
                     }
                     JSONObject()
                         .put("code", response.code).put("status", response.code).put("statusCode", response.code)
-                        .put("body", bodyText).put("headers", responseHeaders)
+                        .put("body", bodyText).put("bodyText", bodyText).put("bodyB64", "")
+                        .put("headers", responseHeaders)
+                        .put("url", response.request.url.toString())
                         .put("finalUrl", response.request.url.toString())
                         .toString()
                 }
