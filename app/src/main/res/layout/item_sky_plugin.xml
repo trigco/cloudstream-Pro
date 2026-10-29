@@ -45,9 +45,17 @@
             android:textAppearance="?attr/textAppearanceCaption" />
     </LinearLayout>
 
-    <com.google.android.material.button.MaterialButton
+    <!-- 8.82: install/update is an icon button now (SkyStream-style):
+         download arrow, update glyph, or a subtle check when the
+         plugin is already installed (removal lives in the
+         Installed tab). -->
+    <ImageButton
         android:id="@+id/item_sky_plugin_action"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp" />
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/sky_plugin_install"
+        android:padding="12dp"
+        android:src="@drawable/ic_sheet_download" />
 </LinearLayout>

@@ -31,15 +31,24 @@
             android:id="@+id/stremio_add_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/stremio_add_addon" />
+            android:text="@string/stremio_add_addon"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/extButtonBackground" />
     </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/stremio_tabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@color/primaryBlackBackground"
         app:tabGravity="fill"
-        app:tabMode="fixed" />
+        app:tabIndicatorColor="@color/colorPrimaryRed"
+        app:tabIndicatorFullWidth="false"
+        app:tabIndicatorHeight="3dp"
+        app:tabMode="fixed"
+        app:tabRippleColor="@color/extRippleLight"
+        app:tabSelectedTextColor="@color/white"
+        app:tabTextColor="@color/extTabUnselected" />
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/stremio_pager"

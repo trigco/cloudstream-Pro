@@ -40,7 +40,13 @@ object SkyProviders {
                 wanted[SkyEngine.instanceKey(plugin.packageName, null)] =
                     plugin to null
             } else {
+                // 8.82: sub-providers switched off in the plugin's
+                // settings sheet are not registered.
+                val disabledSubs = SkyRepository.disabledSubProviders(
+                    context, plugin.packageName
+                )
                 for (sub in manifest.subProviders) {
+                    if (sub.id in disabledSubs) continue
                     wanted[SkyEngine.instanceKey(plugin.packageName, sub.id)] =
                         plugin to sub
                 }

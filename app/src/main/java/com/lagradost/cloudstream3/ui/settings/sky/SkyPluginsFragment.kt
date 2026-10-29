@@ -1,5 +1,7 @@
 package com.lagradost.cloudstream3.ui.settings.sky
 
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -138,7 +140,15 @@ class SkyPluginsFragment : Fragment() {
         pager.setCurrentItem(1, false)
         SkyProviders.sync(requireContext())
         refresh()
-        fetchAllChains()
+        // 8.82: one-time migration — a mega-repo stored by 8.81 and
+        // earlier as ONE entry becomes one entry per sub-repo; the
+        // chains then load for the flattened list.
+        lifecycleScope.launch {
+            runCatching { SkyRepository.migrateMegaRepos(requireContext()) }
+            if (!isAdded) return@launch
+            refresh()
+            fetchAllChains()
+        }
     }
 
     private fun toast(message: Int) {
@@ -236,15 +246,27 @@ class SkyPluginsFragment : Fragment() {
         lifecycleScope.launch {
             val doc = SkyRepository.fetchRepoDoc(repo.url)
             if (!isAdded) return@launch
+            var flattened = false
             if (doc != null) {
-                SkyRepository.addRepo(ctx, repo.url, repo.input, doc)
+                if (doc.isMega) {
+                    // A repo whose document turned into a mega-repo
+                    // flattens into per-sub-repo entries (8.82).
+                    SkyRepository.addRepoResolved(ctx, repo.url, repo.input, doc)
+                    flattened = true
+                } else {
+                    SkyRepository.addRepo(ctx, repo.url, repo.input, doc)
+                }
             }
             listings.remove(repo.url)
             refresh()
-            fetchChain(
-                SkyRepository.getRepos(ctx)
-                    .firstOrNull { it.url == repo.url } ?: repo
-            )
+            if (flattened) {
+                fetchAllChains()
+            } else {
+                fetchChain(
+                    SkyRepository.getRepos(ctx)
+                        .firstOrNull { it.url == repo.url } ?: repo
+                )
+            }
         }
     }
 
@@ -256,13 +278,16 @@ class SkyPluginsFragment : Fragment() {
             hint = getString(R.string.sky_repo_input_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
+            // 8.82: readable on the dark dialog surface.
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(ctx).apply {
             val pad = (20 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
             addView(input)
         }
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.sky_add_repo)
             .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -284,18 +309,22 @@ class SkyPluginsFragment : Fragment() {
                 return@launch
             }
             val (url, doc) = resolved
-            val added = SkyRepository.addRepo(ctx, url, raw, doc)
-            toast(if (added) R.string.sky_repo_added else R.string.sky_repo_refreshed)
-            listings.remove(url)
+            // 8.82: a mega-repo flattens into one stored entry per
+            // sub-repo; the mega URL itself is never stored.
+            val addedCount = SkyRepository.addRepoResolved(ctx, url, raw, doc)
+            toast(
+                if (addedCount > 0) R.string.sky_repo_added
+                else R.string.sky_repo_refreshed
+            )
+            listings.clear()
             refresh()
-            SkyRepository.getRepos(ctx)
-                .firstOrNull { it.url == url }?.let { fetchChain(it) }
+            fetchAllChains()
         }
     }
 
     private fun confirmRemoveRepo(repo: StoredSkyRepo) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.sky_repo_remove_title)
             .setMessage(getString(R.string.sky_repo_remove_message, repo.displayName()))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -338,7 +367,7 @@ class SkyPluginsFragment : Fragment() {
     private fun confirmRemovePlugin(plugin: StoredSkyPlugin) {
         val ctx = requireContext()
         val name = plugin.manifest()?.name ?: plugin.name
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.sky_plugin_remove_title)
             .setMessage(getString(R.string.sky_plugin_remove_message, name))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -409,7 +438,38 @@ class SkyPluginsFragment : Fragment() {
             else -> emptySet()
         }
 
+        // 8.82: the sheet opens with the Base URL field (the order
+        // the reference uses), whether or not the schema declares
+        // one. It writes through the schema's base-url key when
+        // there is one, else the "base_url" override key — exactly
+        // what SkyRepository.effectiveBaseUrl reads. A blank value,
+        // or the manifest default re-entered, writes nothing: saving
+        // replaces the settings object, so an old override drops.
+        if (manifest != null) {
+            val baseKey = fields.firstOrNull { it.isBaseUrl }?.key ?: "base_url"
+            column.addView(TextView(ctx).apply {
+                text = getString(R.string.sky_base_url_label)
+                setPadding(0, dp(10), 0, 0)
+            })
+            val baseEdit = EditText(ctx).apply {
+                setSingleLine(true)
+                inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_VARIATION_URI
+                setText(SkyRepository.effectiveBaseUrl(ctx, manifest))
+                hint = getString(R.string.sky_base_url_hint, manifest.baseUrl)
+            }
+            column.addView(baseEdit)
+            getters += {
+                val value = baseEdit.text?.toString()?.trim().orEmpty()
+                if (value.isNotBlank() && value != manifest.baseUrl) {
+                    values.put(baseKey, value)
+                }
+            }
+        }
+
         for (field in fields) {
+            // The base-url field is the dedicated section above.
+            if (field.isBaseUrl) continue
             val label = field.title.ifBlank { field.key }
             when (field.type) {
                 "toggle" -> {
@@ -495,15 +555,7 @@ class SkyPluginsFragment : Fragment() {
                         } else {
                             InputType.TYPE_CLASS_TEXT
                         }
-                        setText(
-                            // 8.81: the schema's base-url field shows
-                            // the effective (override-aware) URL.
-                            if (field.isBaseUrl && manifest != null) {
-                                SkyRepository.effectiveBaseUrl(ctx, manifest)
-                            } else {
-                                rawString(currentRaw(field))
-                            }
-                        )
+                        setText(rawString(currentRaw(field)))
                     }
                     column.addView(edit)
                     field.description?.let { desc ->
@@ -517,29 +569,38 @@ class SkyPluginsFragment : Fragment() {
             }
         }
 
-        // 8.81: when the manifest has no base-url setting of its own,
-        // the sheet always carries a Base URL field. Saving a value
-        // stores it as the plugin's base-url override (the same
-        // settings path SkyRepository.effectiveBaseUrl reads);
-        // clearing it (or re-entering the default) drops the override.
-        if (manifest != null && fields.none { it.isBaseUrl }) {
+        // 8.82: sub-provider switches (SkyStream parity) — plugins
+        // like Netmirror declare providers[] but no settings schema,
+        // and the reference still gives each sub-provider a switch
+        // in this sheet. Off ids persist under the reserved settings
+        // key; SkyProviders skips them at registration, and saving
+        // re-syncs (see the save handler below).
+        val subProviders = manifest?.subProviders.orEmpty()
+        if (subProviders.isNotEmpty()) {
+            val disabledSubs = SkyRepository.disabledSubProviders(
+                ctx, plugin.packageName
+            )
             column.addView(TextView(ctx).apply {
-                text = getString(R.string.sky_base_url_label)
-                setPadding(0, dp(10), 0, 0)
+                text = getString(R.string.sky_settings_providers)
+                textSize = 16f
+                setPadding(0, dp(16), 0, 0)
             })
-            val baseEdit = EditText(ctx).apply {
-                setSingleLine(true)
-                inputType = InputType.TYPE_CLASS_TEXT or
-                    InputType.TYPE_TEXT_VARIATION_URI
-                setText(SkyRepository.effectiveBaseUrl(ctx, manifest))
-                hint = getString(R.string.sky_base_url_hint, manifest.baseUrl)
-            }
-            column.addView(baseEdit)
-            getters += {
-                val value = baseEdit.text?.toString()?.trim().orEmpty()
-                if (value.isNotBlank() && value != manifest.baseUrl) {
-                    values.put("base_url", value)
+            val subSwitches = mutableListOf<Pair<String, MaterialSwitch>>()
+            for (sub in subProviders) {
+                val switch = MaterialSwitch(ctx).apply {
+                    text = sub.name.ifBlank { sub.id }
+                    isChecked = sub.id !in disabledSubs
+                    setPadding(0, dp(8), 0, dp(8))
                 }
+                column.addView(switch)
+                subSwitches += sub.id to switch
+            }
+            getters += {
+                val arr = JSONArray()
+                subSwitches.forEach { (id, switch) ->
+                    if (!switch.isChecked) arr.put(id)
+                }
+                values.put(SkyRepository.DISABLED_PROVIDERS_KEY, arr)
             }
         }
         if (column.childCount == 0) {
@@ -549,14 +610,38 @@ class SkyPluginsFragment : Fragment() {
             })
         }
 
+        // 8.82: the sheet is a dark surface with readable text —
+        // force the colours on the whole form (labels, descriptions,
+        // switches, inputs) instead of inheriting whatever the
+        // active theme variant gives programmatic views.
+        fun styleFormText(view: View) {
+            when (view) {
+                is EditText -> {
+                    view.setTextColor(Color.WHITE)
+                    view.setHintTextColor(Color.rgb(158, 158, 158))
+                }
+                is TextView -> view.setTextColor(Color.WHITE)
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    styleFormText(view.getChildAt(i))
+                }
+            }
+        }
+        styleFormText(column)
+
         // 8.81: settings open as a bottom sheet (SkyStream parity)
-        // instead of an AlertDialog.
+        // instead of an AlertDialog. 8.82: the app's own bottom-sheet
+        // theme plus the app modal surface (rounded_dialog) on the
+        // sheet root, so no light frame can show through.
         val scroll = ScrollView(ctx).apply { addView(column) }
         val sheetRoot = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.rounded_dialog)
             addView(TextView(ctx).apply {
                 text = plugin.manifest()?.name ?: plugin.name
                 textSize = 18f
+                setTextColor(Color.WHITE)
                 setPadding(dp(20), dp(16), dp(20), 0)
             })
             addView(scroll)
@@ -566,28 +651,41 @@ class SkyPluginsFragment : Fragment() {
             gravity = Gravity.END
             setPadding(dp(20), dp(12), dp(20), dp(16))
         }
+        val chipTint = ColorStateList.valueOf(Color.rgb(0x26, 0x26, 0x26))
         val cancelButton = MaterialButton(ctx).apply {
             setText(android.R.string.cancel)
+            backgroundTintList = chipTint
+            setTextColor(Color.WHITE)
         }
         val saveButton = MaterialButton(ctx).apply {
             setText(R.string.nuvio_settings_save)
+            backgroundTintList = chipTint
+            setTextColor(Color.WHITE)
         }
         buttonRow.addView(cancelButton)
         buttonRow.addView(saveButton)
         sheetRoot.addView(buttonRow)
-        val dialog = BottomSheetDialog(ctx)
+        val dialog = BottomSheetDialog(ctx, R.style.AppBottomSheetDialogTheme)
         dialog.setContentView(sheetRoot)
         cancelButton.setOnClickListener { dialog.dismiss() }
         saveButton.setOnClickListener {
             getters.forEach { it() }
             SkyRepository.savePluginSettings(ctx, plugin.packageName, values)
             // Settings feed manifest.baseUrl and getPreference:
-            // rebuild the plugin's context so they take effect.
+            // rebuild the plugin's context so they take effect, and
+            // re-sync registrations so sub-provider switches (8.82)
+            // apply immediately.
             SkyEngine.evictPackage(plugin.packageName)
+            SkyProviders.sync(ctx)
             toast(R.string.sky_settings_saved)
             dialog.dismiss()
         }
         dialog.show()
+        // The dialog's own sheet frame stays transparent — the
+        // sheet root's rounded_dialog background is the only surface.
+        dialog.findViewById<View>(
+            com.google.android.material.R.id.design_bottom_sheet
+        )?.setBackgroundColor(Color.TRANSPARENT)
     }
 }
 
@@ -793,15 +891,43 @@ private class SkyRepoAdapter(
                     } else {
                         ""
                     }
-                h.action.setText(
-                    when (row.state) {
-                        SkyRow.PluginState.NOT_INSTALLED -> R.string.sky_plugin_install
-                        SkyRow.PluginState.UPDATE -> R.string.sky_plugin_update
-                        SkyRow.PluginState.INSTALLED -> R.string.sky_plugin_remove
+                // 8.82: icon action (SkyStream-style) — download to
+                // install, update glyph when a newer version is
+                // listed, a subtle disabled check when the plugin is
+                // already installed (removal lives in the Installed
+                // tab). Install/update taps behave exactly as the
+                // old text button did.
+                when (row.state) {
+                    SkyRow.PluginState.NOT_INSTALLED -> {
+                        h.action.setImageResource(R.drawable.ic_sheet_download)
+                        h.action.contentDescription =
+                            ctx.getString(R.string.sky_plugin_install)
+                        h.action.isEnabled = true
+                        h.action.alpha = 1f
+                        h.action.setOnClickListener {
+                            onPluginAction(row.entry, row.listing, row.state)
+                        }
                     }
-                )
-                h.action.setOnClickListener {
-                    onPluginAction(row.entry, row.listing, row.state)
+                    SkyRow.PluginState.UPDATE -> {
+                        h.action.setImageResource(
+                            R.drawable.ic_baseline_system_update_24
+                        )
+                        h.action.contentDescription =
+                            ctx.getString(R.string.sky_plugin_update)
+                        h.action.isEnabled = true
+                        h.action.alpha = 1f
+                        h.action.setOnClickListener {
+                            onPluginAction(row.entry, row.listing, row.state)
+                        }
+                    }
+                    SkyRow.PluginState.INSTALLED -> {
+                        h.action.setImageResource(R.drawable.ic_baseline_check_24)
+                        h.action.contentDescription =
+                            ctx.getString(R.string.sky_plugin_state_installed)
+                        h.action.isEnabled = false
+                        h.action.alpha = 0.55f
+                        h.action.setOnClickListener(null)
+                    }
                 }
             }
             is SkyRow.InstalledRow -> {
@@ -887,7 +1013,7 @@ private class SkyRepoAdapter(
         val icon: ImageView = view.findViewById(R.id.item_sky_plugin_icon)
         val name: TextView = view.findViewById(R.id.item_sky_plugin_name)
         val desc: TextView = view.findViewById(R.id.item_sky_plugin_desc)
-        val action: MaterialButton = view.findViewById(R.id.item_sky_plugin_action)
+        val action: ImageButton = view.findViewById(R.id.item_sky_plugin_action)
     }
 
     private class InstalledHolder(view: View) : RecyclerView.ViewHolder(view) {

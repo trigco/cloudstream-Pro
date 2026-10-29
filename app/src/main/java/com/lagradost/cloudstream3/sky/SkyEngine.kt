@@ -134,14 +134,31 @@ class SkyHostBridge(
                 }
             }
         }
-        val response = SkyHttp.client.newCall(builder.build()).execute()
+        // 8.82: collect Set-Cookie from EVERY hop of the redirect
+        // chain, not just the final response — Netmirror's session
+        // cookie (t_hash_t) is set on the 301 out of verify.php and
+        // its plugin reads it from the response headers; with only
+        // the final response's headers the handshake always failed.
+        // The network interceptor runs per hop, final hop included.
+        val chainCookies = java.util.Collections.synchronizedList(
+            mutableListOf<String>()
+        )
+        val callClient = SkyHttp.client.newBuilder()
+            .addNetworkInterceptor { chain ->
+                val hop = chain.proceed(chain.request())
+                chainCookies.addAll(hop.headers.values("Set-Cookie"))
+                hop
+            }
+            .build()
+        val response = callClient.newCall(builder.build()).execute()
         return response.use { resp ->
             // SkyStream parity (8.80): the reference bridge exposes
             // Set-Cookie to plugins as a header list — plugins keep
             // their own cookie store from it (katdrama's locker chain
             // silently stalls without it) — while ALSO feeding the
-            // host-side jar below.
-            val setCookies = resp.headers.values("Set-Cookie")
+            // host-side jar below. 8.82: the list now spans the whole
+            // redirect chain (see above).
+            val setCookies = chainCookies.toList()
             setCookies.forEach { setCookie ->
                 val pair = setCookie.substringBefore(';').trim()
                 if (pair.contains('=')) {

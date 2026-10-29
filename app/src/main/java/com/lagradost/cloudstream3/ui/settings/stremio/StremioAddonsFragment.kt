@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui.settings.stremio
 
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
@@ -145,11 +146,12 @@ class StremioAddonsFragment : Fragment() {
         if (!::adapter.isInitialized) return
         val addons = AddonRepository.getAddons(requireContext())
         adapter.submit(addons)
-        // The empty-state hint doubles as an explainer while the only
-        // row is the built-in one; the list itself always stays visible
-        // so Cinemeta can be toggled too.
+        // 8.82: the empty text shows ONLY when the list is truly
+        // empty. The 8.81 rule (visible while only the built-in row
+        // exists) overlaid the text on top of the Cinemeta row —
+        // the overlap the user reported on this page.
         installedEmpty?.visibility =
-            if (addons.any { !it.builtIn }) View.GONE else View.VISIBLE
+            if (addons.isEmpty()) View.VISIBLE else View.GONE
         updateQuickInstall(addons)
     }
 
@@ -189,7 +191,7 @@ class StremioAddonsFragment : Fragment() {
     private fun confirmRemove(addon: StoredAddon) {
         val name = addon.manifest()?.name
             ?: StremioAddonProvider.hostLabel(addon.manifestUrl)
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.AlertDialogCustom)
             .setTitle(R.string.stremio_addon_remove_title)
             .setMessage(getString(R.string.stremio_addon_remove_message, name))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -207,13 +209,16 @@ class StremioAddonsFragment : Fragment() {
             hint = getString(R.string.stremio_addon_url_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
+            // 8.82: readable on the dark dialog surface.
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(context).apply {
             val pad = (20 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
             addView(input)
         }
-        AlertDialog.Builder(context)
+        AlertDialog.Builder(context, R.style.AlertDialogCustom)
             .setTitle(R.string.stremio_add_addon)
             .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ ->

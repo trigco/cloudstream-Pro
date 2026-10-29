@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui.settings.nuvio
 
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
@@ -187,7 +188,7 @@ class NuvioPluginsFragment : Fragment() {
             text = "…"
         }
         var cancelled = false
-        val dialog = AlertDialog.Builder(ctx)
+        val dialog = AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.nuvio_check_title)
             .setView(progress)
             .setNegativeButton(R.string.cancel) { _, _ -> cancelled = true }
@@ -289,13 +290,16 @@ class NuvioPluginsFragment : Fragment() {
             hint = getString(R.string.nuvio_repo_url_hint)
             inputType = InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_CLASS_TEXT
             setSingleLine(true)
+            // 8.82: readable on the dark dialog surface.
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(ctx).apply {
             val padding = (20 * resources.displayMetrics.density).toInt()
             setPadding(padding, 0, padding, 0)
             addView(input)
         }
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.nuvio_add_repo)
             .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -345,7 +349,7 @@ class NuvioPluginsFragment : Fragment() {
     private fun confirmRemove(repo: StoredNuvioRepo) {
         val ctx = requireContext()
         val name = repo.manifest()?.name ?: repo.manifestUrl
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(R.string.nuvio_repo_remove_title)
             .setMessage(getString(R.string.nuvio_repo_remove_message, name))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -360,7 +364,7 @@ class NuvioPluginsFragment : Fragment() {
 
     private fun openScraperSettings(repo: StoredNuvioRepo, scraper: NuvioScraperInfo) {
         val ctx = requireContext()
-        val loading = AlertDialog.Builder(ctx)
+        val loading = AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setMessage(R.string.nuvio_settings_loading)
             .setCancelable(false)
             .create()
@@ -541,8 +545,26 @@ class NuvioPluginsFragment : Fragment() {
             }
         }
 
+        // 8.82: readable white form text on the dark dialog surface,
+        // independent of the theme variant in use.
+        fun styleFormText(view: View) {
+            when (view) {
+                is EditText -> {
+                    view.setTextColor(Color.WHITE)
+                    view.setHintTextColor(Color.rgb(158, 158, 158))
+                }
+                is TextView -> view.setTextColor(Color.WHITE)
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    styleFormText(view.getChildAt(i))
+                }
+            }
+        }
+        styleFormText(column)
+
         val scroll = ScrollView(ctx).apply { addView(column) }
-        AlertDialog.Builder(ctx)
+        AlertDialog.Builder(ctx, R.style.AlertDialogCustom)
             .setTitle(scraper.name)
             .setView(scroll)
             .setPositiveButton(R.string.nuvio_settings_save) { _, _ ->

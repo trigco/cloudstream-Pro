@@ -689,6 +689,8 @@
     <string name="sky_base_url_hint">Leave blank to use the plugin default (%1$s)</string>
     <string name="sky_installed_by_format">By %1$s</string>
     <string name="sky_installed_providers_format">%1$d providers</string>
+    <string name="sky_plugin_state_installed">Installed</string>
+    <string name="sky_settings_providers">Providers</string>
     <string name="add_repository">Add repository</string>
     <string name="repository_name_hint">Repository name (Optional)</string>
     <string name="repository_url_hint">Repository URL or Shortcode</string>

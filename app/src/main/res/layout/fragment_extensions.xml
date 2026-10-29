@@ -33,10 +33,13 @@
             android:layout_height="wrap_content"
             android:background="?attr/primaryGrayBackground"
             app:tabGravity="fill"
-            app:tabIndicatorColor="?attr/textColor"
+            app:tabIndicatorColor="@color/colorPrimaryRed"
+            app:tabIndicatorFullWidth="false"
+            app:tabIndicatorHeight="3dp"
             app:tabMode="fixed"
-            app:tabSelectedTextColor="?attr/textColor"
-            app:tabTextColor="?attr/textColor" />
+            app:tabRippleColor="@color/extRippleLight"
+            app:tabSelectedTextColor="@color/white"
+            app:tabTextColor="@color/extTabUnselected" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

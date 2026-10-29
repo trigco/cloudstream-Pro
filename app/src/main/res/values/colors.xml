@@ -101,6 +101,11 @@
     <!--Other Colors -->
     <color name="colorPrimaryBlue">#5664B7</color>
     <color name="colorPrimaryRed">#E50914</color> <!-- Phase 5A: Play-button red -->
+    <!-- Phase 8.82: extension-page surfaces — dark chip buttons and
+         tab bars on the Sky / Nuvio / Stremio / Extensions pages. -->
+    <color name="extButtonBackground">#FF262626</color>
+    <color name="extTabUnselected">#FF9E9E9E</color>
+    <color name="extRippleLight">#33FFFFFF</color>
     <color name="ratingStarGold">#FFC107</color> <!-- Phase 8.74: gold rating star (his request) -->
     <color name="colorPrimaryPurple">#6200EA</color> <!-- Burple-->
     <color name="colorPrimaryGreen">#00BFA5</color>

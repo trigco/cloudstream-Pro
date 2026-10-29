@@ -139,7 +139,7 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
                 // Prompt user before deleting repo
                 main {
                     val uiContext = context ?: fragmentBinding.root.context
-                    val builder = AlertDialog.Builder(uiContext)
+                    val builder = AlertDialog.Builder(uiContext, R.style.AlertDialogCustom)
                     val dialogClickListener =
                         DialogInterface.OnClickListener { _, which ->
                             when (which) {

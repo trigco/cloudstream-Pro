@@ -15,6 +15,8 @@
         android:id="@+id/tab_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clickable="false"
+        android:focusable="false"
         android:padding="24dp"
         android:textAppearance="?attr/textAppearanceBody2"
         android:visibility="gone" />

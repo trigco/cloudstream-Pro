@@ -115,6 +115,13 @@ object SkyRepository {
     private const val KEY_COLLAPSED = "sky_collapsed_v1"
     private const val KEY_SECTIONS = "sky_sections_v1"
 
+    /**
+     * Reserved key inside a plugin's settings object (8.82): a JSON
+     * array of sub-provider ids the user switched off in the
+     * settings sheet. SkyProviders skips those instances.
+     */
+    const val DISABLED_PROVIDERS_KEY = "disabled_providers"
+
     private fun prefs(ctx: Context) =
         PreferenceManager.getDefaultSharedPreferences(ctx)
 
@@ -175,6 +182,93 @@ object SkyRepository {
         // their own source URL); only the listing source goes away.
         saveRepos(ctx, getRepos(ctx).filterNot { it.url == url })
     }
+
+    /**
+     * Stores a freshly resolved repository (8.82). A mega-repo is
+     * NOT stored itself: each sub-repo becomes its own entry (its
+     * own repo.json URL as the key, name/description from its own
+     * repo document), exactly how the reference treats Stars, ZORO,
+     * MiraiExt and TJ-Plugins. A plain repo stores exactly like
+     * [addRepo]. A sub-repo whose document cannot be fetched right
+     * now is still stored (doc-less); its document loads live on the
+     * next chain fetch.
+     *
+     * @return how many entries were newly added (0 = all refreshed).
+     */
+    suspend fun addRepoResolved(
+        ctx: Context,
+        url: String,
+        input: String,
+        doc: SkyRepoDoc,
+    ): Int = withContext(Dispatchers.IO) {
+        if (!doc.isMega) {
+            return@withContext if (addRepo(ctx, url, input, doc)) 1 else 0
+        }
+        // The mega document itself is never a stored entry.
+        removeRepo(ctx, url)
+        val current = getRepos(ctx).toMutableList()
+        var added = 0
+        for (childUrl in doc.repos) {
+            val child = tryFetchRepoDoc(childUrl)
+            val childKey = child?.first ?: childUrl
+            val index = current.indexOfFirst { it.url == childKey }
+            if (index >= 0) {
+                current[index] = current[index].copy(
+                    docJson = child?.second?.rawJson ?: current[index].docJson,
+                    lastError = null,
+                )
+            } else {
+                current += StoredSkyRepo(
+                    url = childKey,
+                    input = input,
+                    addedAt = System.currentTimeMillis(),
+                    docJson = child?.second?.rawJson,
+                )
+                added++
+            }
+        }
+        saveRepos(ctx, current)
+        added
+    }
+
+    /**
+     * One-time migration (8.82): installs from 8.81 and earlier
+     * stored a mega-repo as ONE entry whose card expanded into flat
+     * section labels. Replace every stored mega entry by its
+     * sub-repo entries — the same shape [addRepoResolved] stores —
+     * and persist. Runs on repository load from the settings page;
+     * a no-op once no stored document is a mega-repo.
+     *
+     * @return true when the stored list was rewritten.
+     */
+    suspend fun migrateMegaRepos(ctx: Context): Boolean =
+        withContext(Dispatchers.IO) {
+            val repos = getRepos(ctx)
+            if (repos.none { it.doc()?.isMega == true }) {
+                return@withContext false
+            }
+            val out = mutableListOf<StoredSkyRepo>()
+            for (entry in repos) {
+                val doc = entry.doc()
+                if (doc == null || !doc.isMega) {
+                    out += entry
+                    continue
+                }
+                for (childUrl in doc.repos) {
+                    val child = tryFetchRepoDoc(childUrl)
+                    val childKey = child?.first ?: childUrl
+                    if (out.any { it.url == childKey }) continue
+                    out += StoredSkyRepo(
+                        url = childKey,
+                        input = entry.input,
+                        addedAt = entry.addedAt,
+                        docJson = child?.second?.rawJson,
+                    )
+                }
+            }
+            saveRepos(ctx, out)
+            true
+        }
 
     fun setRepoError(ctx: Context, url: String, error: String?) {
         val current = getRepos(ctx).map {
@@ -494,6 +588,15 @@ object SkyRepository {
         val root = settingsRoot(ctx)
         root.put(packageName, values)
         prefs(ctx).edit().putString(KEY_SETTINGS, root.toString()).apply()
+    }
+
+    /** Sub-provider ids switched off in the settings sheet (8.82). */
+    fun disabledSubProviders(ctx: Context, packageName: String): Set<String> {
+        val arr = pluginSettings(ctx, packageName)
+            .optJSONArray(DISABLED_PROVIDERS_KEY) ?: return emptySet()
+        return (0 until arr.length()).mapNotNull {
+            arr.optString(it).takeIf { id -> id.isNotBlank() }
+        }.toSet()
     }
 
     /**
