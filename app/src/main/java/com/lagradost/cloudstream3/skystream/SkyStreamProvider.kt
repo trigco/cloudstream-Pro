@@ -48,10 +48,7 @@ class SkyStreamProvider(
     override var name: String = "SkyStream · " + pluginName
     override var mainUrl: String = storedPlugin.sourceUrl.substringBeforeLast("/")
     override var lang: String = "en"
-    override val hasMainPage: Boolean = storedPlugin.manifest().optJSONArray("providers")?.length() != 0 &&
-        (SkyStreamRepository.script(CloudStreamApp.context!!, rootRepoUrl, storedPlugin.packageName)
-            ?.contains("getHome") == true) || (SkyStreamRepository.script(CloudStreamApp.context!!, rootRepoUrl, storedPlugin.packageName)
-            ?.contains("getHome") == true)
+    override val hasMainPage: Boolean = true
     override val mainPage: List<MainPageData>
         get() = if (hasMainPage) listOf(MainPageData(name = "Home", data = "home", horizontalImages = false)) else emptyList()
     override val supportedTypes: Set<TvType> = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
@@ -128,7 +125,7 @@ class SkyStreamProvider(
             return null
         }
         val title = mediaTitle(detail).ifBlank { mediaTitle(payload.item) }.ifBlank { return null }
-        val type = mediaType(detail).ifBlank { mediaType(payload.item) }
+        val type = mediaType(detail, mediaType(payload.item))
         val poster = mediaPoster(detail) ?: mediaPoster(payload.item)
         val background = detail.optString("backgroundPosterUrl", detail.optString("backdrop"))
             .takeIf { it.startsWith("http") }
@@ -136,8 +133,9 @@ class SkyStreamProvider(
             .takeIf { it.isNotBlank() }
         val year = detail.optString("year").take(4).toIntOrNull()
             ?: detail.optString("releaseDate").take(4).toIntOrNull()
+        val resolvedUrl = detail.optString("url").ifBlank { payload.itemUrl }
         val payloadJson = payloadJson(
-            payload.rootRepoUrl, payload.plugin.packageName, payload.providerId, detail, payload.itemUrl
+            payload.rootRepoUrl, payload.plugin.packageName, payload.providerId, detail, resolvedUrl
         )
         return if (type == "series" || type == "anime") {
             val episodes = parseEpisodes(
@@ -174,20 +172,20 @@ class SkyStreamProvider(
         val output = mutableListOf<Episode>()
         if (direct != null) {
             for (i in 0 until direct.length()) {
-                val episode = direct.optJSONObject(i) ?: continue
-                val epUrl = episode.optString("url", episode.optString("id"))
+                val episodeItem = direct.optJSONObject(i) ?: continue
+                val epUrl = episodeItem.optString("url", episodeItem.optString("id"))
                 if (epUrl.isBlank()) continue
-                val epTitle = mediaTitle(episode).ifBlank { "Episode " + (i + 1) }
-                val season = episode.optInt("season", 1).takeIf { it >= 0 }
-                val episodeNo = episode.optInt("episode", i + 1).takeIf { it > 0 }
-                val epPayload = payloadJson(root, plugin.packageName, providerId, episode, epUrl)
+                val epTitle = mediaTitle(episodeItem).ifBlank { "Episode " + (i + 1) }
+                val season = episodeItem.optInt("season", 1).takeIf { it >= 0 }
+                val episodeNo = episodeItem.optInt("episode", i + 1).takeIf { it > 0 }
+                val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
                 output += newEpisode(epPayload, fix = false) {
                     name = epTitle
                     this.season = season
-                    episode = episodeNo
-                    posterUrl = mediaPoster(episode)
-                    description = episode.optString("description").takeIf { it.isNotBlank() }
-                    addDate(episode.optString("releaseDate"))
+                    this.episode = episodeNo
+                    posterUrl = mediaPoster(episodeItem)
+                    description = episodeItem.optString("description").takeIf { it.isNotBlank() }
+                    addDate(episodeItem.optString("releaseDate"))
                 }
             }
         }
@@ -197,17 +195,17 @@ class SkyStreamProvider(
                 val season = seasons.optJSONObject(si) ?: continue
                 val eps = season.optJSONArray("episodes") ?: continue
                 for (ei in 0 until eps.length()) {
-                    val episode = eps.optJSONObject(ei) ?: continue
-                    val epUrl = episode.optString("url", episode.optString("id"))
+                    val episodeItem = eps.optJSONObject(ei) ?: continue
+                    val epUrl = episodeItem.optString("url", episodeItem.optString("id"))
                     if (epUrl.isBlank()) continue
-                    val number = episode.optInt("episode", ei + 1)
-                    val epPayload = payloadJson(root, plugin.packageName, providerId, episode, epUrl)
+                    val number = episodeItem.optInt("episode", ei + 1)
+                    val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
                     output += newEpisode(epPayload, fix = false) {
-                        name = mediaTitle(episode).ifBlank { "Episode " + number }
+                        name = mediaTitle(episodeItem).ifBlank { "Episode " + number }
                         this.season = season.optInt("season", season.optInt("number", si + 1))
-                        episode = number
-                        posterUrl = mediaPoster(episode)
-                        description = episode.optString("description").takeIf { it.isNotBlank() }
+                        this.episode = number
+                        posterUrl = mediaPoster(episodeItem)
+                        description = episodeItem.optString("description").takeIf { it.isNotBlank() }
                     }
                 }
             }
@@ -294,8 +292,10 @@ class SkyStreamProvider(
                 item.optString("name").ifBlank { item.optString("label") }
             }
 
-        private fun mediaType(item: JSONObject): String {
-            val raw = item.optString("type", item.optString("mediaType", "movie")).lowercase()
+        private fun mediaType(item: JSONObject, fallback: String = "movie"): String {
+            val raw = item.optString("type").ifBlank {
+                item.optString("mediaType").ifBlank { fallback }
+            }.lowercase()
             return when (raw) {
                 "tv", "show", "series", "episode" -> "series"
                 "anime" -> "anime"
