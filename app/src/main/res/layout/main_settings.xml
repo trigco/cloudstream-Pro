@@ -239,8 +239,24 @@
                     style="@style/SettingsItem"
                     android:drawablePadding="14dp"
                     android:nextFocusUp="@id/settings_stremio_addons"
-                    android:nextFocusDown="@id/settings_categories"
+                    android:nextFocusDown="@id/settings_sky_plugins"
                     android:text="@string/nuvio_plugins_title"
+                    app:drawableStartCompat="@drawable/ic_settings_extensions" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="58dp"
+                    android:alpha="0.15"
+                    android:background="?attr/colorPrimaryDark" />
+
+                <TextView
+                    android:id="@+id/settings_sky_plugins"
+                    style="@style/SettingsItem"
+                    android:drawablePadding="14dp"
+                    android:nextFocusUp="@id/settings_nuvio_plugins"
+                    android:nextFocusDown="@id/settings_categories"
+                    android:text="@string/skystream_plugins_title"
                     app:drawableStartCompat="@drawable/ic_settings_extensions" />
 
                 <View
@@ -254,7 +270,7 @@
                     android:id="@+id/settings_categories"
                     style="@style/SettingsItem"
                     android:drawablePadding="14dp"
-                    android:nextFocusUp="@id/settings_nuvio_plugins"
+                    android:nextFocusUp="@id/settings_sky_plugins"
                     android:nextFocusDown="@id/settings_family_mode"
                     android:text="@string/home_custom_categories_row"
                     app:drawableStartCompat="@drawable/baseline_list_alt_24" />

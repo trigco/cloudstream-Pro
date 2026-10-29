@@ -1899,6 +1899,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             runCatching {
                 com.lagradost.cloudstream3.nuvio.NuvioProviders.sync(this@MainActivity)
             }
+            // SkyStream has its own JavaScript extension contract and provider registry.
+            runCatching {
+                com.lagradost.cloudstream3.skystream.SkyStreamProviders.sync(this@MainActivity)
+            }
         }
 
         //  val navView: BottomNavigationView = findViewById(R.id.nav_view)
