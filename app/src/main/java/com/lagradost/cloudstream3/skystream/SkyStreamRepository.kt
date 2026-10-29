@@ -255,8 +255,8 @@ object SkyStreamRepository {
                     val entry = zip.nextEntry ?: break
                     if (!entry.isDirectory) {
                         when (entry.name) {
-                            "plugin.json" -> manifestText = readEntryLimited(zip, MAX_MANIFEST_BYTES).toString(Charsets.UTF_8)
-                            "plugin.js" -> scriptText = readEntryLimited(zip, MAX_SCRIPT_BYTES).toString(Charsets.UTF_8)
+                            "plugin.json" -> manifestText = String(readEntryLimited(zip, MAX_MANIFEST_BYTES), Charsets.UTF_8)
+                            "plugin.js" -> scriptText = String(readEntryLimited(zip, MAX_SCRIPT_BYTES), Charsets.UTF_8)
                         }
                     }
                     zip.closeEntry()
