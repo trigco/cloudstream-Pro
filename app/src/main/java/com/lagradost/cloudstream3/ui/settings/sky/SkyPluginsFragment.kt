@@ -95,8 +95,8 @@ class SkyPluginsFragment : Fragment() {
             onPluginAction = { entry, listing, state ->
                 when (state) {
                     SkyRow.PluginState.INSTALLED -> {
-                        SkyRepository.installedByPackage(requireContext())
-                            [entry.packageName]?.let { confirmRemovePlugin(it) }
+                        val installed = SkyRepository.installedByPackage(requireContext())
+                        installed[entry.packageName]?.let { confirmRemovePlugin(it) }
                     }
                     else -> installPlugin(entry, listing.repoUrl)
                 }
