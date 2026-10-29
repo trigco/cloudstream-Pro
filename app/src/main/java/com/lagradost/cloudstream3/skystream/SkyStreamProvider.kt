@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.skystream
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CloudStreamApp
@@ -32,6 +33,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -246,13 +249,14 @@ class SkyStreamProvider(
             val stream = streams.optJSONObject(i) ?: continue
             val rawUrl = stream.optString("url").ifBlank { stream.optString("link") }
             val headers = jsonObjectToMap(stream.optJSONObject("headers"))
-            val resolved = resolveSkyStreamAddress(rawUrl, headers) ?: continue
+            val resolved = resolveSkyStreamAddress(context, rawUrl, headers) ?: continue
             if (!seen.add(resolved.url)) continue
             val subtitles = stream.optJSONArray("subtitles")
             if (subtitles != null) {
                 for (j in 0 until subtitles.length()) {
                     val sub = subtitles.optJSONObject(j) ?: continue
                     val subAddress = resolveSkyStreamAddress(
+                        context,
                         sub.optString("url"),
                         jsonObjectToMap(sub.optJSONObject("headers")).ifEmpty { resolved.headers }
                     ) ?: continue
@@ -293,6 +297,7 @@ class SkyStreamProvider(
      * that exists, fail closed rather than handing an opaque pseudo-URL to Exo.
      */
     private fun resolveSkyStreamAddress(
+        context: Context,
         rawUrl: String,
         requestHeaders: Map<String, String>,
     ): ResolvedSkyStreamAddress? {
@@ -300,7 +305,22 @@ class SkyStreamProvider(
         if (value.startsWith("https://") || value.startsWith("http://")) {
             return ResolvedSkyStreamAddress(value, requestHeaders)
         }
-        if (value.startsWith("magic_m3u8:", ignoreCase = true)) return null
+        if (value.startsWith("magic_m3u8:", ignoreCase = true)) {
+            return runCatching {
+                val playlist = decodeBase64(value.substringAfter(":", ""))
+                require(playlist.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024) {
+                    "SkyStream inline M3U8 exceeds the size limit"
+                }
+                require(playlist.trimStart().startsWith("#EXTM3U")) {
+                    "SkyStream inline playlist is not a valid M3U8"
+                }
+                val dir = File(context.cacheDir, "skystream-playlists")
+                if (!dir.exists()) dir.mkdirs()
+                val file = File(dir, sha256(value) + ".m3u8")
+                if (!file.isFile || file.readText() != playlist) file.writeText(playlist)
+                ResolvedSkyStreamAddress(Uri.fromFile(file).toString(), requestHeaders)
+            }.getOrNull()
+        }
 
         fun decodeBase64(input: String): String {
             val normalized = input.trim()
@@ -382,6 +402,21 @@ class SkyStreamProvider(
                 arr.optString(i).takeIf { it.isNotBlank() }
             }
         }
+
+        private fun decodeBase64(input: String): String {
+            val normalized = input.trim()
+            val bytes = runCatching {
+                Base64.decode(normalized, Base64.DEFAULT)
+            }.recoverCatching {
+                Base64.decode(normalized, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            }.getOrThrow()
+            return String(bytes, Charsets.UTF_8)
+        }
+
+        private fun sha256(value: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(value.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
 
         private fun jsonObjectToMap(obj: JSONObject?): Map<String, String> {
             if (obj == null) return emptyMap()
