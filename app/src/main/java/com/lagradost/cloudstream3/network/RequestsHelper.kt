@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.Prerelease
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.mvvm.safe
+import com.lagradost.cloudstream3.utils.AppCookieJar
 import com.lagradost.nicehttp.Requests
 import com.lagradost.nicehttp.ignoreAllSSLErrors
 import okhttp3.Cache
@@ -41,6 +42,12 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
     val baseClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
+        // 8.83: universal persistent cookies for native providers —
+        // many providers/extractors never manage cookies, so the
+        // app does it for them (RFC 6265, survives restarts). A
+        // Cookie header a provider sets itself still wins: OkHttp
+        // only asks the jar when the request has none.
+        .cookieJar(AppCookieJar(context.applicationContext, "native"))
         .apply {
             if (ignoreSSL) {
                 ignoreAllSSLErrors()

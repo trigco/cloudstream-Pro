@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.83: smart provider switcher sheet (SkyStream-style).
+     Title, a horizontal type-filter chip row (All + the tv-type
+     chips this picker has always had), a radio RecyclerView of
+     providers/custom lists with source tags, and a Close row.
+     Surface = rounded_dialog on the app bottom-sheet theme, so
+     no light frame can show through (same recipe as 8.82). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/switcher_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/rounded_dialog"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/switcher_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="10dp"
+        android:text="@string/switcher_select_provider"
+        android:textColor="?attr/textColor"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <HorizontalScrollView
+        android:id="@+id/switcher_chips_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="6dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/switcher_chip_all"
+                style="@style/ChipFilled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/all" />
+
+            <include
+                android:id="@+id/switcher_tvtypes_chips"
+                layout="@layout/tvtypes_chips" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/switcher_recycler"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:nestedScrollingEnabled="true"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        tools:listitem="@layout/home_provider_switcher_row" />
+
+    <TextView
+        android:id="@+id/switcher_close"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="20dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="16dp"
+        android:text="@string/switcher_close"
+        android:textColor="?attr/textColor"
+        android:textSize="14sp" />
+</LinearLayout>

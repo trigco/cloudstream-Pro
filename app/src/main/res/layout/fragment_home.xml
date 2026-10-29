@@ -254,13 +254,15 @@
          was drawn — the real failure was it not being drawn at all in the
          top-of-home state. HomeFragment.anchorHomeApiFab() now recomputes
          the bottom margin from the activity's measured nav view at runtime
-         and the FAB no longer shrink()es on scroll (see PHASE85C_CHANGES.md). -->
+         and the FAB no longer shrink()es on scroll (see PHASE85C_CHANGES.md).
+         Phase 8.83: gap above the floating nav widened 16dp -> 24dp
+         (marginBottom 112dp) — the pill crowded the nav bar. -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/home_api_fab"
         style="@style/ExtendedFloatingActionButton"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
-        android:layout_marginBottom="104dp"
+        android:layout_marginBottom="112dp"
         android:text="@string/home_source"
         android:textColor="?attr/textColor"
         android:visibility="gone"
@@ -272,7 +274,7 @@
         android:id="@+id/home_random"
         style="@style/ExtendedFloatingActionButton"
         android:layout_gravity="bottom|start"
-        android:layout_marginBottom="104dp"
+        android:layout_marginBottom="112dp"
         android:text="@string/home_random"
         android:textColor="?attr/textColor"
         android:visibility="gone"

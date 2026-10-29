@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.83: grey source tag on provider switcher rows
+     (repository name / bridge source). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/switcherTagBackground" />
+    <corners android:radius="8dp" />
+</shape>

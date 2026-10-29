@@ -6,17 +6,17 @@ import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.EdgeEffect
-import android.widget.AbsListView
-import android.widget.ArrayAdapter
 import android.widget.ImageView
-import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -35,8 +35,10 @@ import android.os.Looper
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.io.File
 import java.util.Collections
 import com.lagradost.cloudstream3.plugins.PluginManager
+import com.lagradost.cloudstream3.plugins.RepositoryManager
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getActivity
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -53,7 +55,8 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentHomeBinding
 import com.lagradost.cloudstream3.databinding.HomeEpisodesExpandedBinding
-import com.lagradost.cloudstream3.databinding.HomeSelectMainpageBinding
+import com.lagradost.cloudstream3.databinding.HomeProviderSwitcherBinding
+import com.lagradost.cloudstream3.databinding.HomeProviderSwitcherRowBinding
 import com.lagradost.cloudstream3.databinding.TvtypesChipsBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.logError
@@ -64,6 +67,9 @@ import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.nuvio.NuvioProvider
+import com.lagradost.cloudstream3.sky.SkyPluginProvider
+import com.lagradost.cloudstream3.stremio.StremioAddonProvider
 import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
@@ -407,19 +413,27 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
             validAPIs.add(0, randomApi)
             validAPIs.add(0, noneApi)
-            //val builder: AlertDialog.Builder = AlertDialog.Builder(this)
-            //builder.setView(R.layout.home_select_mainpage)
-            val builder =
-                BottomSheetDialog(this)
 
-            builder.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            val binding: HomeSelectMainpageBinding = HomeSelectMainpageBinding.inflate(
-                builder.layoutInflater,
-                null,
-                false
-            )
+            // Phase 8.83: SkyStream-style smart switcher sheet —
+            // title, type-filter chips (All + the tv-type chips this
+            // picker has always had), and a radio list whose rows
+            // carry source tags (repository name / bridge source).
+            // Every data rule below is the pre-8.83 logic unchanged
+            // (pinned first via DataStoreHelper.pinnedProviders,
+            // custom lists appended with "custom:<id>" pin keys,
+            // Family Mode filter); only the presentation moved from
+            // a ListView to this RecyclerView sheet. SearchFragment
+            // keeps the old home_select_mainpage layout untouched.
+            val dialog = BottomSheetDialog(this, R.style.AppBottomSheetDialogTheme)
+            val binding: HomeProviderSwitcherBinding =
+                HomeProviderSwitcherBinding.inflate(
+                    dialog.layoutInflater,
+                    null,
+                    false
+                )
+            dialog.setContentView(binding.root)
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
 
-            builder.setContentView(binding.root)
             // Phase 8.47: his custom lists are appended to this
             // same picker (his request) so providers and custom
             // lists are managed in one place.
@@ -427,251 +441,351 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // Phase 8.74: the customs as DISPLAYED (pinned ones first);
             // updateList() recomputes it, click/pin handlers read it.
             var displayCustoms: List<HomeCustomLists.CustomList> = customLists
-            builder.show()
-            builder.let { dialog ->
-                val isMultiLang = getApiProviderLangSettings().let { set ->
-                    set.size > 1 || set.contains(AllLanguagesName)
+
+            val isMultiLang = getApiProviderLangSettings().let { set ->
+                set.size > 1 || set.contains(AllLanguagesName)
+            }
+
+            var currentApiName = selectedApiName
+
+            var currentValidApis: MutableList<MainAPI> = mutableListOf()
+            val preSelectedTypes = DataStoreHelper.homePreference.toMutableList()
+            val validTypesAll = validAPIs.flatMap { it.supportedTypes }.distinct()
+
+            var pinnedphashset = DataStoreHelper.pinnedProviders.toHashSet()
+
+            // ---- Phase 8.83: row model + source tags ----
+
+            data class SwitcherTag(val text: String, val cloud: Boolean)
+
+            class SwitcherRow(
+                val api: MainAPI?,
+                val custom: HomeCustomLists.CustomList?,
+                val title: String,
+                val tags: List<SwitcherTag>,
+                val selected: Boolean,
+                val pinned: Boolean,
+                val settingsPlugin: Plugin?,
+            )
+
+            class SwitcherHolder(val rowBinding: HomeProviderSwitcherRowBinding) :
+                RecyclerView.ViewHolder(rowBinding.root)
+
+            /** Repository display name for a downloaded native
+             *  plugin: its file lives in a folder named after the
+             *  sanitized repository URL (PluginManager.getPluginPath),
+             *  matched against the stored + prebuilt repositories. */
+            fun repositoryTagFor(api: MainAPI): String? {
+                val path = api.sourcePlugin ?: return null
+                val folder = File(path).parentFile?.name ?: return null
+                val repos = RepositoryManager.getRepositories().toList() +
+                    RepositoryManager.PREBUILT_REPOSITORIES.toList()
+                return repos.firstOrNull {
+                    PluginManager.getPluginSanitizedFileName(it.url) == folder
+                }?.name
+            }
+
+            fun tagsFor(api: MainAPI): List<SwitcherTag> {
+                if (api.name == noneApi.name || api.name == randomApi.name) {
+                    return emptyList()
                 }
-                //dialog.window?.setGravity(Gravity.BOTTOM)
+                return when {
+                    api is SkyPluginProvider -> listOf(
+                        SwitcherTag(
+                            if (api.sub != null) {
+                                api.stored.name
+                            } else {
+                                getString(R.string.switcher_tag_skystream)
+                            },
+                            false
+                        )
+                    )
 
-                var currentApiName = selectedApiName
+                    api is StremioAddonProvider -> listOf(
+                        SwitcherTag(
+                            getString(R.string.switcher_tag_stremio),
+                            false
+                        )
+                    )
 
-                var currentValidApis: MutableList<MainAPI> = mutableListOf()
-                val preSelectedTypes = DataStoreHelper.homePreference.toMutableList()
+                    api is NuvioProvider -> emptyList()
 
-                binding.cancelBtt.setOnClickListener {
-                    dialog.dismissSafe()
-                }
-
-                binding.applyBtt.setOnClickListener {
-                    if (currentApiName != selectedApiName) {
-                        currentApiName?.let(callback)
+                    api.sourcePlugin != null -> buildList {
+                        repositoryTagFor(api)?.let { add(SwitcherTag(it, false)) }
+                        add(
+                            SwitcherTag(
+                                getString(R.string.switcher_tag_cloudstream),
+                                true
+                            )
+                        )
                     }
-                    dialog.dismissSafe()
+
+                    else -> listOf(
+                        SwitcherTag(
+                            getString(R.string.switcher_tag_cloudstream),
+                            true
+                        )
+                    )
                 }
+            }
 
-                var pinnedphashset = DataStoreHelper.pinnedProviders.toHashSet()
+            fun titleFor(api: MainAPI): String {
+                // Sky sub-providers headline with the sub name; the
+                // plugin name moves to the source tag (SkyStream's
+                // Select Provider rows work the same way).
+                val base = if (api is SkyPluginProvider && api.sub != null) {
+                    api.sub.name
+                } else {
+                    getDisplayName(api.name) ?: api.name
+                }
+                return if (isMultiLang) {
+                    "${getFlagFromIso(api.lang)?.plus(" ") ?: ""}$base"
+                } else {
+                    base
+                }
+            }
 
-                val listView = dialog.findViewById<ListView>(R.id.listview1)
+            val rows = mutableListOf<SwitcherRow>()
+            lateinit var switcherAdapter: RecyclerView.Adapter<SwitcherHolder>
 
-                val arrayAdapter = object : ArrayAdapter<String>(
-                    this, R.layout.sort_bottom_single_provider_choice,
-                    mutableListOf()
-                ) {
-                    override fun getView(
-                        position: Int,
-                        convertView: View?,
-                        parent: ViewGroup
-                    ): View {
-                        val view = convertView ?: LayoutInflater.from(context)
-                            .inflate(R.layout.sort_bottom_single_provider_choice, parent, false)
-                        val titleText = view.findViewById<TextView>(R.id.text1)
-                        val pinIcon = view.findViewById<ImageView>(R.id.pinicon)
-                        val settingsIcon = view.findViewById<ImageView>(R.id.action_settings)
+            fun updateList() {
+                DataStoreHelper.homePreference = preSelectedTypes
+                val pinnedp = DataStoreHelper.pinnedProviders.toList()
+                pinnedphashset = pinnedp.toHashSet()
+                val sortedApis = validAPIs
+                    .filter {
+                        val isPinned = pinnedphashset.contains(it.name)
 
-                        val name = getItem(position)
-                        titleText?.text = name
-
-                        // Phase 8.11-E1: the row's CheckLabel check is a static
-                        // compound drawable whose stateful tint never
-                        // discriminated on device (every row rendered
-                        // checked). Drive it from the ListView's checked
-                        // state explicitly instead — updateList() seeds it
-                        // via setItemChecked before filling the adapter, and
-                        // both branches run on every bind so recycled rows
-                        // never keep a stale check. Same explicit-tint
-                        // pattern as SingleSelectionHelper's IconArrayAdapter.
-                        val isChecked =
-                            (parent as? ListView)?.isItemChecked(position) == true
-                        if (isChecked) {
-                            val checkDrawable = ContextCompat.getDrawable(
-                                view.context, R.drawable.ic_baseline_check_24_listview
-                            )?.mutate()
-                            if (checkDrawable != null) {
-                                DrawableCompat.setTint(
-                                    checkDrawable,
-                                    view.context.getResourceColor(R.attr.textColor)
-                                )
-                                titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                                    checkDrawable, null, null, null
-                                )
-                            }
-                            titleText?.setTextColor(
-                                view.context.getResourceColor(R.attr.textColor)
-                            )
-                        } else {
-                            titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                                0, 0, 0, 0
-                            )
-                            titleText?.setTextColor(
-                                view.context.getResourceColor(R.attr.grayTextColor)
-                            )
+                        // Hide pinned NSFW when NSFW not selected. NSFW is distracting when not chosen.
+                        if (isPinned && !preSelectedTypes.contains(TvType.NSFW)) {
+                            if (it.supportedTypes.all { type -> type == TvType.NSFW }) return@filter false
                         }
 
-                        val providerApi =
-                            currentValidApis.getOrNull(position)
-                        // Phase 8.74: custom lists pin too — their key
-                        // in the same pinned store is "custom:<id>".
-                        val customAtPos = if (providerApi == null) {
-                            displayCustoms.getOrNull(
-                                position - currentValidApis.size
-                            )
+                        it.hasMainPage && (isPinned || it.supportedTypes.any(
+                            preSelectedTypes::contains
+                        ))
+                    }
+                    .sortedBy { it.name.lowercase() }
+
+                val sortedApiMap = LinkedHashMap<String, MainAPI>().apply {
+                    sortedApis.forEach { put(it.name, it) }
+                }
+
+                val pinnedApis = pinnedp.asReversed().mapNotNull { name ->
+                    sortedApiMap[name]
+                }
+
+                val remainingApis = sortedApis.filterNot { pinnedphashset.contains(it.name) }
+
+                currentValidApis = mutableListOf<MainAPI>().apply {
+                    addAll(validAPIs.take(2))
+                    addAll(pinnedApis)
+                    addAll(remainingApis)
+                }
+
+                // Phase 8.50: Family Mode hides adult providers
+                // from the picker entirely.
+                if (FamilyMode.isEnabled()) {
+                    currentValidApis.removeAll {
+                        FamilyMode.isAdultApi(it)
+                    }
+                }
+
+                // Phase 8.74: pinned customs join the top group
+                // like pinned providers (same store, "custom:<id>"
+                // keys, most-recent pin first), and the star
+                // prefix beside custom names is gone (his call).
+                val pinnedCustoms = pinnedp.asReversed()
+                    .mapNotNull { key ->
+                        if (key.startsWith("custom:")) {
+                            customLists.firstOrNull {
+                                "custom:" + it.id == key
+                            }
                         } else {
                             null
                         }
-                        val isPinned =
-                            (providerApi != null &&
-                                pinnedphashset.contains(providerApi.name)) ||
-                                (customAtPos != null &&
-                                    pinnedphashset.contains(
-                                        "custom:" + customAtPos.id
-                                    ))
-                        pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
+                    }
+                displayCustoms = pinnedCustoms + customLists.filterNot {
+                    pinnedphashset.contains("custom:" + it.id)
+                }
 
-                        val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
-                        val isDownloadedPluginWithSettings = pluginInstance?.openSettings != null && !isLayout(TV)
-
-                        settingsIcon.visibility = if (isDownloadedPluginWithSettings) View.VISIBLE else View.GONE
-                        if (isDownloadedPluginWithSettings) {
-                            settingsIcon.setOnClickListener {
-                                try {
-                                    val activityContext = it.context.getActivity() ?: it.context
-                                    pluginInstance.openSettings?.invoke(activityContext)
-                                } catch (e: Throwable) {
-                                    logError(e)
-                                }
-                            }
+                // The old ListView seeded its checked row from the
+                // active custom list first, the current api second;
+                // the rows carry that same selection state now.
+                val activeCustom =
+                    HomeCustomLists.activeList(this@selectHomepage)
+                        ?.takeIf { active ->
+                            displayCustoms.any { it.id == active.id }
                         }
 
-                        return view
-                    }
+                rows.clear()
+                for (api in currentValidApis) {
+                    val pluginInstance =
+                        api.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
+                    val settingsPlugin =
+                        if (pluginInstance?.openSettings != null && !isLayout(TV)) {
+                            pluginInstance
+                        } else {
+                            null
+                        }
+                    rows += SwitcherRow(
+                        api = api,
+                        custom = null,
+                        title = titleFor(api),
+                        tags = tagsFor(api),
+                        selected = activeCustom == null &&
+                            api.name == currentApiName,
+                        pinned = pinnedphashset.contains(api.name),
+                        settingsPlugin = settingsPlugin,
+                    )
                 }
-                listView?.adapter = arrayAdapter
-                listView?.choiceMode = AbsListView.CHOICE_MODE_SINGLE
+                for (custom in displayCustoms) {
+                    rows += SwitcherRow(
+                        api = null,
+                        custom = custom,
+                        title = custom.name,
+                        tags = emptyList(),
+                        selected = activeCustom?.id == custom.id,
+                        pinned = pinnedphashset.contains("custom:" + custom.id),
+                        settingsPlugin = null,
+                    )
+                }
+                switcherAdapter.notifyDataSetChanged()
 
-                listView?.setOnItemClickListener { _, _, i, _ ->
-                    if (i in currentValidApis.indices) {
-                        currentApiName = currentValidApis[i].name
-                        //to switch to apply simply remove this
-                        currentApiName.let(callback)
-                        dialog.dismissSafe()
-                    } else if (onCustomSelect != null) {
-                        val list = displayCustoms.getOrNull(
-                            i - currentValidApis.size
+                // Keep the All chip in sync with the tv-type chips.
+                binding.switcherChipAll.isChecked =
+                    validTypesAll.isNotEmpty() &&
+                        preSelectedTypes.containsAll(validTypesAll)
+            }
+
+            switcherAdapter = object : RecyclerView.Adapter<SwitcherHolder>() {
+                override fun onCreateViewHolder(
+                    parent: ViewGroup,
+                    viewType: Int
+                ): SwitcherHolder {
+                    val rowBinding = HomeProviderSwitcherRowBinding.inflate(
+                        LayoutInflater.from(parent.context),
+                        parent,
+                        false
+                    )
+                    return SwitcherHolder(rowBinding)
+                }
+
+                override fun getItemCount(): Int = rows.size
+
+                override fun onBindViewHolder(holder: SwitcherHolder, position: Int) {
+                    val row = rows[position]
+                    val rb = holder.rowBinding
+                    val rowContext = holder.itemView.context
+
+                    rb.switcherRowRadio.setImageResource(
+                        if (row.selected) {
+                            R.drawable.ic_switcher_radio_checked
+                        } else {
+                            R.drawable.ic_switcher_radio_unchecked
+                        }
+                    )
+                    rb.switcherRowTitle.text = row.title
+                    rb.switcherRowTitle.typeface = if (row.selected) {
+                        Typeface.DEFAULT_BOLD
+                    } else {
+                        Typeface.DEFAULT
+                    }
+                    rb.switcherRowTitle.setTextColor(
+                        rowContext.getResourceColor(
+                            if (row.selected) R.attr.textColor
+                            else R.attr.grayTextColor
                         )
-                        if (list != null) {
-                            onCustomSelect(list)
+                    )
+
+                    rb.switcherRowTags.removeAllViews()
+                    row.tags.forEachIndexed { index, tag ->
+                        val chip = TextView(rowContext).apply {
+                            text = tag.text
+                            textSize = 11f
+                            setTextColor(
+                                ContextCompat.getColor(
+                                    rowContext,
+                                    if (tag.cloud) R.color.switcherTagCloudText
+                                    else R.color.switcherTagText
+                                )
+                            )
+                            setBackgroundResource(
+                                if (tag.cloud) R.drawable.bg_switcher_tag_cloud
+                                else R.drawable.bg_switcher_tag
+                            )
+                            setPadding(8.toPx, 3.toPx, 8.toPx, 3.toPx)
+                            layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            ).apply {
+                                if (index > 0) marginStart = 6.toPx
+                            }
+                        }
+                        rb.switcherRowTags.addView(chip)
+                    }
+
+                    rb.switcherRowPin.visibility =
+                        if (row.pinned) View.VISIBLE else View.GONE
+
+                    val settingsPlugin = row.settingsPlugin
+                    rb.switcherRowSettings.visibility =
+                        if (settingsPlugin != null) View.VISIBLE else View.GONE
+                    if (settingsPlugin != null) {
+                        rb.switcherRowSettings.setOnClickListener { view ->
+                            try {
+                                val activityContext =
+                                    view.context.getActivity() ?: view.context
+                                settingsPlugin.openSettings?.invoke(activityContext)
+                            } catch (e: Throwable) {
+                                logError(e)
+                            }
+                        }
+                    } else {
+                        rb.switcherRowSettings.setOnClickListener(null)
+                    }
+
+                    rb.root.setOnClickListener {
+                        val pos = holder.bindingAdapterPosition
+                        if (pos == RecyclerView.NO_POSITION) return@setOnClickListener
+                        val clicked = rows[pos]
+                        if (clicked.api != null) {
+                            currentApiName = clicked.api.name
+                            //to switch to apply simply remove this
+                            currentApiName?.let(callback)
+                            dialog.dismissSafe()
+                        } else if (clicked.custom != null && onCustomSelect != null) {
+                            onCustomSelect(clicked.custom)
                             dialog.dismissSafe()
                         }
                     }
-                }
 
-                fun updateList() {
-                    DataStoreHelper.homePreference = preSelectedTypes
-                    val pinnedp = DataStoreHelper.pinnedProviders.toList()
-                    pinnedphashset = pinnedp.toHashSet()
-                    arrayAdapter.clear()
-                    val sortedApis = validAPIs
-                        .filter {
-                            val isPinned = pinnedphashset.contains(it.name)
-
-                            // Hide pinned NSFW when NSFW not selected. NSFW is distracting when not chosen.
-                            if (isPinned && !preSelectedTypes.contains(TvType.NSFW)) {
-                                if (it.supportedTypes.all { type -> type == TvType.NSFW }) return@filter false
-                            }
-
-                            it.hasMainPage && (isPinned || it.supportedTypes.any(
-                                preSelectedTypes::contains
-                            ))
+                    // pin provider on hold
+                    rb.root.setOnLongClickListener {
+                        val pos = holder.bindingAdapterPosition
+                        if (pos == RecyclerView.NO_POSITION) {
+                            return@setOnLongClickListener true
                         }
-                        .sortedBy { it.name.lowercase() }
-
-                    val sortedApiMap = LinkedHashMap<String, MainAPI>().apply {
-                        sortedApis.forEach { put(it.name, it) }
-                    }
-
-                    val pinnedApis = pinnedp.asReversed().mapNotNull { name ->
-                        sortedApiMap[name]
-                    }
-
-                    val remainingApis = sortedApis.filterNot { pinnedphashset.contains(it.name) }
-
-                    currentValidApis = mutableListOf<MainAPI>().apply {
-                        addAll(validAPIs.take(2))
-                        addAll(pinnedApis)
-                        addAll(remainingApis)
-                    }
-
-                    // Phase 8.50: Family Mode hides adult providers
-                    // from the picker entirely.
-                    if (FamilyMode.isEnabled()) {
-                        currentValidApis.removeAll {
-                            FamilyMode.isAdultApi(it)
-                        }
-                    }
-
-                    val names = currentValidApis.map {
-                        val displayName = getDisplayName(it.name)
-                        if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
-                    }
-                    // Phase 8.74: pinned customs join the top group
-                    // like pinned providers (same store, "custom:<id>"
-                    // keys, most-recent pin first), and the star
-                    // prefix beside custom names is gone (his call).
-                    val pinnedCustoms = pinnedp.asReversed()
-                        .mapNotNull { key ->
-                            if (key.startsWith("custom:")) {
-                                customLists.firstOrNull {
-                                    "custom:" + it.id == key
+                        val clicked = rows[pos]
+                        val pinnedp =
+                            DataStoreHelper.pinnedProviders.toMutableList()
+                        if (clicked.api != null) {
+                            // none/random (the first two rows) cannot be pinned
+                            if (currentValidApis.indexOf(clicked.api) > 1) {
+                                val thisapi = clicked.api.name
+                                if (pinnedp.contains(thisapi)) {
+                                    pinnedp.remove(thisapi)
+                                } else {
+                                    pinnedp.add(thisapi)
                                 }
-                            } else {
-                                null
+                                DataStoreHelper.pinnedProviders =
+                                    pinnedp.toTypedArray()
+                                updateList()
                             }
-                        }
-                    displayCustoms = pinnedCustoms + customLists.filterNot {
-                        pinnedphashset.contains("custom:" + it.id)
-                    }
-                    val customNames = displayCustoms.map { it.name }
-                    var index = currentValidApis.map { it.name }
-                        .indexOf(currentApiName)
-                    val activeCustomPos =
-                        HomeCustomLists.activeList(this@selectHomepage)
-                            ?.let { active ->
-                                displayCustoms.indexOfFirst {
-                                    it.id == active.id
-                                }
-                            } ?: -1
-                    if (activeCustomPos >= 0) {
-                        index = currentValidApis.size + activeCustomPos
-                    }
-                    listView?.setItemChecked(index, true)
-                    arrayAdapter.addAll(names + customNames)
-                    arrayAdapter.notifyDataSetChanged()
-                }
-                // pin provider on hold
-                listView?.setOnItemLongClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty() && i > 1 &&
-                        i in currentValidApis.indices
-                    ) {
-                        val pinnedp = DataStoreHelper.pinnedProviders.toMutableList()
-                        val thisapi = currentValidApis[i].name
-                        if (pinnedp.contains(thisapi)) {
-                            pinnedp.remove(thisapi)
-                        } else {
-                            pinnedp.add(thisapi)
-                        }
-                        DataStoreHelper.pinnedProviders = pinnedp.toTypedArray()
-                        updateList()
-                    } else {
-                        // Phase 8.74: custom lists pin/unpin on hold
-                        // exactly like providers.
-                        val custom = displayCustoms.getOrNull(
-                            i - currentValidApis.size
-                        )
-                        if (custom != null) {
-                            val pinnedp =
-                                DataStoreHelper.pinnedProviders.toMutableList()
-                            val key = "custom:" + custom.id
+                        } else if (clicked.custom != null) {
+                            // Phase 8.74: custom lists pin/unpin on hold
+                            // exactly like providers.
+                            val key = "custom:" + clicked.custom.id
                             if (pinnedp.contains(key)) {
                                 pinnedp.remove(key)
                             } else {
@@ -681,21 +795,53 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                                 pinnedp.toTypedArray()
                             updateList()
                         }
+                        true
                     }
-                    true
                 }
+            }
 
-                bindChips(
-                    binding.tvtypesChipsScroll.tvtypesChips,
-                    preSelectedTypes,
-                    validAPIs.flatMap { it.supportedTypes }.distinct()
-                ) { list ->
+            binding.switcherRecycler.layoutManager = LinearLayoutManager(this)
+            binding.switcherRecycler.adapter = switcherAdapter
+
+            binding.switcherClose.setOnClickListener {
+                dialog.dismissSafe()
+            }
+
+            // The All chip drives the same selection the tv-type
+            // chips write: on = every type present, off = none.
+            binding.switcherChipAll.isFocusable = true
+            if (isLayout(TV)) {
+                binding.switcherChipAll.isFocusableInTouchMode = true
+            }
+            binding.switcherChipAll.setOnClickListener {
+                if (binding.switcherChipAll.isChecked) {
                     preSelectedTypes.clear()
-                    preSelectedTypes.addAll(list)
-                    updateList()
+                    preSelectedTypes.addAll(validTypesAll)
+                } else {
+                    preSelectedTypes.clear()
                 }
+                updateChips(binding.switcherTvtypesChips, preSelectedTypes)
                 updateList()
             }
+
+            bindChips(
+                binding.switcherTvtypesChips,
+                preSelectedTypes,
+                validTypesAll
+            ) { list ->
+                preSelectedTypes.clear()
+                preSelectedTypes.addAll(list)
+                updateList()
+            }
+            updateList()
+
+            dialog.show()
+            // The dialog's own sheet frame stays transparent — the
+            // sheet root's rounded_dialog background is the only
+            // surface (same recipe as the 8.82 settings sheet).
+            dialog.findViewById<View>(
+                com.google.android.material.R.id.design_bottom_sheet
+            )?.setBackgroundColor(Color.TRANSPARENT)
         }
     }
 
@@ -1115,7 +1261,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      * margin + the original 16dp gap, recomputed on binding creation, on
      * every successful page load, and on every fixLayout (rotation) — so it
      * also tracks the API 30+ inset growth MainActivity applies to the pill.
-     * The XML 104dp margin remains as the pre-layout fallback. */
+     * The XML 104dp margin remains as the pre-layout fallback.
+     * Phase 8.83: the gap is 24dp now — the pill crowded the nav bar. */
     private fun anchorHomeApiFab() {
         if (!isLayout(PHONE)) return
         val fab = binding?.homeApiFab ?: return
@@ -1124,7 +1271,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             if (nav.isVisible && nav.height > 0) {
                 val navBottomMargin =
                     (nav.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
-                val desired = nav.height + navBottomMargin + 16.toPx
+                val desired = nav.height + navBottomMargin + 24.toPx
                 val lp = fab.layoutParams as? FrameLayout.LayoutParams
                 if (lp != null && lp.bottomMargin != desired) {
                     lp.gravity = Gravity.BOTTOM or Gravity.END

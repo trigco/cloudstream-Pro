@@ -6,6 +6,7 @@ import android.util.Log
 import com.dokar.quickjs.binding.AsyncFunctionBinding
 import com.dokar.quickjs.binding.FunctionBinding
 import com.dokar.quickjs.quickJs
+import com.lagradost.cloudstream3.utils.AppCookieJar
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -16,7 +17,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URI
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
@@ -29,8 +29,9 @@ import javax.crypto.spec.SecretKeySpec
  * The Nuvio host: runs one scraper in dokar3's QuickJS (quickjs-kt)
  * with the polyfill installed and three host bindings —
  * `nuvioCall` (sync JSON bridge: result, crypto, storage, log),
- * `nuvioFetchAsync` (async JSON bridge: HTTP with a per-run cookie
- * jar) and `nuvioSleepAsync` (backs the polyfill's timers).
+ * `nuvioFetchAsync` (async JSON bridge: HTTP with a persistent
+ * per-scraper cookie jar) and `nuvioSleepAsync` (backs the
+ * polyfill's timers).
  *
  * Engine choice notes: app.cash.quickjs 0.9.2 and the other Android
  * QuickJS bindings never execute QuickJS's pending-job queue, so
@@ -50,7 +51,19 @@ class NuvioHostBridge(
 
     val resultDeferred = CompletableDeferred<String>()
 
-    private val cookies = mutableMapOf<String, MutableList<String>>()
+    /**
+     * 8.83: cookies moved from the old per-run in-memory map to the
+     * universal persistent [AppCookieJar], namespaced per scraper —
+     * a scraper's session now survives across runs and app restarts
+     * (the bridge knows its scraper id, so per-scraper isolation is
+     * free). OkHttp sends/stores automatically per redirect hop and
+     * still yields to a Cookie header the scraper set itself.
+     */
+    private val httpClient: OkHttpClient by lazy {
+        HTTP.newBuilder()
+            .cookieJar(AppCookieJar(appContext, "nuvio:$scraperId"))
+            .build()
+    }
 
     // ---- sync bridge (nuvioCall) ----
 
@@ -187,8 +200,6 @@ class NuvioHostBridge(
     private fun doFetch(p: JSONObject): JSONObject {
         val url = p.optString("url")
         val method = p.optString("method", "GET").uppercase()
-        val uri = runCatching { URI(url) }.getOrNull()
-        val host = uri?.host ?: ""
         val builder = Request.Builder().url(url)
         var contentType: String? = null
         val headers = p.optJSONObject("headers")
@@ -208,12 +219,9 @@ class NuvioHostBridge(
         // scraper did not set its own. (Native HTTP has no CORS; a 403 here
         // is the site refusing the client, and the UA is the usual reason.)
         if (!hasUserAgent) builder.header("User-Agent", DEFAULT_USER_AGENT)
-        synchronized(cookies) {
-            val jar = cookies[host]
-            if (!jar.isNullOrEmpty() && headers?.optString("Cookie").isNullOrBlank()) {
-                builder.header("Cookie", jar.joinToString("; "))
-            }
-        }
+        // Cookies come from the persistent jar on httpClient; a
+        // Cookie header supplied by the scraper suppresses it, as
+        // the old manual jar check did.
         val bodyBytes: ByteArray? = when {
             p.has("bodyB64") && !p.isNull("bodyB64") ->
                 b64Decode(p.optString("bodyB64"))
@@ -242,19 +250,12 @@ class NuvioHostBridge(
                 }
             }
         }
-        val response = HTTP.newCall(builder.build()).execute()
+        val response = httpClient.newCall(builder.build()).execute()
         return response.use { resp ->
-            resp.headers.values("Set-Cookie").forEach { setCookie ->
-                val pair = setCookie.substringBefore(';').trim()
-                if (pair.contains('=')) {
-                    synchronized(cookies) {
-                        val jar = cookies.getOrPut(host) { mutableListOf() }
-                        val name = pair.substringBefore('=')
-                        jar.removeAll { it.substringBefore('=') == name }
-                        jar.add(pair)
-                    }
-                }
-            }
+            // 8.83: Set-Cookie storage is the persistent jar's job
+            // (OkHttp feeds it from this response); the response
+            // shape is unchanged — set-cookie stays hidden from the
+            // headers object, exactly as before.
             val rawBytes = resp.body?.bytes() ?: ByteArray(0)
             val capped = if (rawBytes.size > MAX_BODY_BYTES) {
                 rawBytes.copyOf(MAX_BODY_BYTES)

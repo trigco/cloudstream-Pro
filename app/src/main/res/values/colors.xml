@@ -140,4 +140,9 @@
     <color name="skyOnAccent">#0B57D0</color>
     <color name="skySurface">#18181F</color>
     <color name="skyOutline">#22222E</color>
+    <!-- Phase 8.83: provider switcher source tags. -->
+    <color name="switcherTagBackground">#FF2E3440</color>
+    <color name="switcherTagText">#FFC9CED6</color>
+    <color name="switcherTagCloudBackground">#FF5B4A8A</color>
+    <color name="switcherTagCloudText">#FFFFFFFF</color>
 </resources>

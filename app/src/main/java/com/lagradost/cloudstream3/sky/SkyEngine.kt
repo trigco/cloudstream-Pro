@@ -5,6 +5,7 @@ import android.util.Log
 import com.dokar.quickjs.binding.AsyncFunctionBinding
 import com.dokar.quickjs.binding.FunctionBinding
 import com.dokar.quickjs.quickJs
+import com.lagradost.cloudstream3.utils.AppCookieJar
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URI
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.Mac
@@ -33,9 +33,9 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * The SkyStream host bridge: executes a plugin's http_get/http_post/
  * http_parallel calls on OkHttp, modelled on NuvioHostBridge (shared
- * client, per-session cookie jar, browser UA default) but returning
- * the SkyStream response shape {status, body, headers} with
- * lowercased header names and the reference's 8 MB body cap.
+ * client, persistent per-plugin cookie jar, browser UA default) but
+ * returning the SkyStream response shape {status, body, headers}
+ * with lowercased header names and the reference's 8 MB body cap.
  * Preferences resolve through SkyRepository (per-plugin store).
  */
 class SkyHostBridge(
@@ -47,7 +47,17 @@ class SkyHostBridge(
     @Volatile
     var pending: CompletableDeferred<String>? = null
 
-    private val cookies = mutableMapOf<String, MutableList<String>>()
+    /**
+     * 8.83: the per-plugin cookie store is now the universal
+     * persistent [AppCookieJar], namespaced per plugin — cookies
+     * survive context eviction and app restarts, and subdomain/path/
+     * expiry rules follow RFC 6265. OkHttp sends the jar's cookies
+     * unless the plugin set its own Cookie header (unchanged
+     * behaviour), and stores every hop's Set-Cookie by itself; the
+     * network interceptor below still runs, but only to build the
+     * plugin-visible merged set-cookie list (8.82).
+     */
+    private val cookieJar = AppCookieJar(appContext, "sky:$packageName")
 
     suspend fun httpAsync(requestJson: String): String {
         return withContext(Dispatchers.IO) {
@@ -67,12 +77,10 @@ class SkyHostBridge(
     private fun doHttp(p: JSONObject): JSONObject {
         val url = p.optString("url")
         val method = p.optString("method", "GET").uppercase()
-        val host = runCatching { URI(url).host ?: "" }.getOrDefault("")
         val builder = Request.Builder().url(url)
         var contentType: String? = null
         var hasUserAgent = false
         var hasAcceptEncoding = false
-        var sawCookie = false
         val headers = p.optJSONObject("headers")
         if (headers != null) {
             val keys = headers.keys()
@@ -82,7 +90,6 @@ class SkyHostBridge(
                 if (key.equals("content-type", ignoreCase = true)) contentType = value
                 if (key.equals("user-agent", ignoreCase = true)) hasUserAgent = true
                 if (key.equals("accept-encoding", ignoreCase = true)) hasAcceptEncoding = true
-                if (key.equals("cookie", ignoreCase = true)) sawCookie = true
                 builder.header(key, value)
             }
         }
@@ -91,12 +98,9 @@ class SkyHostBridge(
         // Accept-Encoding: identity unless the plugin set one, so
         // responses are never gzip-wrapped behind the plugin's back.
         if (!hasAcceptEncoding) builder.header("Accept-Encoding", "identity")
-        synchronized(cookies) {
-            val jar = cookies[host]
-            if (!jar.isNullOrEmpty() && !sawCookie) {
-                builder.header("Cookie", jar.joinToString("; "))
-            }
-        }
+        // Cookies: the persistent jar on the call client (below)
+        // supplies them; a plugin-supplied Cookie header suppresses
+        // the jar automatically, as before.
         val bodyText = if (p.has("body") && !p.isNull("body")) {
             p.optString("body")
         } else {
@@ -140,10 +144,13 @@ class SkyHostBridge(
         // its plugin reads it from the response headers; with only
         // the final response's headers the handshake always failed.
         // The network interceptor runs per hop, final hop included.
+        // It only builds the plugin-visible list now; actually
+        // storing/sending cookies is the persistent jar's job (8.83).
         val chainCookies = java.util.Collections.synchronizedList(
             mutableListOf<String>()
         )
         val callClient = SkyHttp.client.newBuilder()
+            .cookieJar(cookieJar)
             .addNetworkInterceptor { chain ->
                 val hop = chain.proceed(chain.request())
                 chainCookies.addAll(hop.headers.values("Set-Cookie"))
@@ -155,21 +162,10 @@ class SkyHostBridge(
             // SkyStream parity (8.80): the reference bridge exposes
             // Set-Cookie to plugins as a header list — plugins keep
             // their own cookie store from it (katdrama's locker chain
-            // silently stalls without it) — while ALSO feeding the
-            // host-side jar below. 8.82: the list now spans the whole
-            // redirect chain (see above).
+            // silently stalls without it). 8.82: the list spans the
+            // whole redirect chain; 8.83: persistence moved to the
+            // AppCookieJar on the client, so no manual jar feed here.
             val setCookies = chainCookies.toList()
-            setCookies.forEach { setCookie ->
-                val pair = setCookie.substringBefore(';').trim()
-                if (pair.contains('=')) {
-                    synchronized(cookies) {
-                        val jar = cookies.getOrPut(host) { mutableListOf() }
-                        val name = pair.substringBefore('=')
-                        jar.removeAll { it.substringBefore('=') == name }
-                        jar.add(pair)
-                    }
-                }
-            }
             val rawBytes = resp.body?.bytes() ?: ByteArray(0)
             val capped = if (rawBytes.size > MAX_BODY_BYTES) {
                 rawBytes.copyOf(MAX_BODY_BYTES)

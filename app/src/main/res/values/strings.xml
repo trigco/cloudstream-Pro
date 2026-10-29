@@ -560,6 +560,11 @@
     <string name="actor_search_titles" formatted="true">Search titles: %s</string>
     <string name="actor_in_format" formatted="true">in %s</string>
     <string name="home_source">Source</string>
+    <string name="switcher_select_provider">Select Provider</string>
+    <string name="switcher_close">Close</string>
+    <string name="switcher_tag_cloudstream">☁ CloudStream</string>
+    <string name="switcher_tag_stremio">Stremio</string>
+    <string name="switcher_tag_skystream">SkyStream</string>
     <string name="home_random">Random</string>
     <string name="coming_soon">Coming soon…</string>
     <string name="quality_cam">Cam</string>

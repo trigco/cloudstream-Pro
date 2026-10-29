@@ -2,6 +2,8 @@ package com.lagradost.cloudstream3.sky
 
 import android.content.Context
 import androidx.preference.PreferenceManager
+import com.lagradost.cloudstream3.CloudStreamApp
+import com.lagradost.cloudstream3.utils.AppCookieJar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -74,6 +76,12 @@ object SkyHttp {
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
+        // 8.83: repository-chain fetches (repo docs, shortcode
+        // redirects, .sky downloads) share the universal persistent
+        // cookie store under their own namespace. The context is
+        // resolved lazily — this object can be touched before the
+        // Application's context is published.
+        .cookieJar(AppCookieJar({ CloudStreamApp.context }, "sky:repo"))
         .build()
 
     /** GET text; finalUrl is the URL after redirects (shortcodes!). */
