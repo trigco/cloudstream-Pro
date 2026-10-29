@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 8.81: Repositories tab page of the Extensions screen. This is
+     the pre-8.81 repo_recycler_view moved verbatim into the pager;
+     the pager carries its bottom margin and appbar behaviour. -->
+<androidx.recyclerview.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/repo_recycler_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/primaryBlackBackground"
+    android:clipToPadding="false"
+    android:nextFocusUp="@id/settings_toolbar"
+    android:nextFocusDown="@id/plugin_storage_appbar"
+    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+    tools:listitem="@layout/repository_item"
+    tools:visibility="visible" />

@@ -2,6 +2,7 @@ package com.lagradost.cloudstream3.ui.settings.sky
 
 import android.os.Bundle
 import android.text.InputType
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,10 +24,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import coil3.request.transformations
-import coil3.transform.CircleCropTransformation
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.sky.SkyEngine
 import com.lagradost.cloudstream3.sky.SkyPluginManifest
@@ -51,9 +54,14 @@ import org.json.JSONObject
  */
 class SkyPluginsFragment : Fragment() {
 
-    private lateinit var adapter: SkyRepoAdapter
-    private lateinit var recycler: RecyclerView
-    private lateinit var emptyView: TextView
+    // 8.81: two tabs — Installed (page 0) and Repositories (page 1,
+    // selected by default). Page views are created by the pager.
+    private lateinit var installedAdapter: SkyRepoAdapter
+    private lateinit var reposAdapter: SkyRepoAdapter
+    private var installedRecycler: RecyclerView? = null
+    private var reposRecycler: RecyclerView? = null
+    private var installedEmpty: TextView? = null
+    private var reposEmpty: TextView? = null
 
     /** Chain expansions per stored repo URL, filled in asynchronously. */
     private val listings = mutableMapOf<String, List<SkyRepoListing>>()
@@ -81,37 +89,53 @@ class SkyPluginsFragment : Fragment() {
         view.findViewById<MaterialButton>(R.id.sky_add_button).setOnClickListener {
             showAddDialog()
         }
-        recycler = view.findViewById(R.id.sky_recycler)
-        emptyView = view.findViewById(R.id.sky_empty)
-        adapter = SkyRepoAdapter(
-            onToggleCollapse = { repo ->
-                val ctx = requireContext()
-                val collapsed = SkyRepository.collapsedRepos(ctx).contains(repo.url)
-                SkyRepository.setRepoCollapsed(ctx, repo.url, !collapsed)
-                refresh()
-            },
-            onRefreshRepo = { repo -> refreshRepo(repo) },
-            onRemoveRepo = { repo -> confirmRemoveRepo(repo) },
-            onPluginAction = { entry, listing, state ->
-                when (state) {
-                    SkyRow.PluginState.INSTALLED -> {
-                        val installed = SkyRepository.installedByPackage(requireContext())
-                        installed[entry.packageName]?.let { confirmRemovePlugin(it) }
-                    }
-                    else -> installPlugin(entry, listing.repoUrl)
+        installedAdapter = makeAdapter()
+        reposAdapter = makeAdapter()
+        val pager = view.findViewById<ViewPager2>(R.id.sky_pager)
+        val tabs = view.findViewById<TabLayout>(R.id.sky_tabs)
+        pager.offscreenPageLimit = 1
+        pager.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = 2
+
+            override fun onCreateViewHolder(
+                parent: ViewGroup,
+                viewType: Int,
+            ): RecyclerView.ViewHolder {
+                val page = LayoutInflater.from(parent.context)
+                    .inflate(R.layout.tab_page_list, parent, false)
+                page.layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                return object : RecyclerView.ViewHolder(page) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val list = holder.itemView.findViewById<RecyclerView>(R.id.tab_recycler)
+                val empty = holder.itemView.findViewById<TextView>(R.id.tab_empty)
+                list.layoutManager = LinearLayoutManager(holder.itemView.context)
+                if (position == 0) {
+                    installedRecycler = list
+                    installedEmpty = empty
+                    list.adapter = installedAdapter
+                    empty.setText(R.string.sky_installed_empty)
+                } else {
+                    reposRecycler = list
+                    reposEmpty = empty
+                    list.adapter = reposAdapter
+                    empty.setText(R.string.sky_plugins_empty)
                 }
-            },
-            onToggleInstalled = { plugin, enabled ->
-                val ctx = requireContext()
-                SkyRepository.setPluginEnabled(ctx, plugin.packageName, enabled)
-                if (!enabled) SkyEngine.evictPackage(plugin.packageName)
-                SkyProviders.sync(ctx)
-            },
-            onRemoveInstalled = { plugin -> confirmRemovePlugin(plugin) },
-            onInstalledSettings = { plugin -> openPluginSettings(plugin) },
-        )
-        recycler.layoutManager = LinearLayoutManager(requireContext())
-        recycler.adapter = adapter
+                refresh()
+            }
+        }
+        TabLayoutMediator(tabs, pager) { tab, position ->
+            tab.setText(
+                if (position == 0) R.string.sky_tab_installed
+                else R.string.sky_tab_repositories
+            )
+        }.attach()
+        // Reference behaviour: the page opens on the browse tab.
+        pager.setCurrentItem(1, false)
         SkyProviders.sync(requireContext())
         refresh()
         fetchAllChains()
@@ -122,20 +146,51 @@ class SkyPluginsFragment : Fragment() {
         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
     }
 
+    private fun makeAdapter(): SkyRepoAdapter = SkyRepoAdapter(
+        onToggleCollapse = { repo ->
+            val ctx = requireContext()
+            val collapsed = SkyRepository.collapsedRepos(ctx).contains(repo.url)
+            SkyRepository.setRepoCollapsed(ctx, repo.url, !collapsed)
+            refresh()
+        },
+        onRefreshRepo = { repo -> refreshRepo(repo) },
+        onRemoveRepo = { repo -> confirmRemoveRepo(repo) },
+        onPluginAction = { entry, listing, state ->
+            when (state) {
+                SkyRow.PluginState.INSTALLED -> {
+                    val installed = SkyRepository.installedByPackage(requireContext())
+                    installed[entry.packageName]?.let { confirmRemovePlugin(it) }
+                }
+                else -> installPlugin(entry, listing.repoUrl)
+            }
+        },
+        onToggleInstalled = { plugin, enabled ->
+            val ctx = requireContext()
+            SkyRepository.setPluginEnabled(ctx, plugin.packageName, enabled)
+            if (!enabled) SkyEngine.evictPackage(plugin.packageName)
+            SkyProviders.sync(ctx)
+        },
+        onRemoveInstalled = { plugin -> confirmRemovePlugin(plugin) },
+        onInstalledSettings = { plugin -> openPluginSettings(plugin) },
+    )
+
     private fun refresh() {
-        if (!::adapter.isInitialized) return
+        if (!::installedAdapter.isInitialized) return
         val ctx = requireContext()
         val repos = SkyRepository.getRepos(ctx)
         val installed = SkyRepository.getInstalled(ctx)
-        adapter.submit(
+        installedAdapter.submitInstalled(installed)
+        reposAdapter.submitRepos(
             repos = repos,
             listings = listings,
             loading = loadingRepos,
             installed = installed,
             collapsed = SkyRepository.collapsedRepos(ctx),
         )
-        emptyView.visibility =
-            if (repos.isEmpty() && installed.isEmpty()) View.VISIBLE else View.GONE
+        installedEmpty?.visibility =
+            if (installed.isEmpty()) View.VISIBLE else View.GONE
+        reposEmpty?.visibility =
+            if (repos.isEmpty()) View.VISIBLE else View.GONE
     }
 
     // ---- repository chain loading ----
@@ -303,13 +358,13 @@ class SkyPluginsFragment : Fragment() {
         val manifest = plugin.manifest()
         val fields = manifest?.settings.orEmpty()
             .filter { it.key.isNotBlank() }
-        if (manifest == null || fields.isEmpty()) return
         val saved = SkyRepository.pluginSettings(ctx, plugin.packageName)
-        showSettingsForm(plugin, fields, saved)
+        showSettingsForm(plugin, manifest, fields, saved)
     }
 
     private fun showSettingsForm(
         plugin: StoredSkyPlugin,
+        manifest: SkyPluginManifest?,
         fields: List<SkySettingDef>,
         saved: JSONObject,
     ) {
@@ -440,7 +495,15 @@ class SkyPluginsFragment : Fragment() {
                         } else {
                             InputType.TYPE_CLASS_TEXT
                         }
-                        setText(rawString(currentRaw(field)))
+                        setText(
+                            // 8.81: the schema's base-url field shows
+                            // the effective (override-aware) URL.
+                            if (field.isBaseUrl && manifest != null) {
+                                SkyRepository.effectiveBaseUrl(ctx, manifest)
+                            } else {
+                                rawString(currentRaw(field))
+                            }
+                        )
                     }
                     column.addView(edit)
                     field.description?.let { desc ->
@@ -454,20 +517,77 @@ class SkyPluginsFragment : Fragment() {
             }
         }
 
-        val scroll = ScrollView(ctx).apply { addView(column) }
-        AlertDialog.Builder(ctx)
-            .setTitle(plugin.manifest()?.name ?: plugin.name)
-            .setView(scroll)
-            .setPositiveButton(R.string.nuvio_settings_save) { _, _ ->
-                getters.forEach { it() }
-                SkyRepository.savePluginSettings(ctx, plugin.packageName, values)
-                // Settings feed manifest.baseUrl and getPreference:
-                // rebuild the plugin's context so they take effect.
-                SkyEngine.evictPackage(plugin.packageName)
-                toast(R.string.sky_settings_saved)
+        // 8.81: when the manifest has no base-url setting of its own,
+        // the sheet always carries a Base URL field. Saving a value
+        // stores it as the plugin's base-url override (the same
+        // settings path SkyRepository.effectiveBaseUrl reads);
+        // clearing it (or re-entering the default) drops the override.
+        if (manifest != null && fields.none { it.isBaseUrl }) {
+            column.addView(TextView(ctx).apply {
+                text = getString(R.string.sky_base_url_label)
+                setPadding(0, dp(10), 0, 0)
+            })
+            val baseEdit = EditText(ctx).apply {
+                setSingleLine(true)
+                inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_VARIATION_URI
+                setText(SkyRepository.effectiveBaseUrl(ctx, manifest))
+                hint = getString(R.string.sky_base_url_hint, manifest.baseUrl)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            column.addView(baseEdit)
+            getters += {
+                val value = baseEdit.text?.toString()?.trim().orEmpty()
+                if (value.isNotBlank() && value != manifest.baseUrl) {
+                    values.put("base_url", value)
+                }
+            }
+        }
+        if (column.childCount == 0) {
+            column.addView(TextView(ctx).apply {
+                text = getString(R.string.nuvio_settings_no_fields)
+                setPadding(0, dp(10), 0, 0)
+            })
+        }
+
+        // 8.81: settings open as a bottom sheet (SkyStream parity)
+        // instead of an AlertDialog.
+        val scroll = ScrollView(ctx).apply { addView(column) }
+        val sheetRoot = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(ctx).apply {
+                text = plugin.manifest()?.name ?: plugin.name
+                textSize = 18f
+                setPadding(dp(20), dp(16), dp(20), 0)
+            })
+            addView(scroll)
+        }
+        val buttonRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            setPadding(dp(20), dp(12), dp(20), dp(16))
+        }
+        val cancelButton = MaterialButton(ctx).apply {
+            setText(android.R.string.cancel)
+        }
+        val saveButton = MaterialButton(ctx).apply {
+            setText(R.string.nuvio_settings_save)
+        }
+        buttonRow.addView(cancelButton)
+        buttonRow.addView(saveButton)
+        sheetRoot.addView(buttonRow)
+        val dialog = BottomSheetDialog(ctx)
+        dialog.setContentView(sheetRoot)
+        cancelButton.setOnClickListener { dialog.dismiss() }
+        saveButton.setOnClickListener {
+            getters.forEach { it() }
+            SkyRepository.savePluginSettings(ctx, plugin.packageName, values)
+            // Settings feed manifest.baseUrl and getPreference:
+            // rebuild the plugin's context so they take effect.
+            SkyEngine.evictPackage(plugin.packageName)
+            toast(R.string.sky_settings_saved)
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 }
 
@@ -505,7 +625,15 @@ private class SkyRepoAdapter(
 
     private var rows: List<SkyRow> = emptyList()
 
-    fun submit(
+    /** Installed tab: installed plugins only (8.81). */
+    fun submitInstalled(installed: List<StoredSkyPlugin>) {
+        rows = installed.sortedBy { it.name.lowercase() }
+            .map { SkyRow.InstalledRow(it) }
+        notifyDataSetChanged()
+    }
+
+    /** Repositories tab: repos + their browsable plugin lists (8.81). */
+    fun submitRepos(
         repos: List<StoredSkyRepo>,
         listings: Map<String, List<SkyRepoListing>>,
         loading: Set<String>,
@@ -514,14 +642,7 @@ private class SkyRepoAdapter(
     ) {
         val out = mutableListOf<SkyRow>()
         val installedByPackage = installed.associateBy { it.packageName }
-        if (installed.isNotEmpty()) {
-            out += SkyRow.Section(R.string.sky_section_installed)
-            installed.sortedBy { it.name.lowercase() }.forEach { plugin ->
-                out += SkyRow.InstalledRow(plugin)
-            }
-        }
         if (repos.isNotEmpty()) {
-            out += SkyRow.Section(R.string.sky_section_repositories)
             for (repo in repos) {
                 val chain = listings[repo.url]
                 val isCollapsed = collapsed.contains(repo.url)
@@ -564,6 +685,25 @@ private class SkyRepoAdapter(
         }
         rows = out
         notifyDataSetChanged()
+    }
+
+    /**
+     * 8.81: plugin icon with the SkyStream-style puzzle placeholder —
+     * the manifest/listing icon when there is one, the placeholder
+     * vector otherwise (the row tile is bg_sky_icon in the layouts).
+     */
+    private fun bindSkyIcon(view: ImageView, iconUrl: String?, ctx: android.content.Context) {
+        if (!iconUrl.isNullOrBlank()) {
+            view.loadImage(iconUrl) {
+                error(
+                    getImageFromDrawable(
+                        ctx, R.drawable.ic_sky_plugin_placeholder
+                    )
+                )
+            }
+        } else {
+            view.setImageResource(R.drawable.ic_sky_plugin_placeholder)
+        }
     }
 
     private fun pluginRow(
@@ -643,6 +783,7 @@ private class SkyRepoAdapter(
                 val entry = row.entry
                 val ctx = h.itemView.context
                 h.name.text = entry.name
+                bindSkyIcon(h.icon, entry.iconUrl, ctx)
                 val version = ctx.getString(R.string.sky_version_format, entry.version)
                 h.desc.text = listOf(entry.description, version)
                     .filter { it.isNotBlank() }
@@ -669,31 +810,55 @@ private class SkyRepoAdapter(
                 val ctx = h.itemView.context
                 val manifest = plugin.manifest()
                 h.name.text = manifest?.name ?: plugin.name
-                val version = ctx.getString(R.string.sky_version_format, plugin.version)
-                val description = manifest?.description ?: plugin.sourceRepoUrl
-                h.desc.text = listOf(description, version)
+                h.desc.text = manifest?.description ?: plugin.sourceRepoUrl
+                // 8.81 meta line: "v9 • By IGRIS • 3 providers".
+                val metaParts = mutableListOf(
+                    ctx.getString(R.string.sky_version_format, plugin.version)
+                )
+                val authors = manifest?.authors.orEmpty()
                     .filter { it.isNotBlank() }
-                    .joinToString(" • ")
-                val icon = manifest?.iconUrl
-                if (!icon.isNullOrBlank()) {
-                    h.icon.visibility = View.VISIBLE
-                    h.icon.loadImage(icon) {
-                        transformations(CircleCropTransformation())
-                        error(
-                            getImageFromDrawable(
-                                ctx, R.drawable.ic_baseline_extension_24
-                            )
-                        )
-                    }
-                } else {
-                    h.icon.visibility = View.GONE
+                if (authors.isNotEmpty()) {
+                    metaParts += ctx.getString(
+                        R.string.sky_installed_by_format,
+                        authors.joinToString(", "),
+                    )
                 }
-                h.settings.visibility =
-                    if (manifest?.settings?.isNotEmpty() == true) {
-                        View.VISIBLE
-                    } else {
-                        View.GONE
+                val providerCount = manifest?.subProviders?.size ?: 0
+                if (providerCount > 0) {
+                    metaParts += ctx.getString(
+                        R.string.sky_installed_providers_format, providerCount
+                    )
+                }
+                h.meta.text = metaParts.joinToString(" • ")
+                bindSkyIcon(h.icon, manifest?.iconUrl, ctx)
+                // 8.81: language chips under the meta line.
+                val languages = manifest?.languages.orEmpty()
+                    .filter { it.isNotBlank() }
+                h.langs.removeAllViews()
+                if (languages.isEmpty()) {
+                    h.langs.visibility = View.GONE
+                } else {
+                    h.langs.visibility = View.VISIBLE
+                    val density = ctx.resources.displayMetrics.density
+                    fun chipDp(value: Int) = (value * density).toInt()
+                    for (language in languages) {
+                        val chip = TextView(ctx).apply {
+                            text = language.uppercase()
+                            textSize = 10f
+                            setBackgroundResource(R.drawable.bg_sky_chip)
+                            setPadding(chipDp(8), chipDp(3), chipDp(8), chipDp(3))
+                        }
+                        val chipParams = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        )
+                        chipParams.marginEnd = chipDp(6)
+                        h.langs.addView(chip, chipParams)
                     }
+                }
+                // 8.81: the settings sheet always opens (it carries
+                // the Base URL field even without a settings schema).
+                h.settings.visibility = View.VISIBLE
                 h.settings.setOnClickListener { onInstalledSettings(plugin) }
                 h.enabled.setOnCheckedChangeListener(null)
                 h.enabled.isChecked = plugin.enabled
@@ -719,6 +884,7 @@ private class SkyRepoAdapter(
     }
 
     private class PluginHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val icon: ImageView = view.findViewById(R.id.item_sky_plugin_icon)
         val name: TextView = view.findViewById(R.id.item_sky_plugin_name)
         val desc: TextView = view.findViewById(R.id.item_sky_plugin_desc)
         val action: MaterialButton = view.findViewById(R.id.item_sky_plugin_action)
@@ -728,6 +894,8 @@ private class SkyRepoAdapter(
         val icon: ImageView = view.findViewById(R.id.item_sky_inst_icon)
         val name: TextView = view.findViewById(R.id.item_sky_inst_name)
         val desc: TextView = view.findViewById(R.id.item_sky_inst_desc)
+        val meta: TextView = view.findViewById(R.id.item_sky_inst_meta)
+        val langs: LinearLayout = view.findViewById(R.id.item_sky_inst_langs)
         val settings: ImageButton = view.findViewById(R.id.item_sky_inst_settings)
         val enabled: MaterialSwitch = view.findViewById(R.id.item_sky_inst_enabled)
         val remove: ImageButton = view.findViewById(R.id.item_sky_inst_remove)

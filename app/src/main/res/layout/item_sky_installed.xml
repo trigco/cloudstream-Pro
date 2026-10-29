@@ -11,10 +11,13 @@
 
     <ImageView
         android:id="@+id/item_sky_inst_icon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_sky_icon"
         android:contentDescription="@null"
-        android:scaleType="fitCenter" />
+        android:padding="7dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_sky_plugin_placeholder" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -38,6 +41,24 @@
             android:ellipsize="end"
             android:maxLines="2"
             android:textAppearance="?attr/textAppearanceCaption" />
+
+        <TextView
+            android:id="@+id/item_sky_inst_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/item_sky_inst_langs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal"
+            android:visibility="gone" />
     </LinearLayout>
 
     <ImageButton
@@ -46,8 +67,7 @@
         android:layout_height="48dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/sky_plugin_settings"
-        android:src="@drawable/ic_outline_settings_24"
-        android:visibility="gone" />
+        android:src="@drawable/ic_outline_settings_24" />
 
     <com.google.android.material.materialswitch.MaterialSwitch
         android:id="@+id/item_sky_inst_enabled"

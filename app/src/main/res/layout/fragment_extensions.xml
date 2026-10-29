@@ -26,25 +26,33 @@
             app:titleTextColor="?attr/textColor"
             tools:title="Overlord" />
 
+        <!-- 8.81: Installed / Repositories tabs for this screen. -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/extensions_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/primaryGrayBackground"
+            app:tabGravity="fill"
+            app:tabIndicatorColor="?attr/textColor"
+            app:tabMode="fixed"
+            app:tabSelectedTextColor="?attr/textColor"
+            app:tabTextColor="?attr/textColor" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <!--    <include layout="@layout/standard_toolbar" />-->
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/repo_recycler_view"
+    <!-- 8.81: the two tab pages (Installed, Repositories). The pager
+         carries the old repo list's 80dp bottom margin and appbar
+         behaviour; the repo list itself moved to
+         extensions_tab_repos.xml unchanged. -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/extensions_pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginBottom="80dp"
         android:background="?attr/primaryBlackBackground"
-        android:clipToPadding="false"
-        android:nextFocusUp="@id/settings_toolbar"
-        android:nextFocusDown="@id/plugin_storage_appbar"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        app:layout_constraintBottom_toTopOf="@id/download_storage_appbar"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:listitem="@layout/repository_item"
-        tools:visibility="visible" />
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:visibility="gone"

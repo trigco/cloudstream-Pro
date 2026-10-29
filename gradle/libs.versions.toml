@@ -55,6 +55,7 @@ swiperefreshlayout = "1.1.0"
 torrentserver = "7861970"
 tvprovider = "1.1.0"
 video = "1.0.0"
+viewpager2 = "1.1.0"
 workRuntimeKtx = "2.11.2"
 zipline = "1.27.0"
 
@@ -138,6 +139,7 @@ swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout"
 torrentserver = { module = "com.github.recloudstream:torrentserver", version.ref = "torrentserver" }
 tvprovider = { module = "androidx.tvprovider:tvprovider", version.ref = "tvprovider" }
 video = { module = "com.google.android.mediahome:video", version.ref = "video" }
+viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "viewpager2" }
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 zipline = { module = "app.cash.zipline:zipline-android", version.ref = "zipline" }
 
