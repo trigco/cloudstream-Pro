@@ -13,6 +13,11 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 data class StoredSkyStreamPlugin(
     val packageName: String,
@@ -160,37 +165,33 @@ object SkyStreamRepository {
         visit(rootUrl, 0)
         require(discovered.isNotEmpty()) { "No SkyStream plugins found in the repository" }
         val installed = mutableListOf<JSONObject>()
+        val previousPlugins = old?.plugins?.associateBy { it.packageName }.orEmpty()
         for ((id, pair) in discovered) {
             require(SAFE_PACKAGE.matches(id)) { "Invalid plugin package name" }
             val parsed = SkyStreamManifestParser.parsePlugin(pair.first, pair.second) ?: continue
-            val archive = downloadSkyPlugin(parsed.sourceUrl, id, parsed.raw)
-            val embeddedManifest = archive.manifest
-            val archiveId = embeddedManifest.optString("packageName", embeddedManifest.optString("id"))
-            check(archiveId == id) {
-                "Plugin archive ID does not match repository listing: " + parsed.name
+            val listedManifest = JSONObject(parsed.raw.toString())
+                .put("packageName", id)
+                .put("name", parsed.name)
+                .put("url", parsed.sourceUrl)
+                .put("version", parsed.version)
+
+            // A repository refresh invalidates only the changed plugin's cached code.
+            val oldPlugin = previousPlugins[id]
+            if (oldPlugin != null &&
+                (oldPlugin.sourceUrl != parsed.sourceUrl || oldPlugin.version != parsed.version)
+            ) {
+                runCatching { pluginFile(ctx, rootUrl, id).delete() }
             }
-            // Preserve repository-provided defaults such as baseUrl while taking the
-            // executable provider contract from the archive's plugin.json.
-            listOf(
-                "baseUrl", "description", "authors", "categories", "languages", "iconUrl",
-                "providers", "domains", "customBaseUrl", "settings", "status"
-            ).forEach { key ->
-                if (!embeddedManifest.has(key) && parsed.raw.has(key)) {
-                    embeddedManifest.put(key, parsed.raw.opt(key))
-                }
-            }
-            embeddedManifest.put("packageName", id)
-            embeddedManifest.put("name", embeddedManifest.optString("name", parsed.name).ifBlank { parsed.name })
-            val file = pluginFile(ctx, rootUrl, id)
-            file.parentFile?.mkdirs()
-            file.writeText(archive.script)
+
+            // Metadata is installed now; the executable .sky/.js file is fetched lazily
+            // when this plugin is first enabled and actually used.
             installed.add(
                 JSONObject()
                     .put("packageName", id)
-                    .put("name", embeddedManifest.optString("name", parsed.name))
+                    .put("name", parsed.name)
                     .put("sourceUrl", parsed.sourceUrl)
-                    .put("version", embeddedManifest.optInt("version", parsed.version))
-                    .put("manifest", embeddedManifest)
+                    .put("version", parsed.version)
+                    .put("manifest", listedManifest)
             )
         }
         require(installed.isNotEmpty()) { "No valid plugin scripts could be installed" }
@@ -357,6 +358,65 @@ object SkyStreamRepository {
             )
         }
         prefs(ctx).edit().putString(KEY_REPOS, arr.toString()).apply()
+    }
+
+    private val pluginInstallLocks = ConcurrentHashMap<String, Mutex>()
+
+    /**
+     * Installs the executable payload only when an enabled plugin is first used.
+     * Universe can contain dozens of plugins; downloading every archive during
+     * repository setup makes one inaccessible plugin break the whole repository.
+     */
+    suspend fun ensureScript(
+        ctx: Context,
+        repoUrl: String,
+        packageName: String,
+    ): StoredSkyStreamPlugin = withContext(Dispatchers.IO) {
+        val lockKey = repoUrl + "|" + packageName
+        val lock = pluginInstallLocks.computeIfAbsent(lockKey) { Mutex() }
+        lock.withLock {
+            val repo = getRepos(ctx).firstOrNull { it.url == repoUrl }
+                ?: throw IllegalStateException("SkyStream repository is no longer installed")
+            val plugin = repo.plugins.firstOrNull { it.packageName == packageName }
+                ?: throw IllegalStateException("SkyStream plugin is no longer installed")
+            val file = pluginFile(ctx, repoUrl, packageName)
+            if (file.isFile && file.length() > 0L) return@withLock plugin
+
+            val archive = downloadSkyPlugin(plugin.sourceUrl, packageName, plugin.manifest())
+            val manifest = archive.manifest
+            val archiveId = manifest.optString("packageName", manifest.optString("id"))
+            check(archiveId == packageName) {
+                "Plugin archive ID does not match repository listing: " + plugin.name
+            }
+            listOf(
+                "baseUrl", "description", "authors", "categories", "languages", "iconUrl",
+                "providers", "domains", "customBaseUrl", "settings", "status"
+            ).forEach { key ->
+                if (!manifest.has(key) && plugin.manifest().has(key)) {
+                    manifest.put(key, plugin.manifest().opt(key))
+                }
+            }
+            manifest.put("packageName", packageName)
+            manifest.put("name", manifest.optString("name", plugin.name).ifBlank { plugin.name })
+            manifest.put("version", manifest.optInt("version", plugin.version))
+            file.parentFile?.mkdirs()
+            file.writeText(archive.script)
+
+            val updatedPlugin = plugin.copy(
+                name = manifest.optString("name", plugin.name),
+                version = manifest.optInt("version", plugin.version),
+                manifestJson = manifest.toString(),
+            )
+            val updatedRepo = repo.copy(
+                plugins = repo.plugins.map { existing ->
+                    if (existing.packageName == packageName) updatedPlugin else existing
+                }
+            )
+            persist(ctx, getRepos(ctx).map { existing ->
+                if (existing.url == repoUrl) updatedRepo else existing
+            })
+            updatedPlugin
+        }
     }
 
     fun script(ctx: Context, repoUrl: String, packageName: String): String? =
