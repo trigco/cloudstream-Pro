@@ -159,32 +159,36 @@ object SkyStreamEngine {
     }
 
     private fun buildPluginWrapper(code: String): String {
-        // Raw extension scripts are repository code, not markup. The wrapper keeps all
-        // their declarations in a closure and exposes the same export names as SkyStream.
+        // Mirror SkyStream's source wrapper: plugin declarations live in a nested scope,
+        // which avoids collisions with the host's exports/module bindings.
         return """
 globalThis.__skyStreamExports = (function() {
-  const exports = {};
-  const module = { exports: exports };
-  const require = function(name) {
-    if (name === 'url') return { URL: URL, URLSearchParams: URLSearchParams };
-    throw new Error('Unsupported module: ' + name);
-  };
-  try {
-    $code
-  } catch (e) {
-    globalThis.__skyStreamLoadError = String(e && (e.stack || e.message) || e);
-    throw e;
-  }
-  const sourceExports = (module && module.exports && Object.keys(module.exports).length)
-      ? module.exports : exports;
-  return {
-    getHome: (typeof getHome !== 'undefined') ? getHome : (sourceExports.getHome || globalThis.getHome),
-    search: (typeof search !== 'undefined') ? search : (sourceExports.search || globalThis.search),
-    load: (typeof load !== 'undefined') ? load : (sourceExports.load || globalThis.load),
-    loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (sourceExports.loadStreams || globalThis.loadStreams),
-    getProviders: (typeof getProviders !== 'undefined') ? getProviders : (sourceExports.getProviders || globalThis.getProviders),
-    getSettings: (typeof getSettings !== 'undefined') ? getSettings : (sourceExports.getSettings || globalThis.getSettings)
-  };
+  const pluginExports = (function() {
+    const manifest = globalThis.manifest;
+    const exports = {};
+    const module = { exports: exports };
+    const require = globalThis.require || function(name) {
+      if (name === 'url') return { URL: URL, URLSearchParams: URLSearchParams };
+      return {};
+    };
+    try {
+      $code
+    } catch (e) {
+      globalThis.__skyStreamLoadError = String(e && (e.stack || e.message) || e);
+      throw e;
+    }
+    const sourceExports = (module && module.exports && Object.keys(module.exports).length)
+        ? module.exports : exports;
+    return {
+      getHome: (typeof getHome !== 'undefined') ? getHome : (sourceExports.getHome || globalThis.getHome),
+      search: (typeof search !== 'undefined') ? search : (sourceExports.search || globalThis.search),
+      load: (typeof load !== 'undefined') ? load : (sourceExports.load || globalThis.load),
+      loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (sourceExports.loadStreams || globalThis.loadStreams),
+      getProviders: (typeof getProviders !== 'undefined') ? getProviders : (sourceExports.getProviders || globalThis.getProviders),
+      getSettings: (typeof getSettings !== 'undefined') ? getSettings : (sourceExports.getSettings || globalThis.getSettings)
+    };
+  })();
+  return pluginExports;
 })();
 """.trimIndent()
     }
