@@ -423,6 +423,16 @@
     <string name="feed_hide">Hide</string>
     <string name="feed_hide_message">Hide this from your feed? It will not show again.</string>
     <string name="feed_search_hint">Search feed…</string>
+    <string name="feed_title">Feed</string>
+    <string name="feed_filters">Filters</string>
+    <string name="feed_filter_genre">Genre</string>
+    <string name="feed_filter_source">Source</string>
+    <string name="feed_filter_done">Done</string>
+    <string name="feed_filter_any_rating">Any Rating</string>
+    <string name="feed_filter_any_sub">Show everything</string>
+    <string name="feed_filter_stars">%1$s+ Stars</string>
+    <string name="feed_filter_rating_sub">Rated %1$s or higher, where a score exists</string>
+    <string name="feed_filter_open">Open filters</string>
     <string name="feed_quality">Quality</string>
     <string name="feed_subtitles">Subtitles</string>
     <string name="feed_audio">Audio</string>

@@ -303,25 +303,37 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
+            <!-- Phase 8.85: the Info toggle is a compact pill chip
+                 packed immediately after the title (fixed 8dp gap,
+                 centered on the title's first line) — it used to be
+                 a bare "Info >" text floating at the row's far end
+                 with a chevron he disliked. Still a TextView so
+                 FeedWatchFragment's setText(Info/Less) keeps working;
+                 the icon is now a leading ⓘ, no chevron. -->
             <TextView
                 android:id="@+id/feed_watch_more"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:drawablePadding="1dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="4dp"
-                android:paddingEnd="2dp"
+                android:background="@drawable/feed_pill_bg"
+                android:drawablePadding="4dp"
+                android:foreground="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center_vertical"
+                android:paddingStart="10dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="5dp"
                 android:text="@string/feed_info"
-                android:textColor="@color/grayTextColor"
+                android:textColor="@android:color/white"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:visibility="gone"
-                app:drawableEndCompat="@drawable/ic_baseline_keyboard_arrow_right_24"
-                app:drawableTint="@color/grayTextColor"
+                app:drawableStartCompat="@drawable/ic_outline_info_24"
+                app:drawableTint="@color/white"
+                app:layout_constraintBottom_toBottomOf="@id/feed_watch_title"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/feed_watch_title"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="@id/feed_watch_title" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <TextView
@@ -502,6 +514,7 @@
                 android:id="@+id/feed_watch_upnext_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
                 android:text="@string/feed_for_you"
                 android:textColor="@android:color/white"
                 android:textSize="14sp"

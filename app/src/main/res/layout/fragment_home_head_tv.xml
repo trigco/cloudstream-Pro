@@ -49,6 +49,16 @@
 
                 app:cardCornerRadius="@dimen/rounded_image_radius">
 
+                <!-- Phase 8.85: same anti-black-flash backdrop as the
+                     phone head — settled item's poster under the
+                     pager (see fragment_home_head). -->
+                <ImageView
+                    android:id="@+id/home_hero_backdrop"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="centerCrop" />
+
                 <androidx.viewpager2.widget.ViewPager2
                     android:id="@+id/home_preview_viewpager"
                     android:layout_width="match_parent"

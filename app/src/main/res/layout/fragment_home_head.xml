@@ -82,6 +82,18 @@
             </FrameLayout>
         </com.facebook.shimmer.ShimmerFrameLayout>
 
+        <!-- Phase 8.85: hero backdrop — the settled item's poster
+             sits UNDER the pager so the crossfade (pages fade via
+             HomeScrollTransformer) never flashes the black frame
+             mid-transition; HeaderViewHolder updates it on page
+             settle and pre-warms the next poster in the Coil cache. -->
+        <ImageView
+            android:id="@+id/home_hero_backdrop"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/home_preview_viewpager"
             android:layout_width="match_parent"
@@ -411,6 +423,7 @@
             android:layout_marginEnd="0dp"
             android:background="?android:attr/selectableItemBackground"
             android:contentDescription="@string/home_more_info"
+            android:fontFamily="sans-serif-medium"
             android:padding="12dp"
             android:text="@string/continue_watching"
             app:drawableRightCompat="@drawable/ic_baseline_arrow_forward_24"

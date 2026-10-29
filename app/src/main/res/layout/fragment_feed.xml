@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 8.18-8.23: the Feed tab - a floating collapsible header
-     (search bar + genre chips) over a category-free 2-column grid of
-     every provider's content, skeleton shimmer while loading, and the
-     mini player floating over the bottom. The header overlays the
-     grid and hides by sliding up, so hiding it never forces the grid
-     to relayout mid-scroll (Phase 8.23 scroll-jitter fix). -->
+<!-- Phase 8.85: the Feed page, Explore-style (SkyStream reference):
+     a top bar (page title + circular filter/search buttons) joins
+     the existing search field + genre chips in the floating header;
+     a compact hero carousel floats over the top of the content;
+     the grid below is now 3 columns like Home's. The header still
+     overlays the grid and hides by sliding up (Phase 8.23). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -63,6 +63,13 @@
                             android:layout_margin="6dp"
                             android:layout_weight="1" />
 
+                        <include
+                            layout="@layout/feed_skeleton_item"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_margin="6dp"
+                            android:layout_weight="1" />
+
                     </LinearLayout>
 
                     <LinearLayout
@@ -84,12 +91,26 @@
                             android:layout_margin="6dp"
                             android:layout_weight="1" />
 
+                        <include
+                            layout="@layout/feed_skeleton_item"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_margin="6dp"
+                            android:layout_weight="1" />
+
                     </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal">
+
+                        <include
+                            layout="@layout/feed_skeleton_item"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_margin="6dp"
+                            android:layout_weight="1" />
 
                         <include
                             layout="@layout/feed_skeleton_item"
@@ -170,6 +191,49 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <!-- Phase 8.85: compact hero carousel (220dp — deliberately NOT
+         the Home 500dp hero). The backdrop ImageView under the pager
+         holds the settled item's poster so the crossfade never
+         flashes black (Part B rule, same as Home). The whole box is
+         positioned in code below the floating header. -->
+    <FrameLayout
+        android:id="@+id/feed_hero_box"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="gone">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:cardBackgroundColor="@android:color/black"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/feed_hero_backdrop"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="centerCrop" />
+
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/feed_hero_pager"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal" />
+
+            </FrameLayout>
+
+        </androidx.cardview.widget.CardView>
+
+    </FrameLayout>
+
     <LinearLayout
         android:id="@+id/feed_header"
         android:layout_width="match_parent"
@@ -177,6 +241,53 @@
         android:background="@android:color/black"
         android:elevation="6dp"
         android:orientation="vertical">
+
+        <!-- Phase 8.85: Explore-style top bar — page title at the
+             left, circular filter + search buttons at the right. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginEnd="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/feed_title_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/feed_title"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/feed_filter_button"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/bg_feed_circle_button"
+                android:contentDescription="@string/feed_filter_open"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:src="@drawable/ic_baseline_tune_24"
+                app:tint="@color/white" />
+
+            <ImageButton
+                android:id="@+id/feed_search_button"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_feed_circle_button"
+                android:contentDescription="@string/search"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:src="@drawable/search_icon"
+                app:tint="@color/white" />
+
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -232,7 +343,6 @@
             android:layout_marginTop="10dp"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
-            android:paddingBottom="10dp"
             android:scrollbars="none">
 
             <LinearLayout
@@ -242,6 +352,33 @@
                 android:orientation="horizontal" />
 
         </HorizontalScrollView>
+
+        <!-- Phase 8.85: the "For You" header (red underline, 8.73
+             treatment) moves into the page flow above the grid —
+             it used to exist only on the watch screen. -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/feed_for_you"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="34dp"
+                android:layout_height="3dp"
+                android:layout_marginTop="4dp"
+                android:background="@color/colorPrimaryRed" />
+        </LinearLayout>
 
     </LinearLayout>
 
