@@ -163,7 +163,7 @@ object SkyStreamRepository {
         for ((id, pair) in discovered) {
             require(SAFE_PACKAGE.matches(id)) { "Invalid plugin package name" }
             val parsed = SkyStreamManifestParser.parsePlugin(pair.first, pair.second) ?: continue
-            val archive = downloadSkyPlugin(parsed.sourceUrl, id)
+            val archive = downloadSkyPlugin(parsed.sourceUrl, id, parsed.raw)
             val embeddedManifest = archive.manifest
             val archiveId = embeddedManifest.optString("packageName", embeddedManifest.optString("id"))
             check(archiveId == id) {
@@ -235,7 +235,11 @@ object SkyStreamRepository {
 
     private data class SkyPluginArchive(val manifest: JSONObject, val script: String)
 
-    private fun downloadSkyPlugin(url: String, listedPackageName: String): SkyPluginArchive {
+    private fun downloadSkyPlugin(
+        url: String,
+        listedPackageName: String,
+        listingManifest: JSONObject,
+    ): SkyPluginArchive {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "CloudStream-Pro SkyStream integration")
@@ -245,9 +249,30 @@ object SkyStreamRepository {
             check(response.isSuccessful) { "Plugin download returned HTTP " + response.code }
             val body = response.body ?: throw IllegalStateException("Plugin download body is empty")
             val length = body.contentLength()
-            require(length <= MAX_ARCHIVE_BYTES || length < 0) { "SkyStream plugin archive is too large" }
+            require(length <= MAX_ARCHIVE_BYTES || length < 0) { "SkyStream plugin download is too large" }
             val bytes = body.bytes()
-            require(bytes.size <= MAX_ARCHIVE_BYTES) { "SkyStream plugin archive exceeds the size limit" }
+            require(bytes.size <= MAX_ARCHIVE_BYTES) { "SkyStream plugin download exceeds the size limit" }
+
+            val isZip = bytes.size >= 4 &&
+                bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte() &&
+                (bytes[2] == 0x03.toByte() || bytes[2] == 0x05.toByte() || bytes[2] == 0x07.toByte())
+            if (!isZip) {
+                val mime = response.header("Content-Type").orEmpty().lowercase()
+                val isJavaScript = url.substringBefore("?").endsWith(".js", ignoreCase = true) ||
+                    mime.contains("javascript") || mime.contains("ecmascript")
+                require(isJavaScript) {
+                    "Plugin response is not a .sky ZIP archive or a JavaScript file"
+                }
+                val manifest = JSONObject(listingManifest.toString())
+                val packageName = manifest.optString("packageName", manifest.optString("id"))
+                require(packageName == listedPackageName) {
+                    "JavaScript plugin packageName does not match repository listing"
+                }
+                val script = String(bytes, Charsets.UTF_8)
+                require(script.isNotBlank()) { "SkyStream JavaScript plugin is empty" }
+                return SkyPluginArchive(manifest, script)
+            }
+
             var manifestText: String? = null
             var scriptText: String? = null
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
