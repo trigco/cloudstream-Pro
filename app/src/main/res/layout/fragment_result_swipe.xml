@@ -293,6 +293,28 @@
                     app:tint="@color/white" />
             </LinearLayout>
 
+            <!-- Phase 8.86: always-visible bookmark circle mirroring the
+                 bottom bookmark FAB (same watch-status dialog via
+                 performClick; icon state synced in ResultFragmentPhone).
+                 Starts gone; shown once the page loads, like the FAB. -->
+            <ImageView
+                    android:id="@+id/result_bookmark_top"
+                    android:visibility="gone"
+                    android:nextFocusDown="@id/result_description"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="10dp"
+                    android:layout_margin="5dp"
+                    android:elevation="10dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:tooltipText="@string/action_add_to_bookmarks"
+                    android:background="@drawable/bg_circle_overlay"
+                    android:src="@drawable/ic_baseline_bookmark_border_24"
+                    android:layout_gravity="end|center_vertical"
+                    android:contentDescription="@string/action_add_to_bookmarks"
+                    app:tint="@color/white" />
+
             <!-- Phase 8B: the always-visible toggle for the actions row.
                  Stays OUTSIDE result_actions_row so it never hides itself;
                  its icon swaps to a close (clear) icon while expanded. -->

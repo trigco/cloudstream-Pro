@@ -296,6 +296,9 @@
     <string name="duration">Duration</string>
     <string name="site">Site</string>
     <string name="synopsis">Synopsis</string>
+    <string name="result_cast_header">Cast</string>
+    <string name="result_read_more">Read more</string>
+    <string name="result_read_less">Read less</string>
     <string name="queued">queued</string>
     <string name="no_subtitles">No Subtitles</string>
     <string name="action_default">Default</string>

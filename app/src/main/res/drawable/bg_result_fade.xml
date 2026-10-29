@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.86: bottom fade for the full-bleed details backdrop.
+     Same gradient family as background_shadow: transparent at the top,
+     resolving to the page background colour at the bottom edge so the
+     backdrop melts into the page. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="-90"
+        android:startColor="@color/transparent"
+        android:endColor="?attr/primaryBlackBackground" />
+</shape>

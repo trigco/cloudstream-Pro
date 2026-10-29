@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -7,13 +8,21 @@
     android:gravity="center"
     android:orientation="horizontal">
 
+    <!-- Phase 8.86: outline pill to match the details page's red Play
+         pill (52dp tall, full-pill corners, transparent fill with a
+         light stroke). Click handling lives in DownloadButton; this
+         button is only its surface/target. -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/download_movie_button"
         style="@style/BlackButton"
         android:layout_width="match_parent"
+        android:layout_height="52dp"
         android:layout_marginStart="0dp"
         android:layout_marginEnd="0dp"
-        android:visibility="visible" />
+        android:visibility="visible"
+        app:backgroundTint="@color/transparent"
+        app:cornerRadius="26dp"
+        app:strokeWidth="1dp" />
 
     <LinearLayout
         android:layout_width="wrap_content"

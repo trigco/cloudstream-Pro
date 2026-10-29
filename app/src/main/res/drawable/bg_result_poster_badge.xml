@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.86: red status badge floated on the details poster
+     (shown only for the coming-soon status; see ResultFragmentPhone). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="4dp" />
+    <solid android:color="@color/colorPrimaryRed" />
+</shape>
