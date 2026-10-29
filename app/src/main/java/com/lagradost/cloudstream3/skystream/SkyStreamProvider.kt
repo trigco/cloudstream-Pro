@@ -342,17 +342,10 @@ class SkyStreamProvider(
         if (value.startsWith("magic_m3u8:", ignoreCase = true)) {
             return runCatching {
                 val playlist = decodeBase64(value.substringAfter(":", ""))
-                require(playlist.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024) {
-                    "SkyStream inline M3U8 exceeds the size limit"
-                }
-                require(playlist.trimStart().startsWith("#EXTM3U")) {
-                    "SkyStream inline playlist is not a valid M3U8"
-                }
-                val dir = File(context.cacheDir, "skystream-playlists")
-                if (!dir.exists()) dir.mkdirs()
-                val file = File(dir, sha256(value) + ".m3u8")
-                if (!file.isFile || file.readText() != playlist) file.writeText(playlist)
-                ResolvedSkyStreamAddress(Uri.fromFile(file).toString(), requestHeaders)
+                ResolvedSkyStreamAddress(
+                    SkyStreamPlaylistServer.serve(playlist),
+                    requestHeaders,
+                )
             }.getOrNull()
         }
 
