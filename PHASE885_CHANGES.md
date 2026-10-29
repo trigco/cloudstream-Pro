@@ -207,3 +207,33 @@ New:
 - No `android:tint` added (only `app:tint`); every new LinearLayout
   declares `android:orientation`; no code inserted between any
   annotation and its class; no `${` in raw strings.
+
+## Fix round (run #258)
+
+CI run #258 failed in `:app:compileDebugKotlin` / `:app:compileReleaseKotlin`
+on three errors; all three fixed, no behaviour change:
+
+1. **`ui/feed/FeedFragment.kt:764` — Unresolved reference 'httpHeaders'** and
+   **`ui/home/HomeParentItemAdapterPreview.kt:561` — same.** The 8.85 Coil
+   pre-warm requests called `ImageRequest.Builder.httpHeaders(...)`, which in
+   Coil 3 is the extension function `coil3.network.httpHeaders` — it must be
+   imported explicitly. Both files imported `NetworkHeaders` and
+   `ImageRequest` but not the extension. Added
+   `import coil3.network.httpHeaders` to both files — the exact mechanism
+   `utils/ImageModuleCoil.kt` (the project's own header-carrying image
+   loader) already uses (`import coil3.network.httpHeaders`, line 115 usage),
+   so the pre-warm requests now go through the project's established header
+   path unchanged (User-Agent + the response's posterHeaders).
+2. **`ui/feed/FeedFragment.kt:937` — 'val' cannot be reassigned.** Inside
+   `makeRow(tag: Any, ...)` (the filter-sheet option-row builder), the check
+   icon's `ImageView(ctx).apply { tag = "check" }` resolved `tag` to the
+   function's `tag` parameter (parameters shadow implicit-receiver
+   properties), not `View.tag`. Changed to `this.tag = "check"` — explicit
+   receiver, same `View.setTag("check")` the sheet's `styleRows` lookup
+   (`child.tag == "check"`) expects.
+
+Verification: every file in the tree that calls `.httpHeaders(` now imports
+`coil3.network.httpHeaders` (FeedFragment, HomeParentItemAdapterPreview,
+ImageModuleCoil — 3/3); Kotlin delimiter balance exact on both touched
+files. Files changed in this round: `ui/feed/FeedFragment.kt`,
+`ui/home/HomeParentItemAdapterPreview.kt`, this doc.

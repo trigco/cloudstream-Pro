@@ -30,6 +30,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import coil3.SingletonImageLoader
 import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -934,7 +935,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             row.addView(ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_baseline_check_24)
                 imageTintList = ContextCompat.getColorStateList(ctx, R.color.white)
-                tag = "check"
+                this.tag = "check"
                 isVisible = false
                 layoutParams = LinearLayout.LayoutParams(dp(22), dp(22))
             })

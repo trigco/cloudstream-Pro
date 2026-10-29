@@ -63,6 +63,7 @@ import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.getImageFromDrawable
 import coil3.SingletonImageLoader
 import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.lagradost.cloudstream3.USER_AGENT
