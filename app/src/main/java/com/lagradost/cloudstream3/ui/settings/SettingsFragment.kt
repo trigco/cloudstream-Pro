@@ -599,6 +599,11 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
                 navigate(R.id.action_navigation_global_to_navigation_settings_nuvio)
             }
 
+            // SkyStream plugin repositories and provider toggles.
+            settingsSkyPlugins.setOnClickListener {
+                navigate(R.id.action_navigation_global_to_navigation_settings_skystream)
+            }
+
             // Phase 8.45: Categories lives in the Content group
             // (his ask) and opens the custom home list manager.
             settingsCategories.setOnClickListener {
@@ -625,7 +630,7 @@ class SettingsFragment : BaseFragment<MainSettingsBinding>(
             }
 
             if (isLayout(TV)) {
-                (accordionGroups.map { it.header } + settingsExtensions).forEach { view ->
+                (accordionGroups.map { it.header } + settingsExtensions + settingsSkyPlugins).forEach { view ->
                     view.isFocusable = true
                     view.isFocusableInTouchMode = true
                 }
