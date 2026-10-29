@@ -121,10 +121,9 @@ object SkyStreamEngine {
                 val evalText = runCatching { evaluate<String>(call, "skystream-call.js") }.getOrNull()
                 when {
                     bridge.resultJson != null -> bridge.resultJson
-                    bridge.resultDeferred.isCompleted -> bridge.resultDeferred.await()
                     !evalText.isNullOrBlank() && evalText.trimStart().startsWith("{") -> evalText
                     !evalText.isNullOrBlank() && evalText.trimStart().startsWith("[") -> evalText
-                    else -> null
+                    else -> withTimeoutOrNull(5_000L) { bridge.resultDeferred.await() }
                 }
             }
         } ?: throw IllegalStateException("SkyStream plugin timed out in " + functionName)
