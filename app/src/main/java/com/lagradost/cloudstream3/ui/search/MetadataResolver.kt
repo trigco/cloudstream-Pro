@@ -513,7 +513,7 @@ object MetadataResolver {
         synchronized(metaInFlight) { if (!metaInFlight.add(key)) return }
         val appContext = context.applicationContext
         val tv = isTv(response)
-        val type = response.type
+        val type = response.type ?: TvType.Others
         scope.launch {
             try {
                 semaphore.withPermit {
