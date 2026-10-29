@@ -2,9 +2,11 @@
 <!-- Phase 8.85: the Feed page, Explore-style (SkyStream reference):
      a top bar (page title + circular filter/search buttons) joins
      the existing search field + genre chips in the floating header;
-     a compact hero carousel floats over the top of the content;
-     the grid below is now 3 columns like Home's. The header still
-     overlays the grid and hides by sliding up (Phase 8.23). -->
+     the grid below is now 3 columns like Home's.
+     Phase 8.87: the compact hero carousel is the grid's first list
+     item (feed_hero_header), no longer a floating overlay. The
+     header still overlays the grid and hides by sliding up
+     (Phase 8.23). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -191,48 +193,13 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <!-- Phase 8.85: compact hero carousel (220dp — deliberately NOT
-         the Home 500dp hero). The backdrop ImageView under the pager
-         holds the settled item's poster so the crossfade never
-         flashes black (Part B rule, same as Home). The whole box is
-         positioned in code below the floating header. -->
-    <FrameLayout
-        android:id="@+id/feed_hero_box"
-        android:layout_width="match_parent"
-        android:layout_height="220dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:visibility="gone">
-
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:cardBackgroundColor="@android:color/black"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp">
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent">
-
-                <ImageView
-                    android:id="@+id/feed_hero_backdrop"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:contentDescription="@null"
-                    android:scaleType="centerCrop" />
-
-                <androidx.viewpager2.widget.ViewPager2
-                    android:id="@+id/feed_hero_pager"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:orientation="horizontal" />
-
-            </FrameLayout>
-
-        </androidx.cardview.widget.CardView>
-
-    </FrameLayout>
+    <!-- Phase 8.87: the hero no longer lives here. The 8.85 hero was
+         a root-level overlay box (sibling of the SwipeRefreshLayout,
+         positioned by a code-set topMargin, its grid space faked via
+         RecyclerView top padding) — it never scrolled with the list
+         and its transformed pager pages could paint outside the
+         card. It is now the grid's first list item: see
+         feed_hero_header.xml + FeedHeroHeaderAdapter. -->
 
     <LinearLayout
         android:id="@+id/feed_header"

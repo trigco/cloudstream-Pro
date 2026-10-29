@@ -13,7 +13,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
-import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -26,27 +25,18 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.widget.ViewPager2
-import coil3.SingletonImageLoader
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.lagradost.cloudstream3.R
-import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.databinding.FragmentFeedBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.ui.BaseFragment
-import com.lagradost.cloudstream3.ui.home.HomeScrollTransformer
 import com.lagradost.cloudstream3.ui.search.SearchResultBuilder.cleanPosterTitle
 import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.TitleResolver
-import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
-import com.lagradost.cloudstream3.utils.getImageFromDrawable
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
@@ -129,19 +119,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     // ---------- Phase 8.85: hero + advanced filters state ----------
 
     private val heroAdapter = FeedHeroAdapter(onPlay = { entry -> openWatch(entry) })
+
+    /** Phase 8.87: the hero is the grid's first list item now; this
+     *  header adapter owns the pager + backdrop (see
+     *  FeedHeroHeaderAdapter). The fragment only submits entries /
+     *  visibility and runs the auto-advance timer. */
+    private val heroHeaderAdapter = FeedHeroHeaderAdapter(heroAdapter)
     private var heroEntries: List<FeedEntry> = emptyList()
-    private var heroUserDragging = false
     private val heroHandler = Handler(Looper.getMainLooper())
     private val heroAutoRunnable = object : Runnable {
         override fun run() {
-            val b = binding
-            if (b != null && heroEntries.size > 1 &&
-                b.feedHeroBox.isVisible && !heroUserDragging
-            ) {
-                b.feedHeroPager.setCurrentItem(
-                    (b.feedHeroPager.currentItem + 1) % heroEntries.size, true
-                )
-            }
+            heroHeaderAdapter.advance()
             heroHandler.postDelayed(this, 5_000L)
         }
     }
@@ -187,15 +175,25 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     override fun onBindingCreated(binding: FragmentFeedBinding) {
         // Phase 8.85: 3 columns like Home's grid (was 2).
-        binding.feedRecycler.layoutManager = GridLayoutManager(context, 3)
-        binding.feedRecycler.adapter = adapter
+        // Phase 8.87: the hero rides as list position 0 (full span)
+        // in a ConcatAdapter ahead of the cards — as a normal list
+        // element it scrolls away with the content and this
+        // RecyclerView clips it like every other row.
+        val gridLayoutManager = GridLayoutManager(context, 3)
+        gridLayoutManager.spanSizeLookup =
+            object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int =
+                    if (position == 0 && heroHeaderAdapter.isShowing()) 3 else 1
+            }
+        binding.feedRecycler.layoutManager = gridLayoutManager
+        binding.feedRecycler.adapter = ConcatAdapter(heroHeaderAdapter, adapter)
         // Fixed size + no change animations: the grid must never
         // relayout or flash mid-scroll (Phase 8.23 jitter fix).
         binding.feedRecycler.setHasFixedSize(true)
         binding.feedRecycler.itemAnimator = null
         buildChips(binding)
         setupTopBar(binding)
-        setupHero(binding)
+        setupHero()
         binding.feedEmptyReset.setOnClickListener {
             // Back to the unfiltered feed: clear the advanced
             // filters (8.85), clear the search text (its watcher
@@ -381,7 +379,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 continue
             }
             val any = pool.any {
-                it.response.name.contains(tag, ignoreCase = true)
+                genreMatches(it.response.name, tag)
             }
             chip.alpha = if (any) 1f else 0.45f
         }
@@ -392,11 +390,43 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * no genre field, so genres have always been title-keyword
      * matches — the chip row and the Filters sheet's Genre tab
      * share this one list and this one matching rule.
+     * Phase 8.87: widened from 9 to the standard 18 genres, each
+     * with the title keywords that mark it. A genre matches when
+     * ANY of its keywords appears in the title (case-insensitive
+     * contains — the rule as it always was, now with spelling
+     * variants like "Sci Fi" / "Science Fiction" covered).
      */
-    private val genreTags = listOf(
-        "Horror", "Comedy", "Romance", "Thriller",
-        "Action", "Drama", "Family", "Sci-Fi", "Animation"
+    private val genreKeywords: List<Pair<String, List<String>>> = listOf(
+        "Action" to listOf("Action"),
+        "Adventure" to listOf("Adventure"),
+        "Animation" to listOf("Animation", "Anime", "Animated"),
+        "Comedy" to listOf("Comedy"),
+        "Crime" to listOf("Crime"),
+        "Documentary" to listOf("Documentary"),
+        "Drama" to listOf("Drama"),
+        "Family" to listOf("Family"),
+        "Fantasy" to listOf("Fantasy"),
+        "History" to listOf("History", "Historical"),
+        "Horror" to listOf("Horror"),
+        "Music" to listOf("Music", "Musical"),
+        "Mystery" to listOf("Mystery"),
+        "Romance" to listOf("Romance", "Romantic"),
+        "Sci-Fi" to listOf("Sci-Fi", "Sci Fi", "Science Fiction"),
+        "Thriller" to listOf("Thriller"),
+        "War" to listOf("War"),
+        "Western" to listOf("Western")
     )
+
+    /** Genre names in display order (chip row + Filters sheet). */
+    private val genreTags: List<String> = genreKeywords.map { it.first }
+
+    /** The one genre-matching rule, shared by the chip row, the
+     *  Filters sheet's Genre tab and the genre filter itself. */
+    private fun genreMatches(title: String, genre: String): Boolean {
+        val keywords = genreKeywords.firstOrNull { it.first == genre }?.second
+            ?: return false
+        return keywords.any { title.contains(it, ignoreCase = true) }
+    }
 
     private fun buildChips(binding: FragmentFeedBinding) {
         val tags = listOf("All") + genreTags
@@ -664,22 +694,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         updateFilterButtonState()
     }
 
-    private fun setupHero(binding: FragmentFeedBinding) {
-        binding.feedHeroPager.adapter = heroAdapter
-        // Same crossfade + pop-out transformer as the Home hero.
-        binding.feedHeroPager.setPageTransformer(HomeScrollTransformer())
-        binding.feedHeroPager.registerOnPageChangeCallback(
-            object : ViewPager2.OnPageChangeCallback() {
-                override fun onPageSelected(position: Int) {
-                    onHeroSettled(position)
-                }
-
-                override fun onPageScrollStateChanged(state: Int) {
-                    heroUserDragging =
-                        state == ViewPager2.SCROLL_STATE_DRAGGING
-                }
-            }
-        )
+    /** Phase 8.87: the pager lives inside the hero list item now —
+     *  FeedHeroHeaderAdapter wires its adapter, transformer and
+     *  page callbacks. The fragment only owns the auto-advance
+     *  timer (the runnable itself checks it can move). */
+    private fun setupHero() {
         heroHandler.removeCallbacks(heroAutoRunnable)
         heroHandler.postDelayed(heroAutoRunnable, 5_000L)
     }
@@ -689,39 +708,24 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         heroEntries = pool
             .filter { !it.response.posterUrl.isNullOrBlank() }
             .take(6)
-        heroAdapter.items = heroEntries
         val b = binding ?: return
-        if (heroEntries.isNotEmpty()) {
-            val pos = b.feedHeroPager.currentItem
-                .coerceIn(0, heroEntries.size - 1)
-            if (b.feedHeroPager.currentItem != pos) {
-                b.feedHeroPager.setCurrentItem(pos, false)
-            }
-            onHeroSettled(pos)
-        }
         updateHeroChrome(b)
     }
 
     /**
-     * Positions the hero under the floating header and reserves its
-     * space in the grid's top padding. The hero only shows over the
-     * unfiltered, unsearched feed.
+     * Submits the hero's visibility to the header adapter (it only
+     * shows over the unfiltered, unsearched feed) and reserves the
+     * floating header's space in the grid's top padding. Phase
+     * 8.87: the hero itself needs no reserved space anymore — as a
+     * list item it takes its own room in the flow.
      */
     private fun updateHeroChrome(binding: FragmentFeedBinding) {
         val heroVisible = heroEntries.isNotEmpty() &&
             binding.feedSearchInput.text.toString().trim().isEmpty() &&
             !filtersActive
-        binding.feedHeroBox.isVisible = heroVisible
-        val heroSpace = if (heroVisible) dp(220) + dp(12) else 0
-        (binding.feedHeroBox.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-            val top = headerFullHeight + dp(12)
-            if (lp.topMargin != top) {
-                lp.topMargin = top
-                binding.feedHeroBox.layoutParams = lp
-            }
-        }
+        heroHeaderAdapter.submit(heroEntries, heroVisible)
         if (headerFullHeight > 0) {
-            val topPad = headerFullHeight + dp(6) + heroSpace
+            val topPad = headerFullHeight + dp(6)
             binding.feedRecycler.setPadding(
                 binding.feedRecycler.paddingLeft, topPad,
                 binding.feedRecycler.paddingRight,
@@ -736,40 +740,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 false, 0, headerFullHeight + dp(10)
             )
         }
-    }
-
-    /**
-     * A hero page settled: pin its poster into the backdrop under
-     * the pager (the crossfade then never flashes black) and
-     * pre-warm the next poster's Coil cache entry.
-     */
-    private fun onHeroSettled(position: Int) {
-        val b = binding ?: return
-        val entry = heroEntries.getOrNull(position) ?: return
-        b.feedHeroBackdrop.loadImage(
-            entry.response.posterUrl, entry.response.posterHeaders
-        ) {
-            crossfade(false)
-            error {
-                getImageFromDrawable(
-                    b.feedHeroBackdrop.context, R.drawable.poster_placeholder
-                )
-            }
-        }
-        if (heroEntries.size < 2) return
-        val next = heroEntries[(position + 1) % heroEntries.size]
-        val nextUrl = next.response.posterUrl ?: return
-        val ctx = context ?: return
-        val request = ImageRequest.Builder(ctx)
-            .data(nextUrl)
-            .httpHeaders(NetworkHeaders.Builder().also { hb ->
-                hb["User-Agent"] = USER_AGENT
-                next.response.posterHeaders?.forEach { (key, value) ->
-                    hb[key] = value
-                }
-            }.build())
-            .build()
-        SingletonImageLoader.get(ctx).enqueue(request)
     }
 
     // ---------- Phase 8.85: advanced filters ----------
@@ -793,7 +763,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         var out = list
         filterGenre?.let { genre ->
             out = out.filter {
-                it.response.name.contains(genre, ignoreCase = true)
+                genreMatches(it.response.name, genre)
             }
         }
         filterYear?.let { year ->
@@ -951,7 +921,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 )
             }
             val present = genreTags.filter { tag ->
-                pool.any { it.response.name.contains(tag, ignoreCase = true) }
+                pool.any { genreMatches(it.response.name, tag) }
             }
             (listOf("") + present).forEach { genre ->
                 val chip = makeChip(

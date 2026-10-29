@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.87: the compact Feed hero as a real list item (the
+     grid's position 0, via FeedHeroHeaderAdapter in a
+     ConcatAdapter) instead of the 8.85 root-level overlay box.
+     The overlay never scrolled with the list and its pager pages
+     could paint outside the card; as a list item the outer
+     RecyclerView guarantees both the scroll-away and the clipping.
+     Clipping is ALSO set explicitly at every level of the hero's
+     own chain (clipChildren on both frames, clipChildren +
+     clipToPadding on the pager, and again on the pager's inner
+     RecyclerView from code) because the crossfade transformer
+     stacks every page at the same slot — containment depends
+     entirely on ancestors clipping. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clipChildren="true"
+    android:clipToPadding="true"
+    android:paddingStart="16dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="4dp">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        app:cardBackgroundColor="@android:color/black"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="true"
+            android:clipToPadding="true">
+
+            <ImageView
+                android:id="@+id/feed_hero_backdrop"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop" />
+
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/feed_hero_pager"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="true"
+                android:clipToPadding="true"
+                android:orientation="horizontal" />
+
+        </FrameLayout>
+
+    </androidx.cardview.widget.CardView>
+
+</FrameLayout>
