@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.skystream
 
 import android.content.Context
+import android.util.Base64
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.Episode
@@ -238,31 +239,33 @@ class SkyStreamProvider(
         var emitted = 0
         for (i in 0 until minOf(streams.length(), MAX_STREAMS)) {
             val stream = streams.optJSONObject(i) ?: continue
-            val streamUrl = stream.optString("url").ifBlank { stream.optString("link") }
-            if (!streamUrl.startsWith("http") || !seen.add(streamUrl)) continue
+            val rawUrl = stream.optString("url").ifBlank { stream.optString("link") }
+            val headers = jsonObjectToMap(stream.optJSONObject("headers"))
+            val resolved = resolveSkyStreamAddress(rawUrl, headers) ?: continue
+            if (!seen.add(resolved.url)) continue
             val subtitles = stream.optJSONArray("subtitles")
             if (subtitles != null) {
                 for (j in 0 until subtitles.length()) {
                     val sub = subtitles.optJSONObject(j) ?: continue
-                    val subUrl = sub.optString("url")
-                    if (subUrl.startsWith("http")) {
-                        subtitleCallback(newSubtitleFile(sub.optString("lang", "Unknown"), subUrl))
-                    }
+                    val subAddress = resolveSkyStreamAddress(
+                        sub.optString("url"),
+                        jsonObjectToMap(sub.optJSONObject("headers")).ifEmpty { resolved.headers }
+                    ) ?: continue
+                    subtitleCallback(newSubtitleFile(sub.optString("lang", "Unknown"), subAddress.url))
                 }
             }
             val label = stream.optString("source", stream.optString("quality", stream.optString("title", pluginName)))
             val qualityText = stream.optString("quality") + " " + stream.optString("title")
-            val headers = jsonObjectToMap(stream.optJSONObject("headers"))
-            val linkType = StremioAddonProvider.inferLinkType(streamUrl)
+            val linkType = StremioAddonProvider.inferLinkType(resolved.url)
             callback(
                 newExtractorLink(
                     source = pluginName,
                     name = label.ifBlank { pluginName },
-                    url = streamUrl,
+                    url = resolved.url,
                     type = linkType,
                 ) {
-                    this.referer = headers.entries.firstOrNull { it.key.equals("referer", true) }?.value ?: ""
-                    this.headers = headers
+                    this.referer = resolved.headers.entries.firstOrNull { it.key.equals("referer", true) }?.value ?: ""
+                    this.headers = resolved.headers
                     this.quality = StremioAddonProvider.parseQuality(qualityText)
                 }
             )
@@ -270,6 +273,64 @@ class SkyStreamProvider(
         }
         if (emitted > 0) SkyStreamRepository.setError(context, payload.plugin.packageName, null)
         return emitted > 0
+    }
+
+    private data class ResolvedSkyStreamAddress(
+        val url: String,
+        val headers: Map<String, String>,
+    )
+
+    /**
+     * SkyStream may wrap a URL in MAGIC_PROXY_v1 / MAGIC_PROXY_v2 so its
+     * standalone player can keep request headers on HLS segments. In this
+     * app, decode the wrapped source and forward the declared headers to the
+     * native player. Inline magic_m3u8 playlists need a local HLS proxy; until
+     * that exists, fail closed rather than handing an opaque pseudo-URL to Exo.
+     */
+    private fun resolveSkyStreamAddress(
+        rawUrl: String,
+        requestHeaders: Map<String, String>,
+    ): ResolvedSkyStreamAddress? {
+        val value = rawUrl.trim()
+        if (value.startsWith("https://") || value.startsWith("http://")) {
+            return ResolvedSkyStreamAddress(value, requestHeaders)
+        }
+        if (value.startsWith("magic_m3u8:", ignoreCase = true)) return null
+
+        fun decodeBase64(input: String): String {
+            val normalized = input.trim()
+            val bytes = runCatching {
+                Base64.decode(normalized, Base64.DEFAULT)
+            }.recoverCatching {
+                Base64.decode(normalized, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            }.getOrThrow()
+            return String(bytes, Charsets.UTF_8)
+        }
+
+        return runCatching {
+            when {
+                value.startsWith("MAGIC_PROXY_v2") -> {
+                    val config = JSONObject(decodeBase64(value.removePrefix("MAGIC_PROXY_v2")))
+                    val actualUrl = config.optString("url").takeIf {
+                        it.startsWith("http://") || it.startsWith("https://")
+                    } ?: return null
+                    val configuredHeaders = config.optJSONObject("headers")
+                    val headers = configuredHeaders?.let { jsonObjectToMap(it) } ?: requestHeaders
+                    ResolvedSkyStreamAddress(actualUrl, headers)
+                }
+                value.startsWith("MAGIC_PROXY_v1") ->
+                    decodeBase64(value.removePrefix("MAGIC_PROXY_v1")).let { actualUrl ->
+                        if (!actualUrl.startsWith("http://") && !actualUrl.startsWith("https://")) return null
+                        ResolvedSkyStreamAddress(actualUrl, requestHeaders)
+                    }
+                value.startsWith("MAGIC_PROXY:") ->
+                    decodeBase64(value.removePrefix("MAGIC_PROXY:")).let { actualUrl ->
+                        if (!actualUrl.startsWith("http://") && !actualUrl.startsWith("https://")) return null
+                        ResolvedSkyStreamAddress(actualUrl, requestHeaders)
+                    }
+                else -> null
+            }
+        }.getOrNull()
     }
 
     private fun appContext(): Context? = runCatching { CloudStreamApp.context }.getOrNull()
