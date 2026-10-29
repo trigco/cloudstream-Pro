@@ -1,17 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Phase 8.85: one page of the compact Feed hero carousel —
-     poster fills the card (centerCrop, no stretching), bottom
-     gradient scrim, title + provider/type line bottom-left. -->
+     poster fills the card, bottom gradient scrim, title +
+     provider/type line bottom-left.
+     Phase 8.90: his screenshot showed the portrait poster
+     center-cropped into the landscape frame (faces sliced, the
+     "epic" logo giant) — SearchResponse carries no landscape
+     backdrop field (only LoadResponse does), so the page now
+     uses the premium two-layer treatment: the same poster,
+     heavily downsampled + darkened (+ a real RenderEffect blur
+     on API 31+), fills the frame as a backdrop, and the sharp
+     poster itself sits CONTAINED (fitCenter) on top of it.
+     Nothing is cropped away anymore. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/feed_hero_backdrop_img"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.65"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#59000000" />
 
     <ImageView
         android:id="@+id/feed_hero_poster"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@null"
-        android:scaleType="centerCrop" />
+        android:scaleType="fitCenter" />
 
     <View
         android:layout_width="match_parent"

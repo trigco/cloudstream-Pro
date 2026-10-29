@@ -263,7 +263,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.addListener(stateListener)
         TitleResolver.addListener(watchTitleListener)
 
-        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
+        // Phase 8.90: Up next is a 3-column grid like the Feed
+        // itself (his order) — the feed card was already sized
+        // for three-across in 8.85, so titles/meta stay readable.
+        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 3)
         binding.feedWatchUpnext.adapter = upNextAdapter
         setupTitleAutoHide(binding)
 

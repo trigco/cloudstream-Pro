@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Phase 8.85: the Feed page, Explore-style (SkyStream reference):
      a top bar (page title + circular filter/search buttons) joins
-     the existing search field + genre chips in the floating header;
-     the grid below is now 3 columns like Home's.
+     the genre chips in the floating header; the grid below is
+     3 columns like Home's.
      Phase 8.87: the compact hero carousel is the grid's first list
      item (feed_hero_header), no longer a floating overlay. The
      header still overlays the grid and hides by sliding up
-     (Phase 8.23). -->
+     (Phase 8.23).
+     Phase 8.90: the inline search field is removed — the header
+     is title + filter/search buttons + the pool-derived tag row
+     (All / Trending / Top 250 / categories / genres), like the
+     MovieBox-style reference's single search entry + tabs. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -256,53 +260,12 @@
 
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="12dp"
-            android:background="@drawable/feed_search_bg"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="14dp"
-            android:paddingEnd="6dp">
-
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:contentDescription="@null"
-                android:src="@drawable/search_icon" />
-
-            <EditText
-                android:id="@+id/feed_search_input"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                android:background="@null"
-                android:hint="@string/feed_search_hint"
-                android:imeOptions="actionSearch"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
-                android:textColor="?attr/white"
-                android:textColorHint="?attr/grayTextColor"
-                android:textSize="14sp" />
-
-            <ImageButton
-                android:id="@+id/feed_search_clear"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/feed_retry"
-                android:padding="9dp"
-                android:src="@drawable/ic_baseline_close_24"
-                android:visibility="gone" />
-
-        </LinearLayout>
+        <!-- Phase 8.90: the inline "Search feed..." bar is GONE
+             (his order — it duplicated the search button beside
+             it). The circular search button in the top bar now
+             opens the app's main Search tab (the 8.87 smart
+             landing); feed-local filtering lives on the tag row
+             below and the Filters sheet. -->
 
         <HorizontalScrollView
             android:layout_width="match_parent"
