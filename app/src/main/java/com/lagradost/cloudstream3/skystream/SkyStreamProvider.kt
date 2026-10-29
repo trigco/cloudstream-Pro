@@ -47,10 +47,13 @@ class SkyStreamProvider(
     private val storedPlugin: StoredSkyStreamPlugin,
     private val skyProviderId: String?,
     displayName: String,
+    private val customBaseUrl: String? = null,
 ) : MainAPI() {
     private val pluginName = displayName.ifBlank { storedPlugin.name }
     override var name: String = "SkyStream · " + pluginName
-    override var mainUrl: String = storedPlugin.sourceUrl.substringBeforeLast("/")
+    override var mainUrl: String = customBaseUrl ?: storedPlugin.manifest().optString("baseUrl").ifBlank {
+        storedPlugin.sourceUrl.substringBeforeLast("/")
+    }
     override var lang: String = "en"
     override val hasMainPage: Boolean = true
     override val mainPage: List<MainPageData>
@@ -60,7 +63,10 @@ class SkyStreamProvider(
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         val context = appContext() ?: return null
         val result = runCatching {
-            SkyStreamEngine.invoke(context, rootRepoUrl, storedPlugin, skyProviderId, "getHome", emptyList())
+            SkyStreamEngine.invoke(
+                context, rootRepoUrl, storedPlugin, skyProviderId, "getHome", emptyList(),
+                customBaseUrl = customBaseUrl
+            )
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, storedPlugin.packageName, error.message ?: "getHome failed")
             return null
@@ -85,7 +91,10 @@ class SkyStreamProvider(
     override suspend fun search(query: String): List<SearchResponse>? {
         val context = appContext() ?: return null
         val result = runCatching {
-            SkyStreamEngine.invoke(context, rootRepoUrl, storedPlugin, skyProviderId, "search", listOf(query))
+            SkyStreamEngine.invoke(
+                context, rootRepoUrl, storedPlugin, skyProviderId, "search", listOf(query),
+                customBaseUrl = customBaseUrl
+            )
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, storedPlugin.packageName, error.message ?: "search failed")
             return null
@@ -107,7 +116,7 @@ class SkyStreamProvider(
         val poster = mediaPoster(item)
         val year = item.optString("year").take(4).toIntOrNull()
             ?: item.optString("releaseDate").take(4).toIntOrNull()
-        val payload = payloadJson(rootRepoUrl, storedPlugin.packageName, skyProviderId, item, url)
+        val payload = payloadJson(rootRepoUrl, storedPlugin.packageName, skyProviderId, item, url, customBaseUrl)
         return if (type == "series" || type == "anime") {
             newTvSeriesSearchResponse(title, payload, if (type == "anime") TvType.Anime else TvType.TvSeries, fix = false) {
                 posterUrl = poster
@@ -126,7 +135,8 @@ class SkyStreamProvider(
         val payload = parsePayload(url) ?: return null
         val detail = runCatching {
             SkyStreamEngine.invoke(
-                context, payload.rootRepoUrl, payload.plugin, payload.providerId, "load", listOf(payload.itemUrl)
+                context, payload.rootRepoUrl, payload.plugin, payload.providerId, "load", listOf(payload.itemUrl),
+                customBaseUrl = payload.customBaseUrl
             )
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, payload.plugin.packageName, error.message ?: "load failed")
@@ -149,11 +159,12 @@ class SkyStreamProvider(
             ?: detail.optString("releaseDate").take(4).toIntOrNull()
         val resolvedUrl = detail.optString("url").ifBlank { payload.itemUrl }
         val payloadJson = payloadJson(
-            payload.rootRepoUrl, payload.plugin.packageName, payload.providerId, detail, resolvedUrl
+            payload.rootRepoUrl, payload.plugin.packageName, payload.providerId, detail, resolvedUrl,
+            payload.customBaseUrl
         )
         return if (type == "series" || type == "anime") {
             val episodes = parseEpisodes(
-                payload.rootRepoUrl, payload.plugin, payload.providerId, detail
+                payload.rootRepoUrl, payload.plugin, payload.providerId, detail, payload.customBaseUrl
             )
             newTvSeriesLoadResponse(title, payloadJson, if (type == "anime") TvType.Anime else TvType.TvSeries, episodes) {
                 this.posterUrl = poster
@@ -184,6 +195,7 @@ class SkyStreamProvider(
         plugin: StoredSkyStreamPlugin,
         providerId: String?,
         detail: JSONObject,
+        customBaseUrl: String?,
     ): List<Episode> {
         val direct = detail.optJSONArray("episodes")
         val output = mutableListOf<Episode>()
@@ -195,7 +207,7 @@ class SkyStreamProvider(
                 val epTitle = mediaTitle(episodeItem).ifBlank { "Episode " + (i + 1) }
                 val seasonNumber = episodeItem.optInt("season", 1).coerceAtLeast(0)
                 val episodeNumber = episodeItem.optInt("episode", i + 1).coerceAtLeast(1)
-                val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
+                val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl, customBaseUrl)
                 output += newEpisode(
                     url = epPayload,
                     initializer = {
@@ -249,7 +261,8 @@ class SkyStreamProvider(
         val payload = parsePayload(data) ?: return false
         val result = runCatching {
             SkyStreamEngine.invoke(
-                context, payload.rootRepoUrl, payload.plugin, payload.providerId, "loadStreams", listOf(payload.itemUrl)
+                context, payload.rootRepoUrl, payload.plugin, payload.providerId, "loadStreams", listOf(payload.itemUrl),
+                customBaseUrl = payload.customBaseUrl
             )
         }.getOrElse { error ->
             SkyStreamRepository.setError(context, payload.plugin.packageName, error.message ?: "loadStreams failed")
@@ -385,6 +398,7 @@ class SkyStreamProvider(
         val rootRepoUrl: String,
         val plugin: StoredSkyStreamPlugin,
         val providerId: String?,
+        val customBaseUrl: String?,
         val item: JSONObject,
         val itemUrl: String,
     )
@@ -456,11 +470,13 @@ class SkyStreamProvider(
             providerId: String?,
             item: JSONObject,
             url: String,
+            customBaseUrl: String? = null,
         ): String = JSONObject()
             .put("src", "skystream")
             .put("repo", root)
             .put("plugin", packageName)
             .put("provider", providerId ?: JSONObject.NULL)
+            .put("baseUrl", customBaseUrl ?: JSONObject.NULL)
             .put("item", item)
             .put("url", url)
             .toString()
@@ -476,6 +492,7 @@ class SkyStreamProvider(
                 rootRepoUrl = root,
                 plugin = plugin,
                 providerId = obj.optString("provider").takeIf { it.isNotBlank() && it != "null" },
+                customBaseUrl = obj.optString("baseUrl").takeIf { it.isNotBlank() && it != "null" },
                 item = obj.optJSONObject("item") ?: JSONObject(),
                 itemUrl = obj.optString("url"),
             )
