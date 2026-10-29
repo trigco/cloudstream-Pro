@@ -935,4 +935,20 @@
     <string name="seek_fx_seconds_format">%1$d seconds</string>
     <string name="player_preload_buffer">Preload buffer</string>
     <string name="player_preload_buffer_des">How much video to download ahead while watching online, so playback survives network drops</string>
+
+    <string name="skystream_plugins_title">SkyStream Plugins</string>
+    <string name="skystream_add_repo">Add repository</string>
+    <string name="skystream_back">Back to settings</string>
+    <string name="skystream_plugins_hint">Install a SkyStream repository by URL or enter the official shortcode: universe. Newly discovered plugins start disabled.</string>
+    <string name="skystream_empty">No SkyStream repositories installed yet.</string>
+    <string name="skystream_repo_url_hint">Repository URL or shortcode (e.g. universe)</string>
+    <string name="skystream_repo_dialog_message">Use universe for the official SkyStream Universe repository, or paste a repository manifest URL.</string>
+    <string name="skystream_refresh_repo">Refresh repository</string>
+    <string name="skystream_remove_repo">Remove repository</string>
+    <string name="skystream_remove_repo_message">Remove %1$s and all of its installed plugins?</string>
+    <string name="skystream_refreshing">Refreshing SkyStream repository…</string>
+    <string name="skystream_checking_repo">Checking and installing SkyStream repository…</string>
+    <string name="skystream_repo_installed">Installed %1$s (%2$d plugins discovered).</string>
+    <string name="skystream_repo_failed">SkyStream installation failed: %1$s</string>
+
 </resources>
