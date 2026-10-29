@@ -327,8 +327,8 @@ class SkyStreamProvider(
      * SkyStream may wrap a URL in MAGIC_PROXY_v1 / MAGIC_PROXY_v2 so its
      * standalone player can keep request headers on HLS segments. In this
      * app, decode the wrapped source and forward the declared headers to the
-     * native player. Inline magic_m3u8 playlists need a local HLS proxy; until
-     * that exists, fail closed rather than handing an opaque pseudo-URL to Exo.
+     * native player. Inline magic_m3u8 playlists are served by the loopback-only
+     * playlist endpoint so the player receives an HTTP M3U8 URL instead of an opaque pseudo-URL.
      */
     private fun resolveSkyStreamAddress(
         context: Context,
