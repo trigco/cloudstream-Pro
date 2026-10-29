@@ -509,12 +509,10 @@ object SkyStreamProviders {
         }
         val signatures = wanted.mapValues { (_, entry) ->
             val (repo, plugin, providerInfo) = entry
-            sha256(
-                listOf(
-                    repo.url, plugin.packageName, plugin.version.toString(), plugin.sourceUrl,
-                    plugin.manifestJson, providerInfo.first.orEmpty(), providerInfo.second
-                ).joinToString("|")
-            )
+            listOf(
+                repo.url, plugin.packageName, plugin.version.toString(), plugin.sourceUrl,
+                plugin.manifestJson, providerInfo.first.orEmpty(), providerInfo.second
+            ).joinToString("|")
         }
         val ids = wanted.keys
         registered.keys.toList().filter { it !in ids || registeredSignatures[it] != signatures[it] }
