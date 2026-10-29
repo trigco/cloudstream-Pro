@@ -431,7 +431,7 @@ globalThis.__skyStreamExports = (function() {
                     }
                     JSONObject()
                         .put("code", response.code).put("status", response.code).put("statusCode", response.code)
-                        .put("body", bodyText).put("bodyText", bodyText).put("bodyB64", "")
+                        .put("body", bodyText).put("bodyText", bodyText).put("bodyB64", b64Encode(bytes))
                         .put("headers", responseHeaders)
                         .put("url", response.request.url.toString())
                         .put("finalUrl", response.request.url.toString())
