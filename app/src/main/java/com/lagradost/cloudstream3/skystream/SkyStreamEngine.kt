@@ -151,7 +151,7 @@ object SkyStreamEngine {
     skyStreamCall(JSON.stringify({op:'result', data:JSON.stringify(value === undefined ? null : value)}));
     return value;
   } catch (e) {
-    skyStreamCall(JSON.stringify({op:'result', data:JSON.stringify({__sky_error:String(e && (e.stack || e.message) || e})}));
+    skyStreamCall(JSON.stringify({op:'result', data:JSON.stringify({__sky_error:String(e && (e.stack || e.message) || e)})}));
     return null;
   }
 })()
