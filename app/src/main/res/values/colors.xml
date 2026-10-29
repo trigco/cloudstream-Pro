@@ -128,4 +128,11 @@
 
     <!-- Netflix redesign: translucent red active-indicator for bottom navigation -->
     <color name="navIndicatorRed">#4DE50914</color>
+    <!-- SkyStream design tokens used by the Sky plugin pages
+         (8.81 drawables): surface + outline for icon tiles/chips. -->
+    <color name="skyAccent">#448AFF</color>
+    <color name="skyAccentLight">#A8C7FA</color>
+    <color name="skyOnAccent">#0B57D0</color>
+    <color name="skySurface">#18181F</color>
+    <color name="skyOutline">#22222E</color>
 </resources>
