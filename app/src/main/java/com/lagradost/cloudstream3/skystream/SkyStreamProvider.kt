@@ -465,6 +465,7 @@ class SkyStreamProvider(
 /** Keeps SkyStream providers registered for enabled extensions only. */
 object SkyStreamProviders {
     private val registered = ConcurrentHashMap<String, SkyStreamProvider>()
+    private val registeredSignatures = ConcurrentHashMap<String, String>()
 
     @Synchronized
     fun sync(context: Context) {
@@ -485,13 +486,24 @@ object SkyStreamProviders {
                 }
             }
         }
-        val ids = wanted.keys
-        registered.keys.toList().filterNot { it in ids }.forEach { id ->
-            registered.remove(id)?.let { provider ->
-                APIHolder.allProviders.remove(provider)
-                APIHolder.removePluginMapping(provider)
-            }
+        val signatures = wanted.mapValues { (_, entry) ->
+            val (repo, plugin, providerInfo) = entry
+            sha256(
+                listOf(
+                    repo.url, plugin.packageName, plugin.version.toString(), plugin.sourceUrl,
+                    plugin.manifestJson, providerInfo.first.orEmpty(), providerInfo.second
+                ).joinToString("|")
+            )
         }
+        val ids = wanted.keys
+        registered.keys.toList().filter { it !in ids || registeredSignatures[it] != signatures[it] }
+            .forEach { id ->
+                registered.remove(id)?.let { provider ->
+                    APIHolder.allProviders.remove(provider)
+                    APIHolder.removePluginMapping(provider)
+                }
+                registeredSignatures.remove(id)
+            }
         wanted.forEach { (key, entry) ->
             if (registered.containsKey(key)) return@forEach
             runCatching {
@@ -501,6 +513,7 @@ object SkyStreamProviders {
                 APIHolder.allProviders.add(provider)
                 APIHolder.addPluginMapping(provider)
                 registered[key] = provider
+                signatures[key]?.let { registeredSignatures[key] = it }
             }
         }
     }
