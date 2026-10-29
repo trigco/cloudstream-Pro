@@ -232,7 +232,7 @@ class SkyStreamProvider(
                     val epUrl = episodeItem.optString("url", episodeItem.optString("id"))
                     if (epUrl.isBlank()) continue
                     val episodeNumber = episodeItem.optInt("episode", ei + 1).coerceAtLeast(1)
-                    val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl)
+                    val epPayload = payloadJson(root, plugin.packageName, providerId, episodeItem, epUrl, customBaseUrl)
                     output += newEpisode(
                         url = epPayload,
                         initializer = {
