@@ -946,6 +946,15 @@
         <item name="expandedActiveIndicatorPaddingBottom">0dp</item>
     </style>
 
+    <!-- Phase 8.94: the flat bottom bar's ONE red accent — a
+         small red pill behind the ACTIVE item's icon. Icon and
+         label themselves stay white when active / grey when
+         not (@color/item_select_color), so red remains the
+         Play-only accent everywhere else. -->
+    <style name="NavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/colorPrimaryRed</item>
+    </style>
+
     <style name="BlackButton" parent="NiceButton">
         <item name="strokeColor">?attr/textColor</item>
         <item name="backgroundTint">?attr/iconGrayBackground</item>

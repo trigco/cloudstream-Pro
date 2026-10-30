@@ -142,6 +142,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      *  scheduleChromeUpdate). */
     private var chromeJob: Job? = null
 
+    /** Phase 8.94: chrome scheduler state. A pass in flight is
+     *  NEVER cancelled by a later trigger — cancelling was the
+     *  8.92 missing-rows/chips regression (see
+     *  scheduleChromeUpdate). [chromeDirty] records that the
+     *  inputs moved on while a pass ran, so exactly one
+     *  follow-up pass runs when it finishes. */
+    private var chromeRunning = false
+    private var chromeDirty = false
+
     /** Signature of the rows currently submitted to
      *  [categoryRowsAdapter], so a recompute that changes
      *  nothing never touches the adapter (no relayout, no
@@ -402,6 +411,8 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         pendingSearchText?.let { searchHandler.removeCallbacks(it) }
         searchHandler.removeCallbacks(titleApplyRunnable)
         chromeJob?.cancel()
+        chromeRunning = false
+        chromeDirty = false
         searchJob?.cancel()
         headerAnimator?.cancel()
         FeedPlayer.removeListener(miniListener)
@@ -596,10 +607,37 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     // ---------- Phase 8.88: resolved-metadata categories ----------
 
+    /** Phase 8.94: while a background chrome pass runs, metaOf
+     *  answers from this pass-local memo. The pass evaluates
+     *  ~40–70 tags over the whole pool and metaOf is the hot
+     *  call inside all of them — without the memo, every
+     *  (tag × entry) check re-read SharedPreferences on a
+     *  cache miss and re-ran cleanPosterTitle + the two
+     *  normalize() Regex instantiations, which is what made a
+     *  single pass take seconds on the 8.1 phone. Null
+     *  outside a pass: main-thread callers use the resolver's
+     *  own caches exactly as before. */
+    @Volatile
+    private var passMetaCache:
+        MutableMap<String, MetadataResolver.Meta?>? = null
+
     /** The item's resolved metadata (genres / language /
      *  country), when MetadataResolver has it cached. */
-    private fun metaOf(entry: FeedEntry): MetadataResolver.Meta? =
-        context?.let { MetadataResolver.metaCachedFor(it, entry.response) }
+    private fun metaOf(entry: FeedEntry): MetadataResolver.Meta? {
+        val cache = passMetaCache
+        if (cache != null) {
+            val url = entry.response.url
+            if (cache.containsKey(url)) return cache[url]
+            val meta = context?.let {
+                MetadataResolver.metaCachedFor(it, entry.response)
+            }
+            cache[url] = meta
+            return meta
+        }
+        return context?.let {
+            MetadataResolver.metaCachedFor(it, entry.response)
+        }
+    }
 
     /** All categories an item belongs to: the smart categories
      *  (K-Drama, Anime, …) plus each resolved genre by name.
@@ -732,20 +770,28 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private var sectionTagsCache = mutableMapOf<String, Set<String>>()
     private var sectionTagsCachePool: List<FeedEntry>? = null
 
+    /** Phase 8.94: sectionTagsOf is called from the main
+     *  thread (grid filter) AND from the background chrome
+     *  pass; the plain HashMap cache is guarded so the two
+     *  never mutate it concurrently. Holds are brief (a map
+     *  lookup or one entry's canonicalisation). */
+    private val sectionTagsCacheLock = Any()
+
     /** The canonical tags of the provider shelves this entry
      *  arrived under (FeedSectionTags mapping of the raw names
      *  FeedViewModel kept). */
-    private fun sectionTagsOf(entry: FeedEntry): Set<String> {
-        if (sectionTagsCachePool !== pool) {
-            sectionTagsCache.clear()
-            sectionTagsCachePool = pool
+    private fun sectionTagsOf(entry: FeedEntry): Set<String> =
+        synchronized(sectionTagsCacheLock) {
+            if (sectionTagsCachePool !== pool) {
+                sectionTagsCache.clear()
+                sectionTagsCachePool = pool
+            }
+            sectionTagsCache.getOrPut(entry.response.url) {
+                entry.sections
+                    .mapNotNull { FeedSectionTags.canonicalTag(it) }
+                    .toSet()
+            }
         }
-        return sectionTagsCache.getOrPut(entry.response.url) {
-            entry.sections
-                .mapNotNull { FeedSectionTags.canonicalTag(it) }
-                .toSet()
-        }
-    }
 
     /** Every canonical section tag present anywhere in the pool. */
     private fun poolSectionTags(
@@ -976,32 +1022,86 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val b = binding ?: return
         if (searchQuery.isNotEmpty() || filtersActive || pool.isEmpty()) {
             chromeJob?.cancel()
+            chromeRunning = false
+            chromeDirty = false
             hideCategoryRows()
             if (pool.isEmpty()) {
                 buildCategoryTabs(b, listOf("All"))
             }
             return
         }
+        if (chromeRunning) {
+            // Phase 8.94: a pass is already computing over a
+            // snapshot and the inputs just moved (a pool post,
+            // or another metadata/rating landing). Do NOT
+            // cancel it. The 8.92 code cancelled the in-flight
+            // pass on EVERY trigger, and computeChrome has no
+            // suspension points, so the cancelled pass burned
+            // the whole compute and then died at the
+            // withContext(Main) boundary without posting —
+            // while the Feed itself generates the next trigger
+            // (the observer's 24-item resolveMeta pre-kick plus
+            // a resolve per uncached card bind; every NEW store
+            // in MetadataResolver re-arms metaApplyRunnable,
+            // which lands here). On the 8.1 phone a pass takes
+            // longer than the gap between landings during and
+            // after load, so no pass ever posted: rows stayed
+            // empty and the chips stayed at the "All"-only
+            // initial build from onBindingCreated. Let the
+            // running pass finish; the completion block runs
+            // exactly one follow-up with fresh snapshots.
+            chromeDirty = true
+            return
+        }
+        launchChromePass()
+    }
+
+    /** One background rows+chips pass over the CURRENT pool /
+     *  ratings snapshots. Always posts its result when the
+     *  snapshot is still current and the Feed is still
+     *  browsing; when the world moved on mid-pass it
+     *  re-schedules instead of dropping the result on the
+     *  floor (the other half of the 8.92 regression: the old
+     *  `if (pool !== poolSnap) return` discarded the page-1
+     *  pass when page 2 published, with no retry). */
+    private fun launchChromePass() {
         val poolSnap = pool
         val ratingsSnap = fragmentRatings.toMap()
         val appCtx = context?.applicationContext ?: return
-        chromeJob?.cancel()
+        chromeRunning = true
+        chromeDirty = false
         chromeJob = viewLifecycleOwner.lifecycleScope
             .launch(Dispatchers.Default) {
                 val result = computeChrome(poolSnap, ratingsSnap, appCtx)
                 withContext(Dispatchers.Main) {
-                    if (pool !== poolSnap) return@withContext
-                    val bb = binding ?: return@withContext
-                    val signature = result.rows.map { row ->
-                        row.name to row.items.map { it.response.url }
+                    chromeRunning = false
+                    val bb = binding
+                    if (bb != null && pool === poolSnap &&
+                        searchQuery.isEmpty() && !filtersActive
+                    ) {
+                        val signature = result.rows.map { row ->
+                            row.name to row.items.map { it.response.url }
+                        }
+                        if (signature != lastRowsSignature) {
+                            lastRowsSignature = signature
+                            categoryRowsAdapter.submit(result.rows)
+                        }
+                        buildCategoryTabs(
+                            bb, listOf("All") + result.tabNames
+                        )
+                        if (chromeDirty) {
+                            chromeDirty = false
+                            scheduleChromeUpdate()
+                        }
+                    } else if (bb != null) {
+                        // Pool changed mid-pass, or a search /
+                        // filter took over: route through the
+                        // scheduler, which hides the rows in the
+                        // search/filter case and launches a
+                        // fresh pass over the new pool otherwise.
+                        chromeDirty = false
+                        scheduleChromeUpdate()
                     }
-                    if (signature != lastRowsSignature) {
-                        lastRowsSignature = signature
-                        categoryRowsAdapter.submit(result.rows)
-                    }
-                    buildCategoryTabs(
-                        bb, listOf("All") + result.tabNames
-                    )
                 }
             }
     }
@@ -1015,6 +1115,21 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * (tagItems) is never touched from here.
      */
     private fun computeChrome(
+        poolSnap: List<FeedEntry>,
+        ratingsSnap: Map<String, String>,
+        appCtx: Context
+    ): ChromeResult {
+        // Phase 8.94: install the per-pass meta memo (see
+        // passMetaCache) for the duration of the pass.
+        passMetaCache = java.util.concurrent.ConcurrentHashMap()
+        try {
+            return computeChromePass(poolSnap, ratingsSnap, appCtx)
+        } finally {
+            passMetaCache = null
+        }
+    }
+
+    private fun computeChromePass(
         poolSnap: List<FeedEntry>,
         ratingsSnap: Map<String, String>,
         appCtx: Context
