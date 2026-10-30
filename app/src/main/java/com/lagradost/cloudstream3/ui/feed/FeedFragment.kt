@@ -6,14 +6,10 @@ import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.GridLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -177,15 +173,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      *  non-genre tag. */
     private var filterCategory: String? = null
 
-    /** The feed-local text query. Phase 8.92: written again —
-     *  the header search button expands an in-feed search row
-     *  (his correction: 8.90 sent the button to the main Search
-     *  tab; feed search must stay inside the Feed). Typing
-     *  filters the loaded pool through [applySearch]. */
+    /** The feed-local text query. Phase 8.94 (Job 3): no UI
+     *  writes this any more — text search lives on the pushed
+     *  Search page now (his final word 2026-10-30) — but the
+     *  filter machinery ([applySearch], the chrome scheduler's
+     *  searching branch) still keys off it, and the reset /
+     *  refresh paths clear it via [clearFeedQuery]. */
     private var searchQuery: String = ""
-
-    /** Pending debounced keystroke task for the search row. */
-    private var pendingSearchText: Runnable? = null
 
     private val filtersActive: Boolean
         get() = filterGenre != null || filterYear != null ||
@@ -293,7 +287,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             // query, then re-run the pool through the (now
             // empty) filter set.
             clearFilters()
-            closeFeedSearch(binding)
+            clearFeedQuery()
             scheduleChromeUpdate()
             applySearch("")
         }
@@ -314,7 +308,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             // active query and load the providers' next homepage
             // page — it lands at the TOP of the feed
             // (FeedViewModel.refresh).
-            closeFeedSearch(binding)
+            clearFeedQuery()
             scrollTopOnNextFeed = true
             viewModel.refresh()
         }
@@ -408,7 +402,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // coming back must not throw the viewer back to the top.
         listState = binding?.feedRecycler?.layoutManager?.onSaveInstanceState()
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
-        pendingSearchText?.let { searchHandler.removeCallbacks(it) }
         searchHandler.removeCallbacks(titleApplyRunnable)
         chromeJob?.cancel()
         chromeRunning = false
@@ -1637,108 +1630,35 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun setupTopBar(binding: FragmentFeedBinding) {
         binding.feedFilterButton.setOnClickListener { showFeedFilters() }
         binding.feedSearchButton.setOnClickListener {
-            // Phase 8.92: the button toggles the IN-FEED search
-            // row (his correction — 8.90 exiled feed search to
-            // the main Search tab; "feed সার্চ মেইন সার্চ এ চলে
-            // যায়" was listed as a bug). The bottom-nav Search
-            // tab keeps the global smart Search, untouched.
-            if (binding.feedSearchRow.isVisible) {
-                closeFeedSearch(binding)
-            } else {
-                binding.feedSearchRow.isVisible = true
-                refreshHeaderMetrics(binding)
-                binding.feedSearchInput.requestFocus()
-                showKeyboard(binding.feedSearchInput)
-            }
-        }
-        binding.feedSearchClear.setOnClickListener {
-            closeFeedSearch(binding)
-        }
-        // Live-as-you-type, 300 ms debounced: keystrokes only
-        // settle into searchQuery once the typist pauses, so a
-        // fast burst never runs a filter pass per letter.
-        binding.feedSearchInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(
-                s: CharSequence?, start: Int, count: Int, after: Int
-            ) = Unit
-
-            override fun onTextChanged(
-                s: CharSequence?, start: Int, before: Int, count: Int
-            ) = Unit
-
-            override fun afterTextChanged(s: Editable?) {
-                val text = s?.toString().orEmpty()
-                pendingSearchText?.let {
-                    searchHandler.removeCallbacks(it)
-                }
-                val task = Runnable {
-                    if (searchQuery != text) {
-                        searchQuery = text
-                        if (text.isEmpty()) scheduleChromeUpdate()
-                        applySearch(text)
-                    }
-                }
-                pendingSearchText = task
-                searchHandler.postDelayed(task, 300L)
-            }
-        })
-        binding.feedSearchInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                pendingSearchText?.let {
-                    searchHandler.removeCallbacks(it)
-                }
-                val text = binding.feedSearchInput.text
-                    ?.toString().orEmpty()
-                searchQuery = text
-                applySearch(text)
-                true
-            } else {
-                false
-            }
+            // Phase 8.94 (Job 3) — SETTLED behaviour, his final
+            // word 2026-10-30 after the 8.90/8.92 flip-flop: the
+            // button pushes the standalone smart Search page
+            // (navigation_feed_search — a second SearchFragment
+            // instance) OVER the Feed on the back stack. Not a
+            // bottom-nav tab switch (the Feed stays the selected
+            // destination underneath; the nav bar hides while
+            // the page is open, exactly like the watch page) and
+            // not the 8.92 in-feed expanding row (removed). Back
+            // pops straight back to the Feed, whose grid scroll
+            // state is saved/restored across the push by
+            // onDestroyView / onBindingCreated (listState), the
+            // same mechanism the watch page relies on.
+            activity?.navigate(
+                R.id.action_navigation_feed_to_navigation_feed_search
+            )
         }
         updateFilterButtonState()
     }
 
-    /** Phase 8.92: close the in-feed search row, drop the
-     *  query and restore the unfiltered feed. */
-    private fun closeFeedSearch(binding: FragmentFeedBinding) {
-        if (binding.feedSearchRow.isVisible) {
-            binding.feedSearchRow.isVisible = false
-            binding.feedSearchInput.clearFocus()
-            hideKeyboard(binding.feedSearchInput)
-            refreshHeaderMetrics(binding)
-        }
-        if (binding.feedSearchInput.text?.isNotEmpty() == true) {
-            binding.feedSearchInput.setText("")
-        }
+    /** Phase 8.94 (Job 3): the in-feed search row is gone, so
+     *  resetting "search" is just dropping the query state and
+     *  restoring the unfiltered feed — used by the empty-state
+     *  reset and pull-to-refresh. */
+    private fun clearFeedQuery() {
         if (searchQuery.isNotEmpty()) {
             searchQuery = ""
             scheduleChromeUpdate()
             applySearch("")
-        }
-    }
-
-    private fun showKeyboard(view: View) {
-        val imm = view.context.getSystemService(
-            Context.INPUT_METHOD_SERVICE
-        ) as? InputMethodManager
-        imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
-    }
-
-    private fun hideKeyboard(view: View) {
-        val imm = view.context.getSystemService(
-            Context.INPUT_METHOD_SERVICE
-        ) as? InputMethodManager
-        imm?.hideSoftInputFromWindow(view.windowToken, 0)
-    }
-
-    /** The floating header's height changed (search row shown
-     *  or hidden): re-measure and re-apply the grid's top
-     *  padding once the new height lands. */
-    private fun refreshHeaderMetrics(binding: FragmentFeedBinding) {
-        binding.feedHeader.post {
-            headerFullHeight = binding.feedHeader.height
-            updateHeaderPadding(binding)
         }
     }
 

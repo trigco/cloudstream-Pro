@@ -255,53 +255,11 @@
 
         </LinearLayout>
 
-        <!-- Phase 8.92: the in-feed search row — hidden until
-             the top bar's search button is tapped (his
-             correction: feed search must stay inside the Feed;
-             8.90's jump to the main Search tab is reverted).
-             Typing filters the loaded pool locally into the
-             grid; the ✕ clears the query and restores the full
-             feed. -->
-        <LinearLayout
-            android:id="@+id/feed_search_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="16dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <EditText
-                android:id="@+id/feed_search_input"
-                android:layout_width="0dp"
-                android:layout_height="46dp"
-                android:layout_weight="1"
-                android:background="@drawable/feed_search_bg"
-                android:hint="@string/feed_search_hint"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:textColor="@android:color/white"
-                android:textColorHint="#FF9E9E9E"
-                android:textSize="15sp" />
-
-            <ImageButton
-                android:id="@+id/feed_search_clear"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:layout_marginStart="10dp"
-                android:background="@drawable/bg_feed_circle_button"
-                android:contentDescription="@string/feed_search_close"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
-                android:padding="10dp"
-                android:src="@drawable/ic_baseline_close_24"
-                app:tint="@color/white" />
-
-        </LinearLayout>
+        <!-- Phase 8.94 (Job 3): the 8.92 in-feed search row is
+             removed — the header's search button now pushes the
+             standalone Search page (navigation_feed_search) over
+             the Feed. Settled behaviour, his final word
+             2026-10-30: not a tab switch, not an expanding row. -->
 
         <HorizontalScrollView
             android:layout_width="match_parent"

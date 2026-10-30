@@ -25,6 +25,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
+import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -112,6 +113,12 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         }
 
         const val SEARCH_QUERY = "search_query"
+
+        /** Phase 8.94 (Job 3): graph argument (default true) of
+         *  the standalone destination navigation_feed_search —
+         *  the instance the Feed header pushes over itself. The
+         *  bottom-nav tab destination never sets it. */
+        const val STANDALONE_SEARCH = "standalone_search"
 
         fun newInstance(query: String): Bundle {
             return Bundle().apply {
@@ -1011,6 +1018,48 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 arguments?.remove(SEARCH_QUERY)
                 savedInstanceState?.remove(SEARCH_QUERY)
                 MainActivity.nextSearchQuery = null
+            }
+        }
+
+        // Phase 8.94 (Job 3): the standalone instance pushed over
+        // the Feed (navigation_feed_search). Two adjustments, both
+        // keyed off the graph argument the tab destination never
+        // sets:
+        // 1. The back arrow shows (it is GONE in the shared layout
+        //    otherwise) and pops the back stack to the Feed.
+        // 2. Plain-landing guarantee: this fragment's ViewModel is
+        //    activity-scoped BY UPSTREAM DESIGN and therefore
+        //    shared with the bottom-nav tab instance — without a
+        //    reset, a leftover tab search would render its results
+        //    here under an empty search box. clearSearch() +
+        //    updateHistory() + clearSuggestions() is exactly the
+        //    reset an emptied query performs in the tab itself,
+        //    and the result containers are hidden up front (the
+        //    same visibilities onQueryTextChange applies for an
+        //    empty query) so the first paint is the landing:
+        //    trending chips + content-type tabs, built by
+        //    setupSmartLanding below. An explicit SEARCH_QUERY
+        //    (the argument path the 8.93 filmography taps use on
+        //    the tab destination) still wins and runs as usual.
+        // The shared ViewModel is the ONLY shared state: adapters,
+        // the SearchView and the landing are per-instance fields,
+        // and the two instances are never resumed at the same
+        // time (the tab instance's view is destroyed while this
+        // one is on top), so nothing here can corrupt the tab —
+        // its next open simply also starts from the landing,
+        // which is its own cleared-query state.
+        if (arguments?.getBoolean(STANDALONE_SEARCH) == true) {
+            binding.searchBackButton.isVisible = true
+            binding.searchBackButton.setOnClickListener {
+                findNavController().popBackStack()
+            }
+            if (sq.isNullOrBlank()) {
+                searchViewModel.clearSearch()
+                searchViewModel.updateHistory()
+                searchViewModel.clearSuggestions()
+                binding.searchMasterRecycler.isVisible = false
+                binding.searchAutofitResults.isVisible = false
+                binding.searchSuggestionsRecycler.isVisible = false
             }
         }
 

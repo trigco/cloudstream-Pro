@@ -34,6 +34,23 @@
             android:orientation="horizontal"
             app:layout_scrollFlags="scroll|enterAlways">
 
+            <!-- Phase 8.94 (Job 3): back arrow for the standalone
+                 instance pushed over the Feed
+                 (navigation_feed_search). GONE on the bottom-nav
+                 tab instance — SearchFragment only shows it when
+                 the standalone_search argument is set. -->
+            <ImageView
+                android:id="@+id/search_back_button"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="10dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:contentDescription="@string/go_back_img_des"
+                android:src="@drawable/ic_baseline_arrow_back_24"
+                android:visibility="gone"
+                app:tint="?attr/textColor" />
+
             <ImageView
                 android:id="@+id/voice_search"
                 android:layout_width="25dp"

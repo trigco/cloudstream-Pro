@@ -1,10 +1,14 @@
 # Phase 8.94 — Feed categories/chips regression fix + flat bottom nav
 
-On top of 8.93b (head 5b922f12). Two jobs: (1) the Feed's
+On top of 8.93b (head 5b922f12). Three jobs: (1) the Feed's
 category rows and tag chips vanished in the 8.92 build —
 diagnosed from code, fixed; (2) the floating pill bottom nav
 replaced with a flat full-width bar (his order: the pill
-"sucks", community comments call it the worst nav).
+"sucks", community comments call it the worst nav);
+(3) Feed search moved to a pushed standalone Search page
+(his 2026-10-30 09:11 decision, added after Jobs 1–2 were
+already pushed as 267890b5 — Job 3 ships as this phase's
+follow-up commit).
 
 ## Job 1 — Root cause: the 8.92 chrome scheduler starved itself
 
@@ -106,6 +110,11 @@ calls `scheduleChromeUpdate` and the rows re-post from the
 next completed pass; pull-to-refresh posts a new pool,
 which the observer routes into a pass (or the dirty
 follow-up), so rows re-post after refresh too.
+(Superseded in part by Job 3 below: the in-feed text input
+was removed the same morning by his final decision — the
+filter path through `applySearch` and the scheduler
+interplay verified here are unchanged; only the text entry
+point moved to the pushed Search page.)
 
 ## Job 2 — Flat bottom bar (presentation only)
 
@@ -196,7 +205,79 @@ New: `res/drawable/bg_nav_bar.xml`.
   build loop, green CI = ready for his device check, not
   proof; the checks that confirm this build: Feed shows
   tag chips beyond "All" and the category rows after load,
-  rows survive scrolling and a pull-to-refresh, in-feed
-  search still filters and clearing it brings the rows
-  back, and the bottom bar is flat/full-width/labelled
-  with the red indicator on the current tab.
+  rows survive scrolling and a pull-to-refresh, the Feed
+  header's search button opens the pushed Search page
+  (Job 3) and Back returns to the Feed with scroll and
+  rows intact, and the bottom bar is flat/full-width/
+  labelled with the red indicator on the current tab.
+
+## Job 3 — Feed search = a pushed standalone Search page
+
+**SETTLED BEHAVIOUR (his final word, 2026-10-30 09:11 —
+record it; do not re-open the flip-flop):** tapping the Feed
+header's 🔍 opens the smart Search UI as a full-screen page
+PUSHED over the Feed. Not a bottom-nav tab switch (8.90 —
+rejected), not the 8.92 in-feed expanding row (rejected,
+removed here). The Feed stays the selected tab underneath
+and Back returns to it exactly where the user left it.
+
+Implementation (reuse, no duplication of the 8.87 smart
+Search):
+
+- `mobile_navigation.xml`: new destination
+  `navigation_feed_search` hosting `SearchFragment`, plus
+  action `action_navigation_feed_to_navigation_feed_search`
+  on `navigation_feed`. The destination declares the same
+  `search_query` argument as the tab destination, plus
+  `standalone_search` (boolean, default true). It is
+  deliberately NOT added to MainActivity's nav-visible
+  destination list, so the bottom bar hides while the page
+  is open — the same treatment as `navigation_feed_watch` —
+  and the bar's selection therefore never leaves Feed.
+- `FeedFragment.setupTopBar`: the 🔍 click now calls
+  `activity?.navigate(R.id.action_…_feed_search)`. Feed
+  scroll state survives the push via the fragment's existing
+  `listState` save/restore (onDestroyView / onBindingCreated)
+  — the same mechanism the watch page relies on.
+- Removed: the `feed_search_row` from `fragment_feed.xml`
+  (row, input, ✕), the toggle/TextWatcher/editor wiring, the
+  `pendingSearchText` debounce field, the keyboard helpers,
+  and the now-dead `refreshHeaderMetrics`. `closeFeedSearch`
+  became `clearFeedQuery()` (query-state reset only) for its
+  two remaining callers — the empty-state reset and
+  pull-to-refresh. `searchQuery` itself stays: the filter
+  machinery (`applySearch`, the chrome scheduler's searching
+  branch) still keys off it; no UI writes it any more. The
+  Filters-sheet filtering of the grid is untouched.
+- `fragment_search.xml` + `SearchFragment`: a back-arrow
+  `ImageView` (`@+id/search_back_button`, `ic_baseline_arrow_
+  back_24`, GONE by default) at the start of the top bar.
+  Only the standalone instance shows it (wired to
+  `findNavController().popBackStack()`); the tab instance is
+  pixel-identical to before.
+- Shared-state isolation (the one real hazard): `SearchFragment`
+  uses an **activity-scoped** `SearchViewModel` (upstream
+  design), shared with the tab instance, so a leftover tab
+  search would otherwise render its results in the pushed
+  page under an empty search box. When `standalone_search`
+  is set and no explicit query was passed, the instance runs
+  the same reset an emptied query performs in the tab —
+  `clearSearch()` + `updateHistory()` + `clearSuggestions()` —
+  and hides the result containers up front (the visibilities
+  `onQueryTextChange` applies for an empty query), so the
+  first paint is the plain landing: Trending searches chips +
+  All/Movies/Series/Anime tabs from `setupSmartLanding`.
+  Everything else is per-instance (adapters, SearchView,
+  landing views are fragment fields; the two instances are
+  never resumed simultaneously — the tab instance's view is
+  destroyed while the pushed page is on top), so the tab
+  cannot be corrupted; its next open simply also starts from
+  the landing, which is its own cleared-query state. An
+  explicit `SEARCH_QUERY` still wins over the reset and runs
+  as usual, so the argument path the 8.93 filmography taps
+  rely on (they target the tab destination) is unaffected,
+  and this destination would honour a query the same way.
+- Phone only in practice: TV never navigates to the new
+  destination, and the shared layout's back button stays
+  GONE there (TV uses its own SearchFragment landing and
+  never sets the argument).

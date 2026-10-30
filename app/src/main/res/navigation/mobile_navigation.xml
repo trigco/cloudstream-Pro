@@ -377,6 +377,13 @@
             app:exitAnim="@anim/exit_anim"
             app:popEnterAnim="@anim/enter_anim"
             app:popExitAnim="@anim/exit_anim" />
+        <action
+            android:id="@+id/action_navigation_feed_to_navigation_feed_search"
+            app:destination="@id/navigation_feed_search"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
     </fragment>
 
     <fragment
@@ -422,6 +429,33 @@
             android:name="search_query"
             android:defaultValue=""
             app:argType="string" />
+    </fragment>
+
+    <!-- Phase 8.94 (Job 3): the standalone Search page pushed over
+         the Feed by its header search button (his settled choice
+         2026-10-30). A second SearchFragment instance on the back
+         stack — deliberately NOT a bottom-nav destination: the nav
+         bar hides while it is open (same treatment as
+         navigation_feed_watch), the Feed stays the selected tab
+         underneath, and Back pops straight back to it. Phone only
+         in practice: nothing on TV navigates here. -->
+    <fragment
+        android:id="@+id/navigation_feed_search"
+        android:name="com.lagradost.cloudstream3.ui.search.SearchFragment"
+        android:label="@string/title_search"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_search">
+        <argument
+            android:name="search_query"
+            android:defaultValue=""
+            app:argType="string" />
+        <argument
+            android:name="standalone_search"
+            android:defaultValue="true"
+            app:argType="boolean" />
     </fragment>
 
     <fragment
