@@ -57,6 +57,22 @@ object FeedPool {
 }
 
 /**
+ * Phase 8.96 — the full (UNCAPPED) item list behind every
+ * category row the Feed currently shows, keyed by the row's
+ * name (a tag, or "provider:<apiName>" for a provider row).
+ * FeedFragment's chrome pass already computes these lists to
+ * build the rows (which display only the first 20); it stores
+ * them here so a row's "View All" can open the full category
+ * page (FeedCategoryFragment) with exactly the row's own
+ * membership and order — no second, possibly divergent,
+ * computation. Replaced wholesale on every chrome post.
+ */
+object FeedCategorySession {
+    @Volatile
+    var lists: Map<String, List<FeedEntry>> = emptyMap()
+}
+
+/**
  * Phase 8.18/8.19 — builds the Feed: the homepages of every installed
  * provider with a main page, flattened, interleaved round-robin so no
  * provider dominates, deduplicated by URL. Liked types/providers (see

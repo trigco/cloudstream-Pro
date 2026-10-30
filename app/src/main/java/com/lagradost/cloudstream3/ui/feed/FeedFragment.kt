@@ -147,6 +147,29 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private var chromeRunning = false
     private var chromeDirty = false
 
+    /** Phase 8.96: the pool instance the PHASE-1 chrome pass
+     *  has already posted for (identity-compared). A pass over
+     *  any other pool instance runs phase 1 — the fast,
+     *  pool-internal pass (sections + provider scores, NO
+     *  resolver calls) that ends the skeleton as soon as page 1
+     *  lands; a pass over this same instance runs phase 2, the
+     *  full metadata pass, whose rows merge in behind it. */
+    private var chromePhase1Pool: List<FeedEntry>? = null
+
+    /** Phase 8.96: true while the visible chrome (rows +
+     *  chips) has not been posted for the current browsing
+     *  state — drives the mirror skeleton (in-list skeleton
+     *  rows + the header's chips skeleton). Set at view
+     *  creation and whenever the rows are torn down
+     *  (hideCategoryRows); cleared when a pass posts. */
+    private var chromeAwaitingPost = true
+
+    /** Phase 8.96: the pool head whose metadata pre-kick is
+     *  deferred until the phase-1 chrome pass has posted (see
+     *  the feed observer) — the resolver burst no longer
+     *  competes with the first chrome computation. */
+    private var pendingPreKick: List<FeedEntry> = emptyList()
+
     /** Signature of the rows currently submitted to
      *  [categoryRowsAdapter], so a recompute that changes
      *  nothing never touches the adapter (no relayout, no
@@ -154,10 +177,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private var lastRowsSignature: List<Pair<String, List<String>>> =
         emptyList()
 
-    /** The result of one background chrome pass. */
+    /** The result of one background chrome pass. [fullLists]
+     *  Phase 8.96: every row's UNCAPPED item list, stored into
+     *  FeedCategorySession for the full category page. */
     private data class ChromeResult(
         val rows: List<FeedCategoryRowsAdapter.CategoryRow>,
-        val tabNames: List<String>
+        val tabNames: List<String>,
+        val fullLists: Map<String, List<FeedEntry>>
     )
 
     /** Advanced filter selections (Filters sheet). Null = All. */
@@ -168,9 +194,10 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     /** Phase 8.88: the smart category chosen on the tile row.
      *  Phase 8.90: also carries the special tags (Trending /
-     *  Top 250 / Emotional) chosen on the tag row or a
-     *  category row's View All — one filter slot for every
-     *  non-genre tag. */
+     *  Top 250 / Emotional) chosen on the tag row — one filter
+     *  slot for every non-genre tag. (Phase 8.96: a category
+     *  row's View All no longer lands here — it opens the
+     *  full category page; only chips filter.) */
     private var filterCategory: String? = null
 
     /** The feed-local text query. Phase 8.94 (Job 3): no UI
@@ -189,13 +216,20 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     /** Phase 8.90: the category SECTIONS, ConcatAdapter items
      *  between the hero header and the cards — Home-style rows
      *  (title + red underline + View All pill + poster strip)
-     *  replacing the 8.88 tile row he could not find. View All
-     *  applies the tag as the grid filter and scrolls to the
-     *  grid; a poster tap plays directly. */
+     *  replacing the 8.88 tile row he could not find. A poster
+     *  tap plays directly. Phase 8.96: View All opens the full
+     *  category PAGE (his design — the row holds 20, the rest
+     *  loads on demand in the page); it no longer re-filters
+     *  the grid. Chips still filter the grid (selectTab). */
     private val categoryRowsAdapter = FeedCategoryRowsAdapter(
         onPlay = { entry -> openWatch(entry) },
-        onViewAll = { name -> applyCategoryTab(name, scrollToGrid = true) }
+        onViewAll = { name -> openCategoryPage(name) }
     )
+
+    /** Phase 8.96: mirror-skeleton rows, ConcatAdapter items
+     *  between the category rows and the grid while the chrome
+     *  pass runs (see chromeAwaitingPost). */
+    private val chromeSkeletonAdapter = FeedChromeSkeletonAdapter()
 
     /** Phase 8.88: resolved metadata lands here — queue a calm
      *  refresh of the category surfaces (same debounce-until-idle
@@ -265,22 +299,29 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val gridLayoutManager = GridLayoutManager(context, 3)
         gridLayoutManager.spanSizeLookup =
             object : GridLayoutManager.SpanSizeLookup() {
-                // Category rows (one adapter item PER ROW) span
-                // the full grid width; cards take one column.
+                // Category rows AND their skeleton placeholders
+                // (one adapter item PER ROW) span the full grid
+                // width; cards take one column.
                 override fun getSpanSize(position: Int): Int {
-                    val headers = categoryRowsAdapter.itemCount
+                    val headers = categoryRowsAdapter.itemCount +
+                        chromeSkeletonAdapter.itemCount
                     return if (position < headers) 3 else 1
                 }
             }
         binding.feedRecycler.layoutManager = gridLayoutManager
         binding.feedRecycler.adapter =
-            ConcatAdapter(categoryRowsAdapter, adapter)
+            ConcatAdapter(categoryRowsAdapter, chromeSkeletonAdapter, adapter)
         // Fixed size + no change animations: the grid must never
         // relayout or flash mid-scroll (Phase 8.23 jitter fix).
         binding.feedRecycler.setHasFixedSize(true)
         binding.feedRecycler.itemAnimator = null
         buildCategoryTabs(binding, listOf("All"))
         setupTopBar(binding)
+        // Phase 8.96: from the first frame the chrome is
+        // skeleton (chips pills in the header; the row
+        // placeholders join once the pool lands) until the
+        // phase-1 pass posts.
+        updateChromeSkeleton()
         binding.feedEmptyReset.setOnClickListener {
             // Back to the unfiltered feed: clear the advanced
             // filters (8.85), the tag selection and any in-feed
@@ -336,11 +377,18 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     // and every landing fed the (then main-thread)
                     // full recompute; the hang report traces here
                     // too. Deeper cards still resolve on bind.
-                    context?.let { ctx ->
-                        pool.take(24).forEach {
-                            MetadataResolver.resolveMeta(ctx, it.response)
-                        }
-                    }
+                    // Phase 8.96: the kick itself is DEFERRED —
+                    // it is stored here and fired by
+                    // runPendingPreKick only once the phase-1
+                    // chrome pass has posted (or immediately
+                    // when no pass will run, e.g. a filter is
+                    // live). Firing 24 resolver jobs the moment
+                    // the pool lands made the first chrome pass
+                    // compete with the resolver's Semaphore(3)
+                    // storm — and every landing re-armed this
+                    // scheduler — during the exact seconds the
+                    // page felt hung and the rows were late.
+                    pendingPreKick = pool.take(24)
                     scheduleChromeUpdate()
                     val query = searchQuery
                     if (query.isEmpty()) {
@@ -991,10 +1039,53 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     /** Phase 8.92: rows vanish synchronously the moment a
      *  search/filter takes over (they belong to browsing);
-     *  rebuilding them is the background pass's job. */
+     *  rebuilding them is the background pass's job. Phase
+     *  8.96: the teardown also re-arms the chrome skeleton —
+     *  when browsing resumes, the mirror rows show until the
+     *  rebuild posts (updateChromeSkeleton keeps them hidden
+     *  while the filter itself is live). */
     private fun hideCategoryRows() {
         lastRowsSignature = emptyList()
         categoryRowsAdapter.submit(emptyList())
+        chromeAwaitingPost = true
+        updateChromeSkeleton()
+    }
+
+    /** Phase 8.96: the mirror skeleton's visibility, derived
+     *  in ONE place from the chrome state: skeleton rows (in
+     *  the list, once there is a pool to build rows from) and
+     *  the header's chips pills show exactly while a chrome
+     *  post is outstanding AND the Feed is browsing (no live
+     *  query/filter). The real chips view goes INVISIBLE under
+     *  its skeleton — never GONE — so the floating header's
+     *  measured height, and with it the grid's top padding,
+     *  is identical before and after the swap. */
+    private fun updateChromeSkeleton() {
+        val b = binding ?: return
+        val browsing = searchQuery.isEmpty() && !filtersActive
+        val show = chromeAwaitingPost && browsing
+        chromeSkeletonAdapter.setShowing(show && pool.isNotEmpty())
+        if (show) {
+            b.feedChips.visibility = View.INVISIBLE
+            b.feedChipsSkeleton.isVisible = true
+            b.feedChipsSkeleton.startShimmer()
+        } else {
+            b.feedChips.visibility = View.VISIBLE
+            b.feedChipsSkeleton.stopShimmer()
+            b.feedChipsSkeleton.isVisible = false
+        }
+    }
+
+    /** Phase 8.96: fire the deferred metadata pre-kick (see
+     *  the feed observer). Runs on the main thread at chrome
+     *  post time — the burst now lands AFTER the first rows
+     *  are on screen instead of racing them. */
+    private fun runPendingPreKick() {
+        if (pendingPreKick.isEmpty()) return
+        val kick = pendingPreKick
+        pendingPreKick = emptyList()
+        val ctx = context ?: return
+        kick.forEach { MetadataResolver.resolveMeta(ctx, it.response) }
     }
 
     /**
@@ -1021,8 +1112,14 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             if (pool.isEmpty()) {
                 buildCategoryTabs(b, listOf("All"))
             }
+            // Phase 8.96: no chrome pass will post in this
+            // state, so the deferred pre-kick fires now instead
+            // of waiting for one.
+            runPendingPreKick()
+            updateChromeSkeleton()
             return
         }
+        updateChromeSkeleton()
         if (chromeRunning) {
             // Phase 8.94: a pass is already computing over a
             // snapshot and the inputs just moved (a pool post,
@@ -1061,17 +1158,31 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         val poolSnap = pool
         val ratingsSnap = fragmentRatings.toMap()
         val appCtx = context?.applicationContext ?: return
+        // Phase 8.96: TWO-PHASE chrome. The first pass over a
+        // pool is phase 1 — pool-internal data only (provider
+        // sections + the responses' own scores; NO resolver
+        // calls), so it is fast enough to end the skeleton the
+        // moment page 1 lands instead of seconds later. The
+        // follow-up pass over the SAME pool is phase 2 — the
+        // full computation (metadata genres/regions, resolved
+        // ratings) — and merges in behind phase 1's rows: the
+        // signature gate below means an unchanged model never
+        // touches the adapter, so the merge cannot flicker.
+        val phase = if (chromePhase1Pool === poolSnap) 2 else 1
         chromeRunning = true
         chromeDirty = false
         chromeJob = viewLifecycleOwner.lifecycleScope
             .launch(Dispatchers.Default) {
-                val result = computeChrome(poolSnap, ratingsSnap, appCtx)
+                val result = computeChrome(poolSnap, ratingsSnap, appCtx, phase)
                 withContext(Dispatchers.Main) {
                     chromeRunning = false
                     val bb = binding
                     if (bb != null && pool === poolSnap &&
                         searchQuery.isEmpty() && !filtersActive
                     ) {
+                        if (phase == 1) chromePhase1Pool = poolSnap
+                        chromeAwaitingPost = false
+                        FeedCategorySession.lists = result.fullLists
                         val signature = result.rows.map { row ->
                             row.name to row.items.map { it.response.url }
                         }
@@ -1082,7 +1193,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                         buildCategoryTabs(
                             bb, listOf("All") + result.tabNames
                         )
-                        if (chromeDirty) {
+                        // Phase 8.96: the deferred metadata
+                        // pre-kick fires only now — the first
+                        // rows are on screen before the resolver
+                        // burst starts (and phase 2, queued
+                        // below, is what the burst then feeds).
+                        runPendingPreKick()
+                        updateChromeSkeleton()
+                        if (chromeDirty || phase == 1) {
+                            // A phase-1 post ALWAYS queues its
+                            // phase-2 follow-up (unless the
+                            // scheduler's state changed above).
                             chromeDirty = false
                             scheduleChromeUpdate()
                         }
@@ -1110,8 +1231,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun computeChrome(
         poolSnap: List<FeedEntry>,
         ratingsSnap: Map<String, String>,
-        appCtx: Context
+        appCtx: Context,
+        phase: Int
     ): ChromeResult {
+        // Phase 8.96: phase 1 is pool-internal only — it never
+        // touches a resolver, so the per-pass meta memo below
+        // is neither installed nor needed there.
+        if (phase == 1) return computeChromePhase1(poolSnap, appCtx)
         // Phase 8.94: install the per-pass meta memo (see
         // passMetaCache) for the duration of the pass.
         // Phase 8.95 (crash fix): the memo map must tolerate
@@ -1130,6 +1256,210 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         } finally {
             passMetaCache = null
         }
+    }
+
+    /**
+     * Phase 8.96 — PHASE 1 of the chrome: everything derivable
+     * from the pool entries THEMSELVES. Provider section tags
+     * (FeedSectionTags over the entries' shelf provenance),
+     * the responses' own provider scores (Top 250 / must-watch
+     * / the region Top rows, score-ordered), title-keyword
+     * genres, and the per-provider rows. NO MetadataResolver
+     * and NO TitleResolver calls happen anywhere below — the
+     * metadata-derived rows (smart categories by resolved
+     * language/country, canonical resolved genres, New Release
+     * by resolved year, resolved-rating orderings) are phase
+     * 2's contribution and merge in behind this model.
+     * Same slot order as phase 2 wherever the two overlap.
+     */
+    private fun computeChromePhase1(
+        poolSnap: List<FeedEntry>,
+        appCtx: Context
+    ): ChromeResult {
+        val memo = mutableMapOf<String, List<FeedEntry>>()
+        fun itemsOf(tag: String): List<FeedEntry> =
+            memo.getOrPut(tag) { computeTagItemsPhase1(tag, poolSnap) }
+        fun rowOf(tag: String) = FeedCategoryRowsAdapter.CategoryRow(
+            tag, displayTitleFor(tag), itemsOf(tag).take(ROW_ITEM_CAP)
+        )
+        val hidden = hiddenTags(appCtx)
+        fun wanted(tag: String) =
+            tag !in hidden && itemsOf(tag).size >= ROW_MIN_ITEMS
+        val rows = mutableListOf<FeedCategoryRowsAdapter.CategoryRow>()
+        // Fixed head + the must-watch pair.
+        for (tag in listOf(
+            TAG_TRENDING, TAG_TOP_RATED,
+            TAG_MUST_WATCH_DRAMA, TAG_MUST_WATCH_SERIES
+        )) {
+            if (wanted(tag)) rows += rowOf(tag)
+        }
+        // Provider-section rows, in the user's order.
+        for (tag in orderedSectionTags(poolSnap, appCtx, { t -> itemsOf(t) })) {
+            if (tag == TAG_TRENDING) continue
+            if (wanted(tag)) rows += rowOf(tag)
+        }
+        // Region Top rows from section membership, ordered by
+        // the responses' own scores (phase 2 re-orders by
+        // resolved data and adds the New Release variants).
+        for (tag in listOf(TAG_TOP_ANIME, TAG_TOP_KDRAMA, TAG_TOP_CDRAMA)) {
+            if (wanted(tag)) rows += rowOf(tag)
+        }
+        // Genre rows from title keywords ∪ section tags, for
+        // genres no earlier slot already rowed.
+        val rowed = rows.map { it.name }.toSet()
+        val genreRows = genreTags
+            .filter { it !in rowed }
+            .map { tag -> tag to itemsOf(tag).size }
+            .filter { it.first !in hidden && it.second >= ROW_MIN_ITEMS }
+            .sortedByDescending { it.second }
+        for ((tag, _) in genreRows) {
+            rows += rowOf(tag)
+        }
+        val tagRows = rows.take(ROW_CAP)
+        // Per-provider rows (same construction as phase 2).
+        val providerGroups = poolSnap.groupBy { it.apiName }
+            .filterValues { it.size >= PROVIDER_ROW_MIN_ITEMS }
+            .entries.sortedByDescending { it.value.size }
+            .take(PROVIDER_ROW_CAP)
+        val providerRows = providerGroups.map { (api, items) ->
+            FeedCategoryRowsAdapter.CategoryRow(
+                PROVIDER_TAG_PREFIX + api, api,
+                items.take(ROW_ITEM_CAP)
+            )
+        }
+        val fullLists = mutableMapOf<String, List<FeedEntry>>()
+        tagRows.forEach { fullLists[it.name] = itemsOf(it.name) }
+        providerGroups.forEach { (api, items) ->
+            fullLists[PROVIDER_TAG_PREFIX + api] = items
+        }
+        return ChromeResult(
+            tagRows + providerRows,
+            computePresentTagsPhase1(poolSnap, appCtx, { t -> itemsOf(t) }, hidden),
+            fullLists
+        )
+    }
+
+    /** Phase 8.96: the phase-1 item rule — [computeTagItems]
+     *  restricted to pool-internal data (sections, response
+     *  scores, response types, title keywords). */
+    private fun computeTagItemsPhase1(
+        tag: String,
+        poolSnap: List<FeedEntry>
+    ): List<FeedEntry> = when (tag) {
+        TAG_TRENDING -> {
+            val shelved = poolSnap.filter {
+                FeedSectionTags.TRENDING in sectionTagsOf(it)
+            }
+            if (shelved.size >= ROW_MIN_ITEMS) {
+                shelved
+            } else {
+                poolSnap.take(30)
+            }
+        }
+        TAG_TOP_RATED -> byProviderScoreDesc(
+            poolSnap.filter { providerScoreOf(it) != null }
+        )
+        TAG_MUST_WATCH_DRAMA -> mustWatchPhase1(
+            poolSnap.filter {
+                "Drama" in sectionTagsOf(it) ||
+                    genreMatches(it.response.name, "Drama")
+            }
+        )
+        TAG_MUST_WATCH_SERIES -> mustWatchPhase1(
+            poolSnap.filter { isSeriesType(it.response.type) }
+        )
+        TAG_TOP_ANIME -> byProviderScoreDesc(
+            poolSnap.filter {
+                FeedSectionTags.ANIME in sectionTagsOf(it) ||
+                    it.response.type == TvType.Anime ||
+                    it.response.type == TvType.OVA
+            }
+        )
+        TAG_TOP_KDRAMA -> byProviderScoreDesc(
+            poolSnap.filter { FeedSectionTags.K_DRAMA in sectionTagsOf(it) }
+        )
+        TAG_TOP_CDRAMA -> byProviderScoreDesc(
+            poolSnap.filter { FeedSectionTags.C_DRAMA in sectionTagsOf(it) }
+        )
+        else -> poolSnap.filter {
+            tag in sectionTagsOf(it) ||
+                genreMatches(it.response.name, tag)
+        }
+    }
+
+    /** The response's own provider score, normalised the same
+     *  way scoreOf reads it — the only score phase 1 may use
+     *  (resolved universal ratings are phase 2 data). */
+    private fun providerScoreOf(entry: FeedEntry): Double? =
+        entry.response.score?.toDouble(10)?.takeIf { it > 0.0 }
+
+    /** Provider-score-descending order; unscored items sink
+     *  to the end keeping pool order (stable sort). */
+    private fun byProviderScoreDesc(
+        items: List<FeedEntry>
+    ): List<FeedEntry> =
+        items.sortedWith(
+            compareByDescending { providerScoreOf(it) ?: -1.0 }
+        )
+
+    /** Phase 8.96: must-watch from provider scores only (the
+     *  phase-1 twin of mustWatchItems). */
+    private fun mustWatchPhase1(base: List<FeedEntry>): List<FeedEntry> {
+        val high = base
+            .filter {
+                (providerScoreOf(it) ?: 0.0) >= MUST_WATCH_MIN_SCORE
+            }
+            .sortedByDescending { providerScoreOf(it) }
+        return if (high.size >= ROW_MIN_ITEMS) high else base
+    }
+
+    /** Series-ness from the LISTING's declared type only —
+     *  isSeriesEntry without its TitleResolver lookup. */
+    private fun isSeriesType(type: TvType?): Boolean =
+        type == TvType.TvSeries || type == TvType.AsianDrama ||
+            type == TvType.Anime || type == TvType.OVA
+
+    /** Phase 8.96: the phase-1 chip set — computePresentTags
+     *  restricted to pool-internal presence: sections,
+     *  provider scores, title keywords. Metadata-derived tags
+     *  (smart categories by resolved language/country, the
+     *  region Top/New variants) join in phase 2. */
+    private fun computePresentTagsPhase1(
+        poolSnap: List<FeedEntry>,
+        appCtx: Context,
+        itemsOf: (String) -> List<FeedEntry>,
+        hidden: Set<String>
+    ): List<String> {
+        if (poolSnap.isEmpty()) return emptyList()
+        val tags = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        fun add(tag: String) {
+            if (tag !in hidden && seen.add(tag)) tags += tag
+        }
+        add(TAG_TRENDING)
+        if (poolSnap.any { providerScoreOf(it) != null }) {
+            add(TAG_TOP_RATED)
+        }
+        for (tag in listOf(TAG_MUST_WATCH_DRAMA, TAG_MUST_WATCH_SERIES)) {
+            if (itemsOf(tag).isNotEmpty()) add(tag)
+        }
+        orderedSectionTags(poolSnap, appCtx, itemsOf).forEach { tag ->
+            if (itemsOf(tag).isNotEmpty()) add(tag)
+        }
+        for (tag in listOf(TAG_TOP_ANIME, TAG_TOP_KDRAMA, TAG_TOP_CDRAMA)) {
+            if (itemsOf(tag).isNotEmpty()) add(tag)
+        }
+        if (poolSnap.any { entry ->
+                genreMatches(entry.response.name, "Drama") ||
+                    genreMatches(entry.response.name, "Romance")
+            }
+        ) {
+            add(TAG_EMOTIONAL)
+        }
+        genreTags.forEach { genre ->
+            if (itemsOf(genre).isNotEmpty()) add(genre)
+        }
+        return tags
     }
 
     private fun computeChromePass(
@@ -1222,23 +1552,34 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // own name, so content no tag claimed still appears in
         // a row (his "নীচে গেলে অনেক কন্টেন্ট ক্যাটাগরি ছাড়া
         // আছে"). They are not tags: the Feed Categories
-        // settings page does not govern them, and their View
-        // All routes to the Source filter slot instead.
-        val providerRows = poolSnap.groupBy { it.apiName }
+        // settings page does not govern them. Phase 8.96:
+        // their View All opens the full category page like
+        // every other row (the Source-filter route is gone).
+        val providerGroups = poolSnap.groupBy { it.apiName }
             .filterValues { it.size >= PROVIDER_ROW_MIN_ITEMS }
             .entries.sortedByDescending { it.value.size }
             .take(PROVIDER_ROW_CAP)
-            .map { (api, items) ->
-                FeedCategoryRowsAdapter.CategoryRow(
-                    PROVIDER_TAG_PREFIX + api, api,
-                    items.take(ROW_ITEM_CAP)
-                )
-            }
+        val providerRows = providerGroups.map { (api, items) ->
+            FeedCategoryRowsAdapter.CategoryRow(
+                PROVIDER_TAG_PREFIX + api, api,
+                items.take(ROW_ITEM_CAP)
+            )
+        }
+        // Phase 8.96: the rows' full uncapped lists, for the
+        // category page (FeedCategorySession) — the same memo
+        // the rows were cut from, so the page can never
+        // disagree with its row.
+        val fullLists = mutableMapOf<String, List<FeedEntry>>()
+        tagRows.forEach { fullLists[it.name] = itemsOf(it.name) }
+        providerGroups.forEach { (api, items) ->
+            fullLists[PROVIDER_TAG_PREFIX + api] = items
+        }
         return ChromeResult(
             tagRows + providerRows,
             computePresentTags(
                 poolSnap, appCtx, { t -> itemsOf(t) }, hidden, ratingsSnap
-            )
+            ),
+            fullLists
         )
     }
 
@@ -1363,9 +1704,12 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     private fun applyCategoryTab(tag: String, scrollToGrid: Boolean) {
         val b = binding ?: return
-        // Phase 8.92: a provider row's View All lands in the
-        // Source filter slot (provider rows are not tags, so
-        // they never travel the category/genre slots below).
+        // Phase 8.92: a provider row's View All landed in the
+        // Source filter slot. Phase 8.96: rows open the full
+        // category page instead (openCategoryPage), so this
+        // branch is unreachable from the rows now — kept for
+        // the chip path's completeness (chips never carry the
+        // provider: prefix).
         if (tag.startsWith(PROVIDER_TAG_PREFIX)) {
             val api = tag.removePrefix(PROVIDER_TAG_PREFIX)
             val already = filterSource == api &&
@@ -1482,6 +1826,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             duration = 180L
             addUpdateListener { animator ->
                 header.translationY = animator.animatedValue as Float
+                // Phase 8.96: the grid's top padding tracks the
+                // header's live position (see
+                // updateHeaderPadding) — content stays glued
+                // to the header's bottom edge while it slides,
+                // and no reserved band is left behind once it
+                // is gone.
+                updateHeaderPadding(binding)
             }
             start()
         }
@@ -1642,17 +1993,22 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         binding.feedSearchButton.setOnClickListener {
             // Phase 8.94 (Job 3) — SETTLED behaviour, his final
             // word 2026-10-30 after the 8.90/8.92 flip-flop: the
-            // button pushes the standalone smart Search page
-            // (navigation_feed_search — a second SearchFragment
-            // instance) OVER the Feed on the back stack. Not a
-            // bottom-nav tab switch (the Feed stays the selected
-            // destination underneath; the nav bar hides while
-            // the page is open, exactly like the watch page) and
-            // not the 8.92 in-feed expanding row (removed). Back
-            // pops straight back to the Feed, whose grid scroll
-            // state is saved/restored across the push by
-            // onDestroyView / onBindingCreated (listState), the
-            // same mechanism the watch page relies on.
+            // button pushes a Search page (navigation_feed_search)
+            // OVER the Feed on the back stack. Not a bottom-nav
+            // tab switch (the Feed stays the selected destination
+            // underneath; the nav bar hides while the page is
+            // open, exactly like the watch page) and not the 8.92
+            // in-feed expanding row (removed). Back pops straight
+            // back to the Feed, whose grid scroll state is
+            // saved/restored across the push by onDestroyView /
+            // onBindingCreated (listState), the same mechanism
+            // the watch page relies on.
+            // Phase 8.96 (Job 1): the page is now the FEED-scoped
+            // search (FeedSearchFragment) — the 8.94 page reused
+            // the MAIN SearchFragment (global search), and his
+            // correction (2026-10-30 11:15) settled that feed
+            // search must work on the Feed itself: pool first,
+            // feed grid, feed watch screen.
             activity?.navigate(
                 R.id.action_navigation_feed_to_navigation_feed_search
             )
@@ -1677,10 +2033,22 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * padding (and mirrors it onto the skeleton + refresh
      * ring). Phase 8.92: what is left of the old hero chrome
      * function — the hero itself is gone.
+     * Phase 8.96 (scroll-gap fix): the reserve is the header's
+     * VISIBLE height — full height plus its (negative)
+     * translationY. The old formula always reserved the full
+     * height, so when auto-hide slid the header away, the
+     * reserved band stayed behind as a large empty gap above
+     * the first row whenever the list rested near the top
+     * (his circled screenshot: a ~header-tall black band over
+     * the Trending row). The animator now re-runs this on
+     * every frame, so the padding follows the header exactly;
+     * fully hidden, the reserve collapses to the plain 6dp.
      */
     private fun updateHeaderPadding(binding: FragmentFeedBinding) {
         if (headerFullHeight > 0) {
-            val topPad = headerFullHeight + dp(6)
+            val topPad = (headerFullHeight +
+                binding.feedHeader.translationY).toInt()
+                .coerceAtLeast(0) + dp(6)
             binding.feedRecycler.setPadding(
                 binding.feedRecycler.paddingLeft, topPad,
                 binding.feedRecycler.paddingRight,
@@ -1741,8 +2109,19 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             }
         }
         filterGenre?.let { genre ->
+            // Phase 8.96: the genre filter must use the SAME
+            // membership rule as the genre ROWS (tagPredicate:
+            // provider section tags ∪ resolved genres ∪ title
+            // keywords). It previously used genreMatchesEntry
+            // alone — an item shelved by its provider under a
+            // genre shelf ("Animation", "Comedy", …) whose title
+            // carries no genre keyword and which has no resolved
+            // metadata appeared in the row but filtered to an
+            // EMPTY grid (his "ক্যাটাগরির মধ্যে কিছুই থাকে না").
+            // categoryMatchesEntry IS tagPredicate for
+            // non-curated tags, so filter ≡ row by construction.
             out = out.filter {
-                genreMatchesEntry(it, genre)
+                categoryMatchesEntry(it, genre)
             }
         }
         filterYear?.let { year ->
@@ -2201,6 +2580,26 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 putString("apiName", entry.apiName)
                 putString("name", entry.response.name)
                 putString("posterUrl", entry.response.posterUrl)
+            }
+        )
+    }
+
+    /** Phase 8.96 (Job 3): a category row's View All opens the
+     *  full category page with the row's complete list (from
+     *  FeedCategorySession — the very list the row was cut
+     *  from). The page's title is the row's own title; provider
+     *  rows show the bare provider name. */
+    private fun openCategoryPage(name: String) {
+        val title = if (name.startsWith(PROVIDER_TAG_PREFIX)) {
+            name.removePrefix(PROVIDER_TAG_PREFIX)
+        } else {
+            displayTitleFor(name)
+        }
+        activity.navigate(
+            R.id.action_navigation_feed_to_navigation_feed_category,
+            Bundle().apply {
+                putString(FeedCategoryFragment.ARG_TAG, name)
+                putString(FeedCategoryFragment.ARG_TITLE, title)
             }
         )
     }

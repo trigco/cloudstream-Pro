@@ -73,6 +73,8 @@
             app:itemActiveIndicatorStyle="@style/NavActiveIndicator"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
+            app:itemTextAppearanceActive="@style/NavLabelActive"
+            app:itemTextAppearanceInactive="@style/NavLabelInactive"
 
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"

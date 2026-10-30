@@ -6,10 +6,11 @@
      hides by sliding up (Phase 8.23).
      Phase 8.92: the hero is REMOVED entirely (his verdict —
      unstable, odd shadow); the grid's ConcatAdapter is now
-     category rows + cards. The header search button expands
-     the in-feed search row below (feed search stays in the
-     Feed — 8.90's jump to the main Search tab was reverted on
-     his correction). -->
+     category rows + cards.
+     Phase 8.96: the ConcatAdapter is skeleton rows (while the
+     chrome pass runs) + category rows + cards, and the header
+     search button pushes the FEED-scoped search page
+     (navigation_feed_search, FeedSearchFragment). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -49,33 +50,14 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
+                    <!-- Phase 8.96: the loading skeleton mirrors
+                         the final page's structure — category
+                         rows first (same mirror layout the
+                         in-list skeleton rows use), then the
+                         For You poster grid. -->
+                    <include layout="@layout/feed_category_row_skeleton" />
 
-                        <include
-                            layout="@layout/feed_skeleton_item"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_margin="6dp"
-                            android:layout_weight="1" />
-
-                        <include
-                            layout="@layout/feed_skeleton_item"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_margin="6dp"
-                            android:layout_weight="1" />
-
-                        <include
-                            layout="@layout/feed_skeleton_item"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_margin="6dp"
-                            android:layout_weight="1" />
-
-                    </LinearLayout>
+                    <include layout="@layout/feed_category_row_skeleton" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -261,21 +243,81 @@
              the Feed. Settled behaviour, his final word
              2026-10-30: not a tab switch, not an expanding row. -->
 
-        <HorizontalScrollView
+        <!-- Phase 8.96: the chips live in a FrameLayout so the
+             chips SKELETON can overlay them while the chrome
+             pass runs. The real chips view stays in the layout
+             (INVISIBLE, not gone, while the skeleton shows), so
+             the floating header's measured height — and with it
+             the grid's top padding — never changes across the
+             skeleton → real swap. -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:scrollbars="none">
+            android:layout_height="wrap_content">
 
-            <LinearLayout
-                android:id="@+id/feed_chips"
-                android:layout_width="wrap_content"
+            <HorizontalScrollView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal" />
+                android:layout_marginTop="10dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:scrollbars="none">
 
-        </HorizontalScrollView>
+                <LinearLayout
+                    android:id="@+id/feed_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+            </HorizontalScrollView>
+
+            <com.facebook.shimmer.ShimmerFrameLayout
+                android:id="@+id/feed_chips_skeleton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="54dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="86dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="70dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="98dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="62dp"
+                        android:layout_height="34dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                </LinearLayout>
+
+            </com.facebook.shimmer.ShimmerFrameLayout>
+
+        </FrameLayout>
 
         <!-- Phase 8.85: the "For You" header (red underline, 8.73
              treatment) moves into the page flow above the grid —

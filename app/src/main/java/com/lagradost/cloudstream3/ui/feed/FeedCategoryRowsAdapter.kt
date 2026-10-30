@@ -21,9 +21,11 @@ import com.lagradost.cloudstream3.utils.getImageFromDrawable
  * "View All ›" pill) over a horizontal poster strip, built
  * from the tag vocabulary he listed: Trending, Top 250, the
  * region categories, genres and Emotional — computed by
- * FeedFragment from the pool. "View All ›" (or the title)
- * applies that tag as the grid's filter and scrolls to the
- * grid; a poster tap plays directly, like a grid card.
+ * FeedFragment from the pool. A poster tap plays directly,
+ * like a grid card. "View All ›" (or the title) applied the
+ * tag as the grid's filter until Phase 8.96 — it now opens
+ * the full category page (FeedCategoryFragment) with the
+ * row's complete list.
  */
 class FeedCategoryRowsAdapter(
     private val onPlay: (FeedEntry) -> Unit,

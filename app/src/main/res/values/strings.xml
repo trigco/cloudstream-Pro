@@ -440,6 +440,7 @@
     <string name="feed_hide_message">Hide this from your feed? It will not show again.</string>
     <string name="feed_search_hint">Search feed…</string>
     <string name="feed_search_close">Close search</string>
+    <string name="feed_search_empty">Nothing in the feed matches this search.</string>
     <string name="feed_title">Feed</string>
     <string name="feed_filters">Filters</string>
     <string name="feed_filter_genre">Genre</string>

@@ -961,6 +961,20 @@
         <item name="android:color">@color/extButtonBackground</item>
     </style>
 
+    <!-- Phase 8.96 (Job 4): bottom-nav label sizes. The Material
+         default 12sp truncated "Downloads" to "Downlo…" at six
+         items on his narrow screen: 360dp / 6 = 60dp per item,
+         and 9 glyphs at 12sp need ~56dp before item padding.
+         11sp needs ~51dp, which fits the 60dp slot; "Settings"
+         (8 glyphs, ~46dp) fits with more room. -->
+    <style name="NavLabelActive" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="NavLabelInactive" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textSize">11sp</item>
+    </style>
+
     <style name="BlackButton" parent="NiceButton">
         <item name="strokeColor">?attr/textColor</item>
         <item name="backgroundTint">?attr/iconGrayBackground</item>
