@@ -350,9 +350,9 @@
                  packed immediately after the title (fixed 8dp gap,
                  centered on the title's first line) — it used to be
                  a bare "Info >" text floating at the row's far end
-                 with a chevron he disliked. Still a TextView so
-                 FeedWatchFragment's setText(Info/Less) keeps working;
-                 the icon is now a leading ⓘ, no chevron. -->
+                 with a chevron he disliked. The icon is a leading
+                 ⓘ, no chevron. Phase 8.93: tapping it opens the
+                 FeedInfoSheet (description / cast / trailer). -->
             <TextView
                 android:id="@+id/feed_watch_more"
                 android:layout_width="wrap_content"
@@ -387,15 +387,9 @@
             android:textColor="@color/grayTextColor"
             android:textSize="12sp" />
 
-        <TextView
-            android:id="@+id/feed_watch_storyline_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:lineSpacingMultiplier="1.25"
-            android:textColor="#FFCCCCCC"
-            android:textSize="13sp"
-            android:visibility="gone" />
+        <!-- Phase 8.93: the inline storyline TextView is gone —
+             the plot now lives in the FeedInfoSheet opened by the
+             Info pill above. -->
 
         <!-- 8.71: one-line pill row, natural widths inside a
              HorizontalScrollView — four pills never squeeze or

@@ -305,20 +305,40 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchToTop.isVisible = first >= 8
             }
         })
-        // Storyline: hidden by default; the "More" label beside
-        // the title expands it ("Less" collapses). Expanding
-        // changes the title box height, so the collapse
-        // animation's reference height is re-measured.
+        // Phase 8.93: the Info pill opens the rich details sheet
+        // (FeedInfoSheet: description, cast, trailer) — it no
+        // longer expands the plot inline under the title.
+        binding.feedWatchMore.isVisible = true
         binding.feedWatchMore.setOnClickListener { view ->
             view.hapticTick()
-            val open = !binding.feedWatchStorylineText.isVisible
-            binding.feedWatchStorylineText.isVisible = open
-            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_info)
-            val box = binding.feedWatchTitleBox
-            val params = box.layoutParams
-            params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-            box.layoutParams = params
-            box.post { titleFullHeight = box.height }
+            val act = activity ?: return@setOnClickListener
+            val watchUrl = FeedPlayer.currentUrl
+                ?: arguments?.getString("url") ?: return@setOnClickListener
+            val watchApi = FeedPlayer.currentApiName
+                ?: arguments?.getString("apiName") ?: return@setOnClickListener
+            val watchName = FeedPlayer.currentName
+                ?: arguments?.getString("name") ?: watchUrl
+            val watchPoster = FeedPlayer.currentPoster
+                ?: arguments?.getString("posterUrl")
+            FeedInfoSheet.show(
+                act, watchUrl, watchApi, watchName, watchPoster,
+                onPlay = {
+                    if (FeedPlayer.currentUrl == watchUrl) {
+                        // Already this item: just resume it.
+                        FeedPlayer.exo?.playWhenReady = true
+                    } else {
+                        context?.let {
+                            FeedPlayer.play(
+                                it, watchUrl, watchApi, watchName, watchPoster
+                            )
+                        }
+                    }
+                },
+                onOpenDetails = {
+                    FeedPool.entries.firstOrNull { it.response.url == watchUrl }
+                        ?.let { entry -> act.loadSearchResult(entry.response) }
+                }
+            )
         }
         binding.feedWatchToTop.setOnClickListener { view ->
             view.hapticTick()
@@ -783,13 +803,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             )
         }
-        // Storyline (plot) of the loaded page, collapsed by
-        // default; the "More" label only appears with a plot.
-        val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
-        binding.feedWatchMore.isVisible = plot != null
+        // Phase 8.93: the Info pill stays available whenever the
+        // watch screen is up — the sheet loads whatever the
+        // player has not loaded yet, so it no longer waits for a
+        // plot to exist.
+        binding.feedWatchMore.isVisible = true
         binding.feedWatchMore.setText(R.string.feed_info)
-        binding.feedWatchStorylineText.isVisible = false
-        if (plot != null) binding.feedWatchStorylineText.text = plot
         // Phase 8.42: the collapse animation's full height was
         // measured once per view -- a new item whose title/meta
         // needs a different height kept the old (smaller) one
