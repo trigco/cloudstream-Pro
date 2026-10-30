@@ -96,15 +96,20 @@ class FeedAdapter(
             )
             val rating = ratingOverrides[ratingKey]
                 ?: MetadataResolver.cachedFor(context, response)
-            if (rating == null && response.score == null) {
+            if (rating == null && response.score == null &&
+                !resolutionsPaused
+            ) {
                 MetadataResolver.resolve(context, response)
             }
             // Phase 8.88: metadata (genres / language / country)
             // for the Feed's categories — the fragment pre-kicks
             // the pool's head; cards deeper in the pool resolve
             // here on bind. Self-guarded (cached / missed /
-            // in-flight items skip instantly).
-            if (MetadataResolver.metaCachedFor(context, response) == null) {
+            // in-flight items skip instantly). Phase 8.92: also
+            // paused while the grid scrolls (see companion).
+            if (!resolutionsPaused &&
+                MetadataResolver.metaCachedFor(context, response) == null
+            ) {
                 MetadataResolver.resolveMeta(context, response)
             }
             // dubStatus is declared on AnimeSearchResponse only.
@@ -178,6 +183,15 @@ class FeedAdapter(
     }
 
     companion object {
+        /** Phase 8.92: while the Feed grid is scrolling, card
+         *  binds stop kicking NEW background metadata/rating
+         *  resolutions (cached values still render). The Feed
+         *  fragment flips this from its scroll listener; the
+         *  resolver storm used to compete with fling rendering
+         *  on Android 8.1 and the page read as hung. */
+        @Volatile
+        var resolutionsPaused: Boolean = false
+
         /**
          * The title a card/header shows. Some providers hand back a
          * blank (or all-decoration) name — fall back to a readable

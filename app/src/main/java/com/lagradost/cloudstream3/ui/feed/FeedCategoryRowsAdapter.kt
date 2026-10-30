@@ -42,6 +42,11 @@ class FeedCategoryRowsAdapter(
     private var rows: List<CategoryRow> = emptyList()
 
     fun submit(newRows: List<CategoryRow>) {
+        // Phase 8.92: an identical resubmit (the background
+        // chrome pass re-derives the same rows after a metadata
+        // landing that changed nothing visible) must not
+        // relayout the whole header block.
+        if (rows == newRows) return
         rows = newRows
         notifyDataSetChanged()
     }

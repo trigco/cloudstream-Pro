@@ -6,10 +6,14 @@ import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.GridLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -24,10 +28,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.navigationrail.NavigationRailView
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentFeedBinding
@@ -43,8 +45,10 @@ import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Implemented by the Feed tab so MainActivity can ask it to scroll
@@ -112,32 +116,44 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // sheet's Rating tab reads resolved scores from here.
         fragmentRatings[key] = rating
         adapter.setRatingOverride(key, rating)
-        // Phase 8.90: a fresh rating can change the Top /
-        // must-watch curations — drop the memoised tag items
-        // (they rebuild lazily; the rows themselves refresh on
-        // the meta debounce / next pool pass).
-        tagItemsCache.clear()
+        // Phase 8.92: a fresh rating can change the Top /
+        // must-watch curations, but the memoised tag items are
+        // NOT dropped here anymore — ratings land in bursts
+        // while scrolling, and clearing per rating forced a
+        // full cold recompute of every tag on the MAIN thread
+        // at the next chrome pass (a verified hang source). The
+        // generation bump invalidates lazily, once, on next use;
+        // the rows refresh via the same debounced pass as meta.
+        tagGeneration++
+        searchHandler.removeCallbacks(metaApplyRunnable)
+        searchHandler.postDelayed(metaApplyRunnable, 900L)
     }
 
     private val fragmentRatings = mutableMapOf<String, String>()
 
-    // ---------- Phase 8.85: hero + advanced filters state ----------
+    // ---------- Phase 8.85: advanced filters state ----------
+    // Phase 8.92: the Feed hero is GONE (his verdict — it looked
+    // unstable and carried an odd shadow). The ConcatAdapter is
+    // now category rows + the For You grid, nothing else. The
+    // Home hero is a separate surface and is untouched.
 
-    private val heroAdapter = FeedHeroAdapter(onPlay = { entry -> openWatch(entry) })
+    /** Phase 8.92: the background pass that computes the
+     *  category rows + chip names off the main thread (see
+     *  scheduleChromeUpdate). */
+    private var chromeJob: Job? = null
 
-    /** Phase 8.87: the hero is the grid's first list item now; this
-     *  header adapter owns the pager + backdrop (see
-     *  FeedHeroHeaderAdapter). The fragment only submits entries /
-     *  visibility and runs the auto-advance timer. */
-    private val heroHeaderAdapter = FeedHeroHeaderAdapter(heroAdapter)
-    private var heroEntries: List<FeedEntry> = emptyList()
-    private val heroHandler = Handler(Looper.getMainLooper())
-    private val heroAutoRunnable = object : Runnable {
-        override fun run() {
-            heroHeaderAdapter.advance()
-            heroHandler.postDelayed(this, 5_000L)
-        }
-    }
+    /** Signature of the rows currently submitted to
+     *  [categoryRowsAdapter], so a recompute that changes
+     *  nothing never touches the adapter (no relayout, no
+     *  flash). */
+    private var lastRowsSignature: List<Pair<String, List<String>>> =
+        emptyList()
+
+    /** The result of one background chrome pass. */
+    private data class ChromeResult(
+        val rows: List<FeedCategoryRowsAdapter.CategoryRow>,
+        val tabNames: List<String>
+    )
 
     /** Advanced filter selections (Filters sheet). Null = All. */
     private var filterGenre: String? = null
@@ -152,12 +168,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      *  non-genre tag. */
     private var filterCategory: String? = null
 
-    /** Phase 8.90: the feed-local text query. The inline search
-     *  field is gone (the header search button opens the main
-     *  Search tab now), so nothing writes this anymore — it
-     *  stays as the single query source the search/filter code
-     *  paths were built around, always empty in practice. */
+    /** The feed-local text query. Phase 8.92: written again —
+     *  the header search button expands an in-feed search row
+     *  (his correction: 8.90 sent the button to the main Search
+     *  tab; feed search must stay inside the Feed). Typing
+     *  filters the loaded pool through [applySearch]. */
     private var searchQuery: String = ""
+
+    /** Pending debounced keystroke task for the search row. */
+    private var pendingSearchText: Runnable? = null
 
     private val filtersActive: Boolean
         get() = filterGenre != null || filterYear != null ||
@@ -193,11 +212,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 searchHandler.postDelayed(this, 600L)
                 return
             }
-            val b = binding ?: return
-            updateCategoriesRow(b)
-            buildCategoryTabs(b)
-            // An active genre/category filter may match more (or
-            // fewer) items now that real genres are known.
+            // Phase 8.92: rows + chips recompute OFF the main
+            // thread (scheduleChromeUpdate) — this runnable only
+            // coalesces the burst and re-runs an active filter,
+            // whose match set may have grown with the new meta.
+            scheduleChromeUpdate()
             if (filterGenre != null || filterCategory != null) {
                 applySearch(searchQuery)
             }
@@ -238,41 +257,35 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     override fun onBindingCreated(binding: FragmentFeedBinding) {
         // Phase 8.85: 3 columns like Home's grid (was 2).
-        // Phase 8.87: the hero rides as list position 0 (full span)
-        // in a ConcatAdapter ahead of the cards — as a normal list
-        // element it scrolls away with the content and this
-        // RecyclerView clips it like every other row.
+        // Phase 8.92: the ConcatAdapter is category rows + cards
+        // — the hero header item is gone with the hero itself.
         val gridLayoutManager = GridLayoutManager(context, 3)
         gridLayoutManager.spanSizeLookup =
             object : GridLayoutManager.SpanSizeLookup() {
-                // Phase 8.88: both header items (hero, categories)
-                // span the full grid width; cards take one column.
-                // Phase 8.90: the categories are now one adapter
-                // item PER ROW — same rule, the header block is
-                // hero + however many rows are showing.
+                // Category rows (one adapter item PER ROW) span
+                // the full grid width; cards take one column.
                 override fun getSpanSize(position: Int): Int {
-                    val headers = heroHeaderAdapter.itemCount +
-                        categoryRowsAdapter.itemCount
+                    val headers = categoryRowsAdapter.itemCount
                     return if (position < headers) 3 else 1
                 }
             }
         binding.feedRecycler.layoutManager = gridLayoutManager
         binding.feedRecycler.adapter =
-            ConcatAdapter(heroHeaderAdapter, categoryRowsAdapter, adapter)
+            ConcatAdapter(categoryRowsAdapter, adapter)
         // Fixed size + no change animations: the grid must never
         // relayout or flash mid-scroll (Phase 8.23 jitter fix).
         binding.feedRecycler.setHasFixedSize(true)
         binding.feedRecycler.itemAnimator = null
-        buildCategoryTabs(binding)
+        buildCategoryTabs(binding, listOf("All"))
         setupTopBar(binding)
-        setupHero()
         binding.feedEmptyReset.setOnClickListener {
             // Back to the unfiltered feed: clear the advanced
-            // filters (8.85) and the tag selection, then re-run
-            // the pool through the (now empty) filter set.
+            // filters (8.85), the tag selection and any in-feed
+            // query, then re-run the pool through the (now
+            // empty) filter set.
             clearFilters()
-            searchQuery = ""
-            buildCategoryTabs(binding)
+            closeFeedSearch(binding)
+            scheduleChromeUpdate()
             applySearch("")
         }
         setupHeaderCollapse(binding)
@@ -292,10 +305,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             // active query and load the providers' next homepage
             // page — it lands at the TOP of the feed
             // (FeedViewModel.refresh).
-            if (searchQuery.isNotEmpty()) {
-                searchQuery = ""
-                applySearch("")
-            }
+            closeFeedSearch(binding)
             scrollTopOnNextFeed = true
             viewModel.refresh()
         }
@@ -313,19 +323,22 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     // Hidden items stay hidden even in a replayed value.
                     val hidden = context?.let { FeedHidden.getAll(it) } ?: emptySet()
                     pool = resource.value.filterNot { it.response.url in hidden }
-                    updateHeroItems()
                     // Phase 8.88: kick background metadata
                     // resolution for the pool's head — the
                     // Categories row counts grow as results land
                     // (cards deeper in the pool resolve on bind).
-                    // Bounded by the resolver's own semaphore;
-                    // cached/missed/in-flight items self-skip.
+                    // Phase 8.92: the pre-kick is cut 60 → 24 —
+                    // the old burst saturated the shared resolver
+                    // semaphore while the page was still loading
+                    // and every landing fed the (then main-thread)
+                    // full recompute; the hang report traces here
+                    // too. Deeper cards still resolve on bind.
                     context?.let { ctx ->
-                        pool.take(60).forEach {
+                        pool.take(24).forEach {
                             MetadataResolver.resolveMeta(ctx, it.response)
                         }
                     }
-                    buildCategoryTabs(binding)
+                    scheduleChromeUpdate()
                     val query = searchQuery
                     if (query.isEmpty()) {
                         val filtered = applyFeedFilters(pool)
@@ -386,8 +399,9 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // coming back must not throw the viewer back to the top.
         listState = binding?.feedRecycler?.layoutManager?.onSaveInstanceState()
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
+        pendingSearchText?.let { searchHandler.removeCallbacks(it) }
         searchHandler.removeCallbacks(titleApplyRunnable)
-        heroHandler.removeCallbacks(heroAutoRunnable)
+        chromeJob?.cancel()
         searchJob?.cancel()
         headerAnimator?.cancel()
         FeedPlayer.removeListener(miniListener)
@@ -408,7 +422,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 FeedHidden.hide(context, entry.response.url)
                 FeedPool.hide(entry.response.url)
                 pool = pool.filterNot { it.response.url == entry.response.url }
-                updateHeroItems()
+                scheduleChromeUpdate()
                 val query = searchQuery
                 if (query.isEmpty()) {
                     val filtered = applyFeedFilters(pool)
@@ -523,7 +537,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
         /** Curated tags from the reference app. Phase 8.91
          *  re-slots them around the provider-section rows (see
-         *  updateCategoriesRow): the must-watch pair still
+         *  computeChrome): the must-watch pair still
          *  leads its block, the region variants (Top, then New
          *  Release, per region) now follow the section rows.
          *  "Ongoing Series" is no longer missing: it arrives
@@ -539,12 +553,37 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         /** A must-watch row is "high-rated" from this score. */
         const val MUST_WATCH_MIN_SCORE = 7.0
 
-        /** Category-row bounds (Android 8.1 perf): a candidate
-         *  needs at least 4 pool items, a row shows at most 15,
-         *  and at most 12 rows render. */
-        const val ROW_MIN_ITEMS = 4
-        const val ROW_ITEM_CAP = 15
-        const val ROW_CAP = 12
+        /** Tags whose grid-filter match is membership of their
+         *  computed item list (the curated/special set
+         *  [categoryMatchesEntry] switches on) — the filter
+         *  builds a URL set once instead of scanning the list
+         *  per entry (Phase 8.92, was O(pool²)). */
+        val CURATED_MATCH_TAGS: Set<String> = setOf(
+            TAG_TRENDING, TAG_TOP_RATED, TAG_EMOTIONAL,
+            TAG_MUST_WATCH_DRAMA, TAG_MUST_WATCH_SERIES,
+            TAG_TOP_ANIME, TAG_TOP_KDRAMA, TAG_TOP_CDRAMA,
+            TAG_NEW_KDRAMA, TAG_NEW_CDRAMA
+        )
+
+        /** Category-row bounds. Phase 8.92 (his verdict — too
+         *  few rows formed and content below sat uncategorised):
+         *  a candidate needs at least 3 pool items (was 4), a
+         *  row shows at most 20 (was 15), and at most 20 tag
+         *  rows render (was 12). The computation runs off the
+         *  main thread now, so the wider bounds are affordable. */
+        const val ROW_MIN_ITEMS = 3
+        const val ROW_ITEM_CAP = 20
+        const val ROW_CAP = 20
+
+        /** Phase 8.92: per-provider rows close the coverage gap
+         *  — a provider with at least 6 pool items gets a row
+         *  of its own at the end of the sections, so nearly all
+         *  pool content appears in SOME row even when no tag
+         *  claims it. Row names carry this prefix so View All
+         *  can route to the Source filter slot. */
+        const val PROVIDER_TAG_PREFIX = "provider:"
+        const val PROVIDER_ROW_MIN_ITEMS = 6
+        const val PROVIDER_ROW_CAP = 10
     }
 
     /** The one genre-matching rule, shared by the chip row, the
@@ -599,10 +638,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * Trending / Top 250 keep purely derived meanings here
      * (their item lists are computed in computeTagItems).
      */
-    private fun tagPredicate(entry: FeedEntry, tag: String): Boolean =
+    private fun tagPredicate(
+        entry: FeedEntry,
+        tag: String,
+        poolSnap: List<FeedEntry> = pool,
+        ratingsSnap: Map<String, String> = fragmentRatings
+    ): Boolean =
         when (tag) {
-            TAG_TRENDING -> trendingUrls().contains(entry.response.url)
-            TAG_TOP_RATED -> scoreOf(entry) != null
+            TAG_TRENDING -> trendingUrls(poolSnap).contains(entry.response.url)
+            TAG_TOP_RATED -> scoreOf(entry, ratingsSnap) != null
             TAG_EMOTIONAL -> tag in sectionTagsOf(entry) ||
                 emotionalMatchesEntry(entry)
             in FeedCategories.SMART_CATEGORIES ->
@@ -612,10 +656,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 genreMatchesEntry(entry, tag)
         }
 
-    /** Trending = the pool's own head, in pool order (the same
-     *  source the hero carousel draws from). */
-    private fun trendingUrls(): Set<String> =
-        pool.take(30).map { it.response.url }.toSet()
+    /** Trending = the pool's own head, in pool order. */
+    private fun trendingUrls(
+        poolSnap: List<FeedEntry> = pool
+    ): Set<String> =
+        poolSnap.take(30).map { it.response.url }.toSet()
 
     /**
      * The Emotional tag (his list): Drama/Romance by the union
@@ -651,8 +696,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     /** Rating-descending order; unrated items sink to the end
      *  keeping pool order (the sort is stable). */
-    private fun byRatingDesc(items: List<FeedEntry>): List<FeedEntry> =
-        items.sortedWith(compareByDescending { scoreOf(it) ?: -1.0 })
+    private fun byRatingDesc(
+        items: List<FeedEntry>,
+        ratingsSnap: Map<String, String> = fragmentRatings
+    ): List<FeedEntry> =
+        items.sortedWith(
+            compareByDescending { scoreOf(it, ratingsSnap) ?: -1.0 }
+        )
 
     /**
      * A must-watch curation: the base set's high-rated items
@@ -661,10 +711,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * in pool order (a pool with no ratings still gets its
      * must-watch row).
      */
-    private fun mustWatchItems(base: List<FeedEntry>): List<FeedEntry> {
+    private fun mustWatchItems(
+        base: List<FeedEntry>,
+        ratingsSnap: Map<String, String> = fragmentRatings
+    ): List<FeedEntry> {
         val high = base
-            .filter { (scoreOf(it) ?: 0.0) >= MUST_WATCH_MIN_SCORE }
-            .sortedByDescending { scoreOf(it) }
+            .filter {
+                (scoreOf(it, ratingsSnap) ?: 0.0) >= MUST_WATCH_MIN_SCORE
+            }
+            .sortedByDescending { scoreOf(it, ratingsSnap) }
         return if (high.size >= ROW_MIN_ITEMS) high else base
     }
 
@@ -693,15 +748,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     /** Every canonical section tag present anywhere in the pool. */
-    private fun poolSectionTags(): Set<String> {
+    private fun poolSectionTags(
+        poolSnap: List<FeedEntry> = pool
+    ): Set<String> {
         val out = mutableSetOf<String>()
-        pool.forEach { out += sectionTagsOf(it) }
+        poolSnap.forEach { out += sectionTagsOf(it) }
         return out
     }
 
     /** The user's hidden Feed Categories (settings page). */
-    private fun hiddenTags(): Set<String> =
-        context?.let { FeedCategoryPrefs.hidden(it) } ?: emptySet()
+    private fun hiddenTags(ctx: Context? = context): Set<String> =
+        ctx?.let { FeedCategoryPrefs.hidden(it) } ?: emptySet()
 
     /**
      * The pool's section tags in display order: the user's
@@ -709,71 +766,101 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * curated FeedSectionTags.CANONICAL_ORDER; tags neither list
      * mentions (new passthrough labels) append by item count.
      */
-    private fun orderedSectionTags(): List<String> {
-        val present = poolSectionTags()
+    private fun orderedSectionTags(
+        poolSnap: List<FeedEntry> = pool,
+        ctx: Context? = context,
+        itemsOf: (String) -> List<FeedEntry> = { tagItems(it) }
+    ): List<String> {
+        val present = poolSectionTags(poolSnap)
         if (present.isEmpty()) return emptyList()
-        val saved = context?.let { FeedCategoryPrefs.order(it) }
+        val saved = ctx?.let { FeedCategoryPrefs.order(it) }
             ?: emptyList()
         val base = saved.ifEmpty { FeedSectionTags.CANONICAL_ORDER }
         val listed = base.filter { it in present }
         val unlisted = (present - listed.toSet())
-            .sortedByDescending { categoryCount(it) }
+            .sortedByDescending { itemsOf(it).size }
         return listed + unlisted
     }
 
     /** tagItems results, memoised per pool instance — the row
      *  builder, the chip presence checks and the grid filter
-     *  all ask repeatedly. Late-arriving ratings clear it via
-     *  the rating listener. */
+     *  all ask repeatedly. Phase 8.92: main-thread callers only
+     *  (the background chrome pass computes into its own memo
+     *  via computeTagItems directly). Late-arriving ratings no
+     *  longer clear it per rating (see ratingListener) — the
+     *  generation check drops it lazily, once per burst. */
     private var tagItemsCache = mutableMapOf<String, List<FeedEntry>>()
     private var tagItemsCachePool: List<FeedEntry>? = null
+
+    @Volatile
+    private var tagGeneration = 0
+    private var tagItemsGeneration = -1
 
     /** Every item of a tag in the current pool, in row order,
      *  uncapped (callers cap for display). */
     private fun tagItems(tag: String): List<FeedEntry> {
-        if (tagItemsCachePool !== pool) {
+        if (tagItemsCachePool !== pool ||
+            tagItemsGeneration != tagGeneration
+        ) {
             tagItemsCache.clear()
             tagItemsCachePool = pool
+            tagItemsGeneration = tagGeneration
         }
         return tagItemsCache.getOrPut(tag) { computeTagItems(tag) }
     }
 
-    private fun computeTagItems(tag: String): List<FeedEntry> = when (tag) {
+    private fun computeTagItems(
+        tag: String,
+        poolSnap: List<FeedEntry> = pool,
+        ratingsSnap: Map<String, String> = fragmentRatings
+    ): List<FeedEntry> = when (tag) {
         // Phase 8.91: a real provider Trending shelf (MovieBox
         // and Rtally both declare one) is exact data and wins;
         // the 8.90 pool-head derivation remains the fallback
         // for pools where no provider shelves Trending.
         TAG_TRENDING -> {
-            val shelved = pool.filter {
+            val shelved = poolSnap.filter {
                 FeedSectionTags.TRENDING in sectionTagsOf(it)
             }
-            if (shelved.size >= ROW_MIN_ITEMS) shelved else pool.take(30)
+            if (shelved.size >= ROW_MIN_ITEMS) {
+                shelved
+            } else {
+                poolSnap.take(30)
+            }
         }
         TAG_TOP_RATED -> byRatingDesc(
-            pool.filter { scoreOf(it) != null }
+            poolSnap.filter { scoreOf(it, ratingsSnap) != null },
+            ratingsSnap
         )
         TAG_MUST_WATCH_DRAMA -> mustWatchItems(
-            pool.filter { genreMatchesEntry(it, "Drama") }
+            poolSnap.filter { genreMatchesEntry(it, "Drama") },
+            ratingsSnap
         )
         TAG_MUST_WATCH_SERIES -> mustWatchItems(
-            pool.filter { isSeriesEntry(it) }
+            poolSnap.filter { isSeriesEntry(it) },
+            ratingsSnap
         )
         TAG_TOP_ANIME -> byRatingDesc(
-            pool.filter { "Anime" in categoriesOfEntry(it) }
+            poolSnap.filter { "Anime" in categoriesOfEntry(it) },
+            ratingsSnap
         )
         TAG_TOP_KDRAMA -> byRatingDesc(
-            pool.filter { "K-Drama" in categoriesOfEntry(it) }
+            poolSnap.filter { "K-Drama" in categoriesOfEntry(it) },
+            ratingsSnap
         )
         TAG_TOP_CDRAMA -> byRatingDesc(
-            pool.filter { "C-Drama" in categoriesOfEntry(it) }
+            poolSnap.filter { "C-Drama" in categoriesOfEntry(it) },
+            ratingsSnap
         )
         TAG_NEW_KDRAMA -> newReleaseItems(
-            pool.filter { "K-Drama" in categoriesOfEntry(it) }
+            poolSnap.filter { "K-Drama" in categoriesOfEntry(it) }
         )
         TAG_NEW_CDRAMA -> newReleaseItems(
-            pool.filter { "C-Drama" in categoriesOfEntry(it) }
+            poolSnap.filter { "C-Drama" in categoriesOfEntry(it) }
         )
-        else -> pool.filter { tagPredicate(it, tag) }
+        else -> poolSnap.filter {
+            tagPredicate(it, tag, poolSnap, ratingsSnap)
+        }
     }
 
     /**
@@ -822,14 +909,6 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             else -> tagPredicate(entry, tag)
         }
 
-    /** Every displayed item of a tag (row-capped). */
-    private fun categoryItems(tag: String): List<FeedEntry> =
-        tagItems(tag).take(ROW_ITEM_CAP)
-
-    /** Full (uncapped) match count of a tag — row inclusion and
-     *  ordering run on this, not on the capped row size. */
-    private fun categoryCount(tag: String): Int = tagItems(tag).size
-
     /**
      * The row header's title for a tag — the reference app's
      * emoji decoration lives here and ONLY here (chips stay
@@ -852,38 +931,105 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         else -> tag
     }
 
+    // The category ROWS vocabulary (Phase 8.91 — rows v2): the
+    // PROVIDER SECTIONS are the primary source (the 8.90 rows
+    // were metadata-only). Slot order: 🔥 Trending (the
+    // providers' own Trending shelf when one exists, pool head
+    // otherwise) → ⭐ Top 250 → Must-watch Drama → Must-watch
+    // Series → the section-tag rows in the user's Feed
+    // Categories order (else item count) → the rating-sorted
+    // Top / New Release region rows → metadata-fallback rows
+    // ONLY for smart categories and genres that got no section
+    // data at all → per-provider rows (Phase 8.92). "Ongoing
+    // Series" exists in this world: providers shelf it by that
+    // exact name, so the row is provider-labelled and accurate
+    // — nothing is faked from years or episode titles. Tags
+    // the user hid on the Feed Categories settings page
+    // produce no row. Counts run over the fragment pool, which
+    // the ViewModel already Family-Mode/hidden filtered.
+    // Hidden while a search/filter is active — the rows belong
+    // to browsing. Assembly lives in computeChrome below.
+
+    /** Phase 8.92: rows vanish synchronously the moment a
+     *  search/filter takes over (they belong to browsing);
+     *  rebuilding them is the background pass's job. */
+    private fun hideCategoryRows() {
+        lastRowsSignature = emptyList()
+        categoryRowsAdapter.submit(emptyList())
+    }
+
     /**
-     * Recompute the category ROWS from the current pool. Phase
-     * 8.91 — rows v2: the PROVIDER SECTIONS are the primary
-     * source now (the 8.90 rows were metadata-only). Slot
-     * order: 🔥 Trending (the providers' own Trending shelf
-     * when one exists, pool head otherwise) → ⭐ Top 250 →
-     * Must-watch Drama → Must-watch Series → the section-tag
-     * rows in the user's Feed Categories order (else item
-     * count) → the rating-sorted Top / New Release region rows
-     * → metadata-fallback rows ONLY for smart categories and
-     * genres that got no section data at all. A candidate
-     * needs at least 4 pool items; at most 12 rows. "Ongoing
-     * Series" exists in this world: providers shelf it by that
-     * exact name, so the row is provider-labelled and accurate
-     * — nothing is faked from years or episode titles. Tags
-     * the user hid on the Feed Categories settings page
-     * produce no row. Counts run over the fragment pool, which
-     * the ViewModel already Family-Mode/hidden filtered.
-     * Hidden while a filter is active — like the hero, the
-     * rows belong to browsing.
+     * Phase 8.92: entry point for every rows+chips refresh.
+     * The 8.90/8.91 code recomputed the whole tag vocabulary
+     * over the whole pool ON THE MAIN THREAD at every pool
+     * post and every debounced metadata landing — each pass is
+     * O(tags × pool) predicates whose per-entry cost includes
+     * SharedPreferences lookups and regex title normalisation
+     * (MetadataResolver.metaCached / TitleResolver.cachedType),
+     * which on the 8.1 phone read as a hard freeze. The pass
+     * now runs on Dispatchers.Default over a pool snapshot and
+     * posts back only finished models; a stale pass (pool moved
+     * on meanwhile) is discarded, and an unchanged result never
+     * reaches the adapter.
      */
-    private fun updateCategoriesRow(binding: FragmentFeedBinding) {
+    private fun scheduleChromeUpdate() {
+        val b = binding ?: return
         if (searchQuery.isNotEmpty() || filtersActive || pool.isEmpty()) {
-            categoryRowsAdapter.submit(emptyList())
+            chromeJob?.cancel()
+            hideCategoryRows()
+            if (pool.isEmpty()) {
+                buildCategoryTabs(b, listOf("All"))
+            }
             return
         }
+        val poolSnap = pool
+        val ratingsSnap = fragmentRatings.toMap()
+        val appCtx = context?.applicationContext ?: return
+        chromeJob?.cancel()
+        chromeJob = viewLifecycleOwner.lifecycleScope
+            .launch(Dispatchers.Default) {
+                val result = computeChrome(poolSnap, ratingsSnap, appCtx)
+                withContext(Dispatchers.Main) {
+                    if (pool !== poolSnap) return@withContext
+                    val bb = binding ?: return@withContext
+                    val signature = result.rows.map { row ->
+                        row.name to row.items.map { it.response.url }
+                    }
+                    if (signature != lastRowsSignature) {
+                        lastRowsSignature = signature
+                        categoryRowsAdapter.submit(result.rows)
+                    }
+                    buildCategoryTabs(
+                        bb, listOf("All") + result.tabNames
+                    )
+                }
+            }
+    }
+
+    /**
+     * One full rows+chips computation over [poolSnap] — the
+     * 8.91 rows v2 assembly, unchanged in vocabulary and slot
+     * order, plus the 8.92 provider rows at the end. Runs on a
+     * background dispatcher; touches no views. [itemsOf] is
+     * this pass's own memo — the shared main-thread memo
+     * (tagItems) is never touched from here.
+     */
+    private fun computeChrome(
+        poolSnap: List<FeedEntry>,
+        ratingsSnap: Map<String, String>,
+        appCtx: Context
+    ): ChromeResult {
+        val memo = mutableMapOf<String, List<FeedEntry>>()
+        fun itemsOf(tag: String): List<FeedEntry> =
+            memo.getOrPut(tag) {
+                computeTagItems(tag, poolSnap, ratingsSnap)
+            }
         fun rowOf(tag: String) = FeedCategoryRowsAdapter.CategoryRow(
-            tag, displayTitleFor(tag), categoryItems(tag)
+            tag, displayTitleFor(tag), itemsOf(tag).take(ROW_ITEM_CAP)
         )
-        val hidden = hiddenTags()
+        val hidden = hiddenTags(appCtx)
         fun wanted(tag: String) =
-            tag !in hidden && categoryCount(tag) >= ROW_MIN_ITEMS
+            tag !in hidden && itemsOf(tag).size >= ROW_MIN_ITEMS
         val rows = mutableListOf<FeedCategoryRowsAdapter.CategoryRow>()
         // Fixed head + the must-watch pair.
         for (tag in listOf(
@@ -893,8 +1039,8 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             if (wanted(tag)) rows += rowOf(tag)
         }
         // Provider-section rows, in the user's order.
-        val sectionPresent = poolSectionTags()
-        for (tag in orderedSectionTags()) {
+        val sectionPresent = poolSectionTags(poolSnap)
+        for (tag in orderedSectionTags(poolSnap, appCtx, itemsOf)) {
             if (tag == TAG_TRENDING) continue
             if (wanted(tag)) rows += rowOf(tag)
         }
@@ -912,7 +1058,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             FeedCategories.SMART_CATEGORIES + genreTags)
             .distinct()
             .filter { it !in sectionPresent }
-            .map { tag -> tag to categoryCount(tag) }
+            .map { tag -> tag to itemsOf(tag).size }
             .filter { it.first !in hidden && it.second >= ROW_MIN_ITEMS }
             .sortedByDescending { it.second }
         for ((tag, _) in fallback) {
@@ -952,8 +1098,29 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 }
             }
         }
-        categoryRowsAdapter.submit(
-            rows.filter { it.name !in drop }.take(ROW_CAP)
+        val tagRows = rows.filter { it.name !in drop }.take(ROW_CAP)
+        // Phase 8.92: per-provider rows close the list — every
+        // provider with enough pool items gets a row under its
+        // own name, so content no tag claimed still appears in
+        // a row (his "নীচে গেলে অনেক কন্টেন্ট ক্যাটাগরি ছাড়া
+        // আছে"). They are not tags: the Feed Categories
+        // settings page does not govern them, and their View
+        // All routes to the Source filter slot instead.
+        val providerRows = poolSnap.groupBy { it.apiName }
+            .filterValues { it.size >= PROVIDER_ROW_MIN_ITEMS }
+            .entries.sortedByDescending { it.value.size }
+            .take(PROVIDER_ROW_CAP)
+            .map { (api, items) ->
+                FeedCategoryRowsAdapter.CategoryRow(
+                    PROVIDER_TAG_PREFIX + api, api,
+                    items.take(ROW_ITEM_CAP)
+                )
+            }
+        return ChromeResult(
+            tagRows + providerRows,
+            computePresentTags(
+                poolSnap, appCtx, itemsOf, hidden, ratingsSnap
+            )
         )
     }
 
@@ -973,28 +1140,37 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * Curated tags keep their PLAIN names here (the emoji live
      * in the row titles only).
      */
-    private fun presentTags(): List<String> {
-        if (pool.isEmpty()) return emptyList()
-        val hidden = hiddenTags()
+    private fun computePresentTags(
+        poolSnap: List<FeedEntry>,
+        appCtx: Context,
+        itemsOf: (String) -> List<FeedEntry>,
+        hidden: Set<String>,
+        ratingsSnap: Map<String, String>
+    ): List<String> {
+        if (poolSnap.isEmpty()) return emptyList()
         val tags = mutableListOf<String>()
         val seen = mutableSetOf<String>()
         fun add(tag: String) {
             if (tag !in hidden && seen.add(tag)) tags += tag
         }
         add(TAG_TRENDING)
-        if (pool.any { scoreOf(it) != null }) add(TAG_TOP_RATED)
-        CURATED_TAGS.forEach { tag ->
-            if (tagItems(tag).isNotEmpty()) add(tag)
+        if (poolSnap.any { scoreOf(it, ratingsSnap) != null }) {
+            add(TAG_TOP_RATED)
         }
-        orderedSectionTags().forEach { tag ->
-            if (tagItems(tag).isNotEmpty()) add(tag)
+        CURATED_TAGS.forEach { tag ->
+            if (itemsOf(tag).isNotEmpty()) add(tag)
+        }
+        orderedSectionTags(poolSnap, appCtx, itemsOf).forEach { tag ->
+            if (itemsOf(tag).isNotEmpty()) add(tag)
         }
         FeedCategories.SMART_CATEGORIES.forEach { cat ->
-            if (pool.any { cat in categoriesOfEntry(it) }) add(cat)
+            if (poolSnap.any { cat in categoriesOfEntry(it) }) add(cat)
         }
-        if (pool.any { emotionalMatchesEntry(it) }) add(TAG_EMOTIONAL)
+        if (poolSnap.any { emotionalMatchesEntry(it) }) {
+            add(TAG_EMOTIONAL)
+        }
         genreTags.forEach { genre ->
-            if (pool.any { genreMatchesEntry(it, genre) }) add(genre)
+            if (poolSnap.any { genreMatchesEntry(it, genre) }) add(genre)
         }
         return tags
     }
@@ -1005,8 +1181,10 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * landings); otherwise just the styles refresh, so the
      * row's scroll position survives.
      */
-    private fun buildCategoryTabs(binding: FragmentFeedBinding) {
-        val names = listOf("All") + presentTags()
+    private fun buildCategoryTabs(
+        binding: FragmentFeedBinding,
+        names: List<String>
+    ) {
         // The active filter's tag stays listed even if a pool
         // change dropped it below presence, so it can be
         // tapped off again.
@@ -1067,6 +1245,27 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     private fun applyCategoryTab(tag: String, scrollToGrid: Boolean) {
         val b = binding ?: return
+        // Phase 8.92: a provider row's View All lands in the
+        // Source filter slot (provider rows are not tags, so
+        // they never travel the category/genre slots below).
+        if (tag.startsWith(PROVIDER_TAG_PREFIX)) {
+            val api = tag.removePrefix(PROVIDER_TAG_PREFIX)
+            val already = filterSource == api &&
+                filterCategory == null && filterGenre == null
+            filterSource = if (already) null else api
+            if (!already) {
+                filterCategory = null
+                filterGenre = null
+            }
+            refreshTabStyles(b)
+            updateFilterButtonState()
+            if (filtersActive) hideCategoryRows() else scheduleChromeUpdate()
+            applySearch(searchQuery)
+            if (scrollToGrid) {
+                b.feedRecycler.post { b.feedRecycler.scrollToPosition(0) }
+            }
+            return
+        }
         val target = if (tag == effectiveTabSelection()) "All" else tag
         when {
             target == "All" -> {
@@ -1084,13 +1283,20 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         }
         refreshTabStyles(b)
         updateFilterButtonState()
-        updateCategoriesRow(b)
+        // Rows belong to browsing: a live filter hides them
+        // synchronously; clearing back to All rebuilds them in
+        // the background pass.
+        if (filtersActive || searchQuery.isNotEmpty()) {
+            hideCategoryRows()
+        } else {
+            scheduleChromeUpdate()
+        }
         applySearch(searchQuery)
         if (scrollToGrid) {
             // The filter just hid the rows, so the grid's first
-            // card sits right under the hero (or at the top).
+            // card sits at the very top now.
             b.feedRecycler.post {
-                b.feedRecycler.scrollToPosition(heroHeaderAdapter.itemCount)
+                b.feedRecycler.scrollToPosition(0)
             }
         }
     }
@@ -1098,11 +1304,23 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun setupHeaderCollapse(binding: FragmentFeedBinding) {
         binding.feedHeader.post {
             headerFullHeight = binding.feedHeader.height
-            // The header floats over the grid: content starts below
-            // it (plus the hero's space while the hero is visible).
-            updateHeroChrome(binding)
+            // The header floats over the grid: content starts
+            // below it.
+            updateHeaderPadding(binding)
         }
         binding.feedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(
+                recyclerView: RecyclerView, newState: Int
+            ) {
+                // Phase 8.92: card binds stop kicking background
+                // metadata/rating resolutions while the grid is
+                // moving — the resolver storm competed with fling
+                // rendering on the 8.1 phone (hang report). Cached
+                // values still render; resolution resumes at idle.
+                FeedAdapter.resolutionsPaused =
+                    newState != RecyclerView.SCROLL_STATE_IDLE
+            }
+
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy > 12) {
                     animateHeader(binding, show = false)
@@ -1235,7 +1453,11 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun applySearch(query: String) {
         val binding = binding ?: return
         refreshTabStyles(binding)
-        updateHeroChrome(binding)
+        updateHeaderPadding(binding)
+        // Phase 8.92: while a query is live the category rows
+        // hide (they belong to browsing) — synchronously, so
+        // they never linger over search results.
+        if (query.isNotEmpty()) hideCategoryRows()
         pendingSearch?.let { searchHandler.removeCallbacks(it) }
         searchJob?.cancel()
         if (query.isEmpty()) {
@@ -1300,54 +1522,118 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     private fun setupTopBar(binding: FragmentFeedBinding) {
         binding.feedFilterButton.setOnClickListener { showFeedFilters() }
         binding.feedSearchButton.setOnClickListener {
-            // Phase 8.90: no feed-local field anymore — the
-            // button opens the app's main Search tab (the 8.87
-            // smart landing with Trending searches + type tabs),
-            // the same switch the bottom nav performs (the
-            // deep-link handler in MainActivity does exactly
-            // this selectedItemId assignment).
-            val act = activity ?: return@setOnClickListener
-            act.findViewById<BottomNavigationView>(R.id.nav_view)
-                ?.selectedItemId = R.id.navigation_search
-            act.findViewById<NavigationRailView>(R.id.nav_rail_view)
-                ?.selectedItemId = R.id.navigation_search
+            // Phase 8.92: the button toggles the IN-FEED search
+            // row (his correction — 8.90 exiled feed search to
+            // the main Search tab; "feed সার্চ মেইন সার্চ এ চলে
+            // যায়" was listed as a bug). The bottom-nav Search
+            // tab keeps the global smart Search, untouched.
+            if (binding.feedSearchRow.isVisible) {
+                closeFeedSearch(binding)
+            } else {
+                binding.feedSearchRow.isVisible = true
+                refreshHeaderMetrics(binding)
+                binding.feedSearchInput.requestFocus()
+                showKeyboard(binding.feedSearchInput)
+            }
+        }
+        binding.feedSearchClear.setOnClickListener {
+            closeFeedSearch(binding)
+        }
+        // Live-as-you-type, 300 ms debounced: keystrokes only
+        // settle into searchQuery once the typist pauses, so a
+        // fast burst never runs a filter pass per letter.
+        binding.feedSearchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(
+                s: CharSequence?, start: Int, count: Int, after: Int
+            ) = Unit
+
+            override fun onTextChanged(
+                s: CharSequence?, start: Int, before: Int, count: Int
+            ) = Unit
+
+            override fun afterTextChanged(s: Editable?) {
+                val text = s?.toString().orEmpty()
+                pendingSearchText?.let {
+                    searchHandler.removeCallbacks(it)
+                }
+                val task = Runnable {
+                    if (searchQuery != text) {
+                        searchQuery = text
+                        if (text.isEmpty()) scheduleChromeUpdate()
+                        applySearch(text)
+                    }
+                }
+                pendingSearchText = task
+                searchHandler.postDelayed(task, 300L)
+            }
+        })
+        binding.feedSearchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                pendingSearchText?.let {
+                    searchHandler.removeCallbacks(it)
+                }
+                val text = binding.feedSearchInput.text
+                    ?.toString().orEmpty()
+                searchQuery = text
+                applySearch(text)
+                true
+            } else {
+                false
+            }
         }
         updateFilterButtonState()
     }
 
-    /** Phase 8.87: the pager lives inside the hero list item now —
-     *  FeedHeroHeaderAdapter wires its adapter, transformer and
-     *  page callbacks. The fragment only owns the auto-advance
-     *  timer (the runnable itself checks it can move). */
-    private fun setupHero() {
-        heroHandler.removeCallbacks(heroAutoRunnable)
-        heroHandler.postDelayed(heroAutoRunnable, 5_000L)
+    /** Phase 8.92: close the in-feed search row, drop the
+     *  query and restore the unfiltered feed. */
+    private fun closeFeedSearch(binding: FragmentFeedBinding) {
+        if (binding.feedSearchRow.isVisible) {
+            binding.feedSearchRow.isVisible = false
+            binding.feedSearchInput.clearFocus()
+            hideKeyboard(binding.feedSearchInput)
+            refreshHeaderMetrics(binding)
+        }
+        if (binding.feedSearchInput.text?.isNotEmpty() == true) {
+            binding.feedSearchInput.setText("")
+        }
+        if (searchQuery.isNotEmpty()) {
+            searchQuery = ""
+            scheduleChromeUpdate()
+            applySearch("")
+        }
     }
 
-    /** Hero items: the feed's own top entries that carry a poster. */
-    private fun updateHeroItems() {
-        heroEntries = pool
-            .filter { !it.response.posterUrl.isNullOrBlank() }
-            .take(6)
-        val b = binding ?: return
-        updateHeroChrome(b)
+    private fun showKeyboard(view: View) {
+        val imm = view.context.getSystemService(
+            Context.INPUT_METHOD_SERVICE
+        ) as? InputMethodManager
+        imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun hideKeyboard(view: View) {
+        val imm = view.context.getSystemService(
+            Context.INPUT_METHOD_SERVICE
+        ) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
+    /** The floating header's height changed (search row shown
+     *  or hidden): re-measure and re-apply the grid's top
+     *  padding once the new height lands. */
+    private fun refreshHeaderMetrics(binding: FragmentFeedBinding) {
+        binding.feedHeader.post {
+            headerFullHeight = binding.feedHeader.height
+            updateHeaderPadding(binding)
+        }
     }
 
     /**
-     * Submits the hero's visibility to the header adapter (it only
-     * shows over the unfiltered, unsearched feed) and reserves the
-     * floating header's space in the grid's top padding. Phase
-     * 8.87: the hero itself needs no reserved space anymore — as a
-     * list item it takes its own room in the flow.
+     * Reserves the floating header's space in the grid's top
+     * padding (and mirrors it onto the skeleton + refresh
+     * ring). Phase 8.92: what is left of the old hero chrome
+     * function — the hero itself is gone.
      */
-    private fun updateHeroChrome(binding: FragmentFeedBinding) {
-        val heroVisible = heroEntries.isNotEmpty() &&
-            searchQuery.isEmpty() &&
-            !filtersActive
-        heroHeaderAdapter.submit(heroEntries, heroVisible)
-        // Phase 8.88: the Categories row refreshes on the same
-        // chrome passes (pool changes, query changes, filters).
-        updateCategoriesRow(binding)
+    private fun updateHeaderPadding(binding: FragmentFeedBinding) {
         if (headerFullHeight > 0) {
             val topPad = headerFullHeight + dp(6)
             binding.feedRecycler.setPadding(
@@ -1370,15 +1656,20 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
 
     /** The item's score for the Rating tab: its own provider score
      *  first, then the resolved universal rating (fragment cache,
-     *  then MetadataResolver's cache). Null = no score known. */
-    private fun scoreOf(entry: FeedEntry): Double? {
+     *  then MetadataResolver's cache). Null = no score known.
+     *  [ratingsSnap] lets the background chrome pass read a
+     *  consistent snapshot instead of the live map. */
+    private fun scoreOf(
+        entry: FeedEntry,
+        ratingsSnap: Map<String, String> = fragmentRatings
+    ): Double? {
         entry.response.score?.toDouble(10)?.let {
             if (it > 0.0) return it
         }
         val key = MetadataResolver.keyFor(
             entry.response.name, MetadataResolver.yearOf(entry.response)
         )
-        val text = fragmentRatings[key]
+        val text = ratingsSnap[key]
             ?: context?.let { MetadataResolver.cachedFor(it, entry.response) }
         return text?.toDoubleOrNull()
     }
@@ -1391,7 +1682,18 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // (Trending / Top 250 / Emotional) — categoryMatchesEntry
         // is the one rule for all of them.
         filterCategory?.let { category ->
-            out = out.filter { categoryMatchesEntry(it, category) }
+            // Phase 8.92: curated/special tags match by computed
+            // list membership — build the URL set ONCE. The old
+            // per-entry categoryMatchesEntry scanned the whole
+            // tag list for every pool entry: O(pool²) on the
+            // main thread (another hang contributor).
+            out = if (category in CURATED_MATCH_TAGS) {
+                val allowed = tagItems(category)
+                    .mapTo(HashSet()) { it.response.url }
+                out.filter { it.response.url in allowed }
+            } else {
+                out.filter { categoryMatchesEntry(it, category) }
+            }
         }
         filterGenre?.let { genre ->
             out = out.filter {
@@ -1823,6 +2125,14 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 dialog.dismiss()
                 updateFilterButtonState()
                 binding?.let { refreshTabStyles(it) }
+                // Phase 8.92: rows follow the filter state —
+                // hidden while any filter is live, rebuilt by
+                // the background pass when the sheet clears all.
+                if (filtersActive) {
+                    hideCategoryRows()
+                } else {
+                    scheduleChromeUpdate()
+                }
                 applySearch(searchQuery)
             }
         })

@@ -2,7 +2,9 @@ package com.lagradost.cloudstream3.ui.feed
 
 import android.animation.ValueAnimator
 import com.lagradost.cloudstream3.TvType
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -55,6 +57,8 @@ import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.hapticTick
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Phase 8.18–8.20 — the Feed watch page (YouTube-style, portrait).
@@ -72,6 +76,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var seeking = false
     private var tickCount = 0
     private var lastShownUrl: String? = null
+
+    /** Phase 8.92: the last brightness the swipe gesture set —
+     *  remembered so a trip to the batch page and back (which
+     *  restores the window attribute) resumes adjusting from
+     *  the user's level instead of the 0.5 default. */
+    private var savedFeedBrightness: Float? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -320,6 +330,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         // Single tap toggles controls; double tap skips ∓10 s; a long
         // downward drag minimises into the Feed's mini player.
+        // Phase 8.92: vertical swipes adjust brightness (left
+        // half) / volume (right half), main-player style — see
+        // the gesture helpers below. The pull-down minimise
+        // survives for downward drags that START in the player's
+        // top strip (pulling the video down by its top edge);
+        // downward swipes starting anywhere else are brightness/
+        // volume adjustments, exactly like the main player.
         val gestureDetector = GestureDetector(
             requireContext(),
             object : GestureDetector.SimpleOnGestureListener() {
@@ -339,20 +356,71 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             }
         )
+        var downX = 0f
         var downY = 0f
         var dragHandled = false
-        binding.feedWatchPlayer.setOnTouchListener { _, event ->
+        var adjustClaimed = false
+        var adjustBrightness = false
+        var startBrightness = 0.5f
+        var startVolume = 0f
+        binding.feedWatchPlayer.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
                     downY = event.y
                     dragHandled = false
+                    adjustClaimed = false
+                    startBrightness = currentWindowBrightness()
+                    startVolume = currentVolumeFraction()
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    if (!dragHandled && event.y - downY > 160f && FeedPlayer.isPlaying) {
+                    val dx = event.x - downX
+                    val dyDown = event.y - downY
+                    val topStrip = downY < view.height * 0.25f
+                    if (!dragHandled && !adjustClaimed &&
+                        dyDown > 160f && topStrip && FeedPlayer.isPlaying
+                    ) {
                         dragHandled = true
                         minimizeToFeed()
+                    } else if (!dragHandled) {
+                        // The main player's claim rule
+                        // (PlayerGestureHelper): a mostly-vertical
+                        // move past 2% of the height claims the
+                        // gesture; downward drags out of the top
+                        // strip are exempt (minimise candidates).
+                        if (!adjustClaimed &&
+                            abs(dyDown) > view.height * 0.02f &&
+                            abs(dyDown) > abs(dx) &&
+                            !(dyDown > 0f && topStrip)
+                        ) {
+                            adjustClaimed = true
+                            adjustBrightness = downX < view.width / 2f
+                        }
+                        if (adjustClaimed && view.height > 0) {
+                            // Main-player multiplier (2.0): the
+                            // full 0–100% range is half the view
+                            // height of travel, applied from the
+                            // value snapshotted at touch-down.
+                            val start = if (adjustBrightness) {
+                                startBrightness
+                            } else {
+                                startVolume
+                            }
+                            val next = (start +
+                                (-dyDown) * 2.0f / view.height)
+                                .coerceIn(0f, 1f)
+                            if (adjustBrightness) {
+                                applyFeedBrightness(next)
+                            } else {
+                                applyFeedVolume(next)
+                            }
+                        }
                     }
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    adjustClaimed = false
                 }
             }
             gestureDetector.onTouchEvent(event)
@@ -529,6 +597,18 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             FeedPlayer.exo?.pause()
         } else if (!handedOff && !FeedPlayer.minimized) {
             FeedPlayer.stop()
+        }
+        // Phase 8.92: hand the window's brightness back — the
+        // swipe gesture's override belongs to this screen only
+        // and must not leak into the rest of the app.
+        activity?.window?.let { win ->
+            val lp = win.attributes
+            val none = android.view.WindowManager.LayoutParams
+                .BRIGHTNESS_OVERRIDE_NONE
+            if (lp.screenBrightness != none) {
+                lp.screenBrightness = none
+                win.attributes = lp
+            }
         }
         // After a handoff the main player owns the orientation; only
         // restore it when this page is really being left behind.
@@ -836,6 +916,89 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.savePosition()
         binding?.feedWatchPlayer?.hapticTick()
         findNavController().popBackStack()
+    }
+
+    // ---------- Phase 8.92: brightness / volume swipe gestures ----------
+
+    /** The gesture's starting brightness: the window attribute
+     *  when one is set, else the level this page last used,
+     *  else mid. */
+    private fun currentWindowBrightness(): Float {
+        val attr = activity?.window?.attributes?.screenBrightness ?: -1f
+        return when {
+            attr >= 0f -> attr
+            savedFeedBrightness != null -> savedFeedBrightness!!
+            else -> 0.5f
+        }
+    }
+
+    /**
+     * Brightness applies ONLY over this window (the watch
+     * screen): a WindowManager.LayoutParams.screenBrightness
+     * override on the hosting activity's window. It is never
+     * written to Settings.System, and onDestroyView restores
+     * BRIGHTNESS_OVERRIDE_NONE, so the rest of the app is
+     * never affected. (The main player's helper defaults to
+     * the system setting — deliberately NOT mirrored here.)
+     */
+    private fun applyFeedBrightness(fraction: Float) {
+        val act = activity ?: return
+        val lp = act.window.attributes
+        // 0.01 floor: a value too close to 0 makes some devices
+        // substitute their own brightness (the main player's
+        // helper documents the same quirk).
+        lp.screenBrightness = fraction.coerceIn(0.01f, 1f)
+        act.window.attributes = lp
+        savedFeedBrightness = fraction
+        showGestureIndicator(brightness = true, fraction = fraction)
+    }
+
+    private fun audioManager(): AudioManager? =
+        activity?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    private fun currentVolumeFraction(): Float {
+        val am = audioManager() ?: return 0f
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 0f
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            .toFloat() / max
+    }
+
+    private fun applyFeedVolume(fraction: Float) {
+        val am = audioManager() ?: return
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val step = (fraction * max).roundToInt().coerceIn(0, max)
+        // Flag 0: no system volume UI — the gesture indicator
+        // below is the feedback (same as the main player).
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, step, 0)
+        showGestureIndicator(brightness = false, fraction = fraction)
+    }
+
+    private val gestureHideRunnable = Runnable {
+        binding?.feedGestureIndicator?.isVisible = false
+    }
+
+    /** The on-video feedback pill: sun/volume icon + the new
+     *  percentage + a level bar (the main player's side-rail
+     *  indicator in miniature). Auto-hides after the gesture
+     *  settles. */
+    private fun showGestureIndicator(brightness: Boolean, fraction: Float) {
+        val binding = binding ?: return
+        binding.feedGestureIcon.setImageResource(
+            if (brightness) {
+                R.drawable.sun_4
+            } else when {
+                fraction <= 0.01f -> R.drawable.ic_baseline_volume_mute_24
+                fraction < 0.5f -> R.drawable.ic_baseline_volume_down_24
+                else -> R.drawable.ic_baseline_volume_up_24
+            }
+        )
+        val percent = (fraction * 100).roundToInt()
+        binding.feedGestureText.text = "$percent%"
+        binding.feedGestureBar.progress = percent
+        binding.feedGestureIndicator.isVisible = true
+        handler.removeCallbacks(gestureHideRunnable)
+        handler.postDelayed(gestureHideRunnable, 1_200L)
     }
 
     // ---------- pickers ----------

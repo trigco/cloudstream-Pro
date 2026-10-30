@@ -10,8 +10,9 @@ import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.utils.FamilyMode
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * One feed card: a provider search result plus the provider it
@@ -113,61 +114,33 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         if (building) return
         building = true
         feed.postValue(Resource.Loading())
-        viewModelScope.launch {
+        // Phase 8.92: the whole build runs on Dispatchers.Default.
+        // It used to run in viewModelScope's Main dispatcher, and
+        // buildFeed's amap fan-out inherits the caller's
+        // dispatcher — so every provider's homepage PARSING (the
+        // CPU-heavy half of getMainPage, after the suspending
+        // network call returns) executed on the UI thread,
+        // interleaved across all providers at once. On his
+        // Android 8.1 phone the Feed froze for seconds during
+        // every load (his "হ্যাং হয়ে আটকে থাকে" report).
+        viewModelScope.launch(Dispatchers.Default) {
             try {
-                // Phase 8.32: the pool ACCUMULATES. A single
-                // homepage page per provider made the feed look
-                // sparse next to home, so the first build pulls two
-                // pages per provider, and later builds APPEND the
-                // next page instead of replacing the grid.
-                val fresh = if (firstBuild) {
-                    page = 2
-                    // Phase 8.56: the two first pages used to load
-                    // one after another — the feed's first paint
-                    // waited for both rounds in sequence (his
-                    // "feed loads slowly" report). Side by side now.
-                    val p1 = async { buildFeed(1) }
-                    val p2 = async { buildFeed(2) }
-                    p1.await() + p2.await()
-                } else {
-                    buildFeed(page)
-                }
                 val prepend = prependNext
                 prependNext = false
-                var entries = if (prepend) {
-                    // Phase 8.91: same URL from two builds keeps
-                    // BOTH copies' section provenance.
-                    val merged = LinkedHashMap<String, FeedEntry>()
-                    (fresh + FeedPool.entries).forEach {
-                        unionSections(merged, it)
-                    }
-                    merged.values.toList()
-                } else {
-                    val merged = LinkedHashMap<String, FeedEntry>()
-                    FeedPool.entries.forEach {
-                        unionSections(merged, it)
-                    }
-                    fresh.forEach { unionSections(merged, it) }
-                    merged.values.toList()
-                }
                 if (firstBuild) {
-                    entries = withLikedBoost(entries)
-                    firstBuild = false
+                    // Phase 8.32: the pool ACCUMULATES — the
+                    // first build pulls two homepage pages per
+                    // provider. Phase 8.92: page 1 is PUBLISHED
+                    // as soon as it lands instead of waiting for
+                    // both pages of every provider (the old first
+                    // paint waited for the slowest provider twice
+                    // over); page 2 merges in behind it.
+                    page = 2
+                    publish(buildFeed(1), prepend, suppressEmpty = true)
+                    publish(buildFeed(2), prepend, suppressEmpty = false)
+                } else {
+                    publish(buildFeed(page), prepend, suppressEmpty = false)
                 }
-                // Phase 8.22: hidden items never surface.
-                val hidden = FeedHidden.getAll(getApplication())
-                if (hidden.isNotEmpty()) {
-                    entries = entries.filterNot { it.response.url in hidden }
-                }
-                FeedPool.entries = entries
-                lastBuildWasPrepend = prepend
-                feed.postValue(
-                    if (entries.isEmpty()) {
-                        Resource.Failure(false, "No feed content")
-                    } else {
-                        Resource.Success(entries)
-                    }
-                )
             } catch (e: Exception) {
                 feed.postValue(Resource.Failure(false, e.message ?: "Feed failed"))
             } finally {
@@ -179,6 +152,53 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    /**
+     * Merge [fresh] into the shared pool (unioning section
+     * provenance per URL — Phase 8.91) and post the result.
+     * [suppressEmpty] skips the post when the merge is still
+     * empty, so an intermediate first-build page cannot flash
+     * the failure/empty state before page 2 lands.
+     */
+    private suspend fun publish(
+        fresh: List<FeedEntry>,
+        prepend: Boolean,
+        suppressEmpty: Boolean
+    ) {
+        var entries = if (prepend) {
+            val merged = LinkedHashMap<String, FeedEntry>()
+            (fresh + FeedPool.entries).forEach {
+                unionSections(merged, it)
+            }
+            merged.values.toList()
+        } else {
+            val merged = LinkedHashMap<String, FeedEntry>()
+            FeedPool.entries.forEach {
+                unionSections(merged, it)
+            }
+            fresh.forEach { unionSections(merged, it) }
+            merged.values.toList()
+        }
+        if (firstBuild) {
+            entries = withLikedBoost(entries)
+            firstBuild = false
+        }
+        // Phase 8.22: hidden items never surface.
+        val hidden = FeedHidden.getAll(getApplication())
+        if (hidden.isNotEmpty()) {
+            entries = entries.filterNot { it.response.url in hidden }
+        }
+        FeedPool.entries = entries
+        lastBuildWasPrepend = prepend
+        if (entries.isEmpty() && suppressEmpty) return
+        feed.postValue(
+            if (entries.isEmpty()) {
+                Resource.Failure(false, "No feed content")
+            } else {
+                Resource.Success(entries)
+            }
+        )
     }
 
     /**
@@ -215,8 +235,15 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         return out
     }
 
-    /** Phase 8.19: search every provider at once (used by the feed search). */
-    suspend fun searchAll(query: String): List<FeedEntry> {
+    /** Phase 8.19: search every provider at once (used by the feed search).
+     *  Phase 8.92: runs on Dispatchers.Default — the caller is the
+     *  fragment's Main lifecycleScope, and the amap fan-out would
+     *  otherwise parse every provider's results on the UI thread
+     *  (same hang class as the pool build). */
+    suspend fun searchAll(query: String): List<FeedEntry> =
+        withContext(Dispatchers.Default) { searchAllOnBackground(query) }
+
+    private suspend fun searchAllOnBackground(query: String): List<FeedEntry> {
         val familyOn = FamilyMode.isEnabled()
         val providers = apis.filter {
             it.hasMainPage && it.name != "None" &&
