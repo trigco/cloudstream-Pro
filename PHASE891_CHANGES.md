@@ -156,3 +156,14 @@ Home; 8.91 adds no Feed-specific fetch path.
   under Family Mode (8.51 behaviour, untouched); passthrough
   labels are the providers' own text, unedited.
 - TV untouched; Filters sheet untouched; player untouched.
+
+## 8.91b — CI fix (run #270)
+
+CI run #270 failed with one compile error: `TagsAdapter` in
+`FeedCategorySettingsFragment.kt` had a primary constructor
+taking `MutableList<TagRow>` plus a secondary taking
+`List<TagRow>` — identical after JVM type erasure (platform
+declaration clash). Fix: secondary constructor removed; the
+single call site now passes `buildRows().toMutableList()` to
+the one remaining `MutableList<TagRow>` constructor. Behaviour
+unchanged (drag-reorder still mutates the list).

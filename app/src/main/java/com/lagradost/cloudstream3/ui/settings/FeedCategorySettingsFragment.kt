@@ -66,7 +66,7 @@ class FeedCategorySettingsFragment : Fragment() {
 
         val ctx = requireContext()
         val adapter = TagsAdapter(
-            rows = buildRows(),
+            rows = buildRows().toMutableList(),
             hidden = FeedCategoryPrefs.hidden(ctx).toMutableSet(),
             onHiddenChanged = { tags ->
                 FeedCategoryPrefs.setHidden(ctx, tags)
@@ -156,17 +156,6 @@ class FeedCategorySettingsFragment : Fragment() {
         private val onOrderChanged: (List<String>) -> Unit,
         private val onDragStart: (RecyclerView.ViewHolder) -> Unit
     ) : RecyclerView.Adapter<TagsAdapter.Holder>() {
-
-        constructor(
-            rows: List<TagRow>,
-            hidden: MutableSet<String>,
-            onHiddenChanged: (Set<String>) -> Unit,
-            onOrderChanged: (List<String>) -> Unit,
-            onDragStart: (RecyclerView.ViewHolder) -> Unit
-        ) : this(
-            rows.toMutableList(), hidden,
-            onHiddenChanged, onOrderChanged, onDragStart
-        )
 
         class Holder(val b: FeedCategoryPrefRowBinding) :
             RecyclerView.ViewHolder(b.root)
