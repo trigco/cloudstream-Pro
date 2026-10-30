@@ -60,11 +60,21 @@
              content above it (fixSystemBarsPadding in
              MainActivity, fed the same phone dimen), so the
              labels can never slide under the gesture area; the
-             TV layout keeps the 70dp dimen and is untouched. -->
+             TV layout keeps the 70dp dimen and is untouched.
+             Phase 8.99d: this view is INVISIBLE on the phone layout
+             from now on — it remains the selection/state holder (the
+             NavController wiring, checked-state bookkeeping and the
+             cast holder's bottom anchor all keep working off its
+             unchanged 80dp box), while the visible bar is the
+             code-created FloatingNavView overlay (floating pill,
+             expanding grey blob + label on the active item). The TV
+             layout file is untouched and still shows its own
+             nav_view. -->
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/nav_view"
             android:layout_height="@dimen/nav_view_height_phone"
             android:layout_width="0dp"
+            android:visibility="invisible"
             app:labelVisibilityMode="labeled"
             android:background="@drawable/bg_nav_bar"
             android:elevation="0dp"

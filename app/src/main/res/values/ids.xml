@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 8.99d: the floating bottom bar is created in code on the
+         phone layout only, so it gets a stable id without becoming a
+         view-binding field (the TV layout must stay untouched). -->
+    <item name="floating_nav_view" type="id" />
+</resources>

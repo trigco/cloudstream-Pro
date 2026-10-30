@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 8.97: the small right-pointing chevron (›) beside
-     the watch screen's "Info" text link — a proper vector in
-     muted grey, NOT a text glyph and NOT the downward
-     chevron an earlier design used (his amendment
-     2026-10-30: "Info ›", like the reference app). The path
-     is the standard keyboard-arrow-right chevron; the grey
-     is baked in so the drawable reads muted next to the
-     white link text at any size. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="16dp"
     android:height="16dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FF9E9E9E"
-        android:pathData="M8.59,16.59L13.17,12 8.59,7.41 10,6l6,6 -6,6 -1.41,-1.41z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FF9E9E9E"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="m9 18 6-6-6-6"/>
 </vector>

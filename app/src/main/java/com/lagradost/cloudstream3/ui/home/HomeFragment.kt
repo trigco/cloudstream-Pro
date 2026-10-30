@@ -990,7 +990,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         // away when Home's view goes away.
         homeChromeHidden = false
         homeChromeDy = 0
-        activity?.findViewById<View>(R.id.nav_view)?.let {
+        // Phase 8.99d: the translated chrome bar is the floating overlay
+        // on the phone layout; nav_view is its invisible holder there.
+        (activity?.findViewById<View>(R.id.floating_nav_view)
+            ?: activity?.findViewById<View>(R.id.nav_view))?.let {
             it.animate().cancel()
             it.translationY = 0f
         }
@@ -1314,7 +1317,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private fun applyHomeChromeVisibility() {
-        val nav = activity?.findViewById<View>(R.id.nav_view)
+        val nav = activity?.findViewById<View>(R.id.floating_nav_view)
+            ?: activity?.findViewById<View>(R.id.nav_view)
         if (homeChromeHidden) {
             if (nav != null) {
                 val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
