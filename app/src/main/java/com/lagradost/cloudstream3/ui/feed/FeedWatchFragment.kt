@@ -8,12 +8,12 @@ import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.OrientationEventListener
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
@@ -89,8 +89,29 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
      *  default. Phase 8.99b: the 8.99 video-only experiment
      *  (scrim + media3 Brightness effect) is REVERTED by his
      *  order — the level again drives the window's
-     *  screenBrightness attribute exactly as in 8.92/8.97. */
+     *  screenBrightness attribute exactly as in 8.92/8.97.
+     *  Phase 8.99c: the window model had NO effect on his
+     *  device at all — the gesture now drives the SYSTEM
+     *  brightness exactly like the main player (see the
+     *  brightness section below); this field remains the
+     *  page's own record of the gesture level (HUD continuity
+     *  and the window fallback's resume value). */
     private var savedFeedBrightness: Float? = null
+
+    /** Phase 8.99c (job B): true while the gesture drives the
+     *  SYSTEM brightness (Settings.System) — the main player's
+     *  primary path. Flips false for the rest of this page
+     *  instance's life the first time a system call throws
+     *  (the modify-system-settings permission is missing) and
+     *  the window attribute takes over: PlayerGestureHelper's
+     *  exception-driven fail-over, mirrored. */
+    private var useFeedSystemBrightness = true
+
+    /** Phase 8.99c (job B): the system level read when this
+     *  page was entered. A record only — the exit contract
+     *  mirrors the main player, whose release() never hands
+     *  the level back, so nothing is restored from it. */
+    private var entrySystemBrightness: Float? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -259,17 +280,41 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     // Phase 8.98: collapsing player — scrolling Up next up
-    // shrinks the video towards a compact height, scrolling
+    // shrinks the video towards a compact size, scrolling
     // back down (or reaching the list top) restores it, and a
     // drag/fling that ends mid-way snaps with a light spring
     // overshoot. playerCollapsePx is the collapsed amount in
     // px, 0..(full-compact); the snap animator may push it
     // slightly past either end (the spring), and
-    // applyPlayerHeight clamps the overshoot to a small band.
+    // applyPlayerTransform clamps the overshoot to a small
+    // band.
+    // Phase 8.99c (job A — his order: "ratio area lock করো"):
+    // the collapse is now a pure TRANSFORM of the player box,
+    // never a layout change. 8.98 resized the box's layout
+    // height; 8.99 pinned the PlayerView at full height
+    // inside a clipping box; 8.99b moved the rendering to a
+    // TextureView stage — the picture STILL deformed on his
+    // Android 8.1 device under every one of them, so this
+    // round takes layout out of the equation entirely: after
+    // creation NOTHING in the player subtree (box, stage,
+    // PlayerView) ever receives a layout size write again and
+    // the box keeps its natural XML 16:9 size permanently.
+    // Collapse writes only the box's scaleX/scaleY — uniform,
+    // so the picture CANNOT deform (that is the ratio lock) —
+    // with the pivot at the top-centre so it shrinks toward
+    // the top; the layout space it frees is reclaimed by
+    // translating the title box and the Up-next container up
+    // by the same px amount the height system used to remove.
+    // The scroll accumulation is unchanged: collapsePx still
+    // runs 0..(full-compact) and the compact end still means
+    // 45% — of the SCALE now, not of a layout height.
     private var playerFullHeight = 0
     private var playerCompactHeight = 0
     private var playerCollapsePx = 0
-    private var playerAppliedHeight = -1
+    private var playerAppliedScale = -1f
+    private var playerAppliedShift = Int.MIN_VALUE
+    private var playerRefreshBaseHeight = 0
+    private var playerAppliedRefreshHeight = -1
     private var playerSnapAnimator: ValueAnimator? = null
 
     private val playerCollapseListener = object : RecyclerView.OnScrollListener() {
@@ -283,7 +328,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             next = next.coerceIn(0, range)
             if (next != playerCollapsePx) {
                 playerCollapsePx = next
-                applyPlayerHeight()
+                applyPlayerTransform()
             }
         }
 
@@ -296,22 +341,67 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
-    /** Change-guarded height write — at most one layout pass
-     *  per distinct height, driven by scroll events only (no
-     *  frame loop; the 8.97 ANR lesson). */
-    private fun applyPlayerHeight() {
+    /** Change-guarded transform write — driven by scroll
+     *  events only (no frame loop, no layout pass; the 8.97
+     *  ANR lesson). The scale runs 1.0 at collapsePx 0 down
+     *  to [PLAYER_MIN_SCALE] at full collapse; the snap
+     *  overshoot may push it a small band past either end
+     *  (the same range/6 px band the height system allowed).
+     *  The freed vertical space, (1 - scale) x full height,
+     *  is exactly the clamped collapse amount in px — the
+     *  compact end is 45%, so range = 55% of the full height
+     *  and the two expressions coincide — so the followers
+     *  translate up by that many px and sit flush under the
+     *  shrunken player. Title box and Up-next container get
+     *  the identical value: no gap, no overlap between them.
+     *  The Up-next container additionally grows in layout
+     *  height by the same amount (see inside) so its bottom
+     *  edge stays on the screen bottom — a follower-only
+     *  write; the player subtree gets none. */
+    private fun applyPlayerTransform() {
         val binding = binding ?: return
         if (playerFullHeight <= 0) return
         val range = playerFullHeight - playerCompactHeight
-        val height = (playerFullHeight - playerCollapsePx).coerceIn(
-            playerCompactHeight - range / 6,
-            playerFullHeight + range / 6
-        )
-        if (height == playerAppliedHeight) return
-        playerAppliedHeight = height
-        val params = binding.feedWatchPlayerBox.layoutParams
-        params.height = height
-        binding.feedWatchPlayerBox.layoutParams = params
+        if (range <= 0) return
+        val refresh = binding.feedWatchUpnextRefresh
+        // The refresh container's natural (rest) height,
+        // captured before the first compensation write —
+        // a fresh or not-yet-compensated view always shows
+        // it, so the first apply is a safe capture point.
+        if (playerRefreshBaseHeight == 0 && refresh.height > 0) {
+            playerRefreshBaseHeight = refresh.height
+        }
+        val clampedPx = playerCollapsePx.coerceIn(-range / 6, range + range / 6)
+        val scale = 1f - (clampedPx.toFloat() / range) * (1f - PLAYER_MIN_SCALE)
+        if (scale == playerAppliedScale && clampedPx == playerAppliedShift) return
+        playerAppliedScale = scale
+        playerAppliedShift = clampedPx
+        val box = binding.feedWatchPlayerBox
+        box.scaleX = scale
+        box.scaleY = scale
+        val shift = -clampedPx.toFloat()
+        binding.feedWatchTitleBox.translationY = shift
+        refresh.translationY = shift
+        // The refresh container is bottom-pinned with a 0dp
+        // (match-constraints) height: translated up alone it
+        // would leave a dead black band at the screen bottom
+        // and shorten the list by the same amount — the
+        // blank-band pattern he flagged in 8.96. So its
+        // layout height grows by the collapse amount (top
+        // anchored by bias 0) and its bottom edge stays on
+        // the screen bottom. This write is on a FOLLOWER,
+        // never on the player subtree — the box, stage and
+        // PlayerView still receive no layout writes at all.
+        if (playerRefreshBaseHeight > 0) {
+            val targetHeight = playerRefreshBaseHeight + clampedPx
+            if (targetHeight != playerAppliedRefreshHeight) {
+                playerAppliedRefreshHeight = targetHeight
+                val params = refresh.layoutParams as ConstraintLayout.LayoutParams
+                params.verticalBias = 0f
+                params.height = targetHeight
+                refresh.layoutParams = params
+            }
+        }
     }
 
     /** Spring settle: a collapse left mid-way snaps to the
@@ -329,13 +419,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             interpolator = android.view.animation.OvershootInterpolator(1.1f)
             addUpdateListener { anim ->
                 playerCollapsePx = anim.animatedValue as Int
-                applyPlayerHeight()
+                applyPlayerTransform()
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     if (playerCollapsePx != target) {
                         playerCollapsePx = target
-                        applyPlayerHeight()
+                        applyPlayerTransform()
                     }
                 }
             })
@@ -343,11 +433,20 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
+    /** Back to the full player: collapse amount zeroed and
+     *  the transform re-applied, which writes scale 1 and
+     *  translations 0 (the change guard cannot skip this —
+     *  the applied values only ever equal f(collapsePx), so
+     *  at 0 they ARE identity; the doOnLayout guard reset
+     *  covers view recreation). Called on item change (via
+     *  refreshUpNext), on the fullscreen handoff and on view
+     *  teardown, so nothing downstream can inherit a scaled
+     *  box or shifted followers. */
     private fun resetPlayerCollapse() {
         playerSnapAnimator?.cancel()
         if (playerCollapsePx != 0) {
             playerCollapsePx = 0
-            applyPlayerHeight()
+            applyPlayerTransform()
         }
     }
 
@@ -406,6 +505,22 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.addListener(stateListener)
         TitleResolver.addListener(watchTitleListener)
 
+        // Phase 8.99c (job B): record the system brightness
+        // this page was entered at (a plain read — reads need
+        // no permission and must not flip the system-path
+        // flag). Record only: the exit contract mirrors the
+        // main player, which never hands the level back.
+        if (entrySystemBrightness == null) {
+            entrySystemBrightness = try {
+                Settings.System.getInt(
+                    requireContext().contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS
+                ) / 255f
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         // Phase 8.90: Up next is a 3-column grid like the Feed
         // itself (his order) — the feed card was already sized
         // for three-across in 8.85, so titles/meta stay readable.
@@ -413,66 +528,33 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchUpnext.adapter = upNextAdapter
         setupTitleAutoHide(binding)
 
-        // Phase 8.98: collapsing player (Job 3) — once the box
-        // has its natural 16:9 height, take ownership of that
-        // height: the XML dimension ratio must go first, or
-        // ConstraintLayout would re-derive the box WIDTH from
-        // a fixed height and narrow the video. The compact
-        // height is 45% of the full height. Playback is never
-        // re-attached — only the box's layout height moves, so
-        // position and state are untouched.
-        // Phase 8.99 pinned the PlayerView itself to the full
-        // height inside the box (exact LayoutParams height +
-        // gravity centre + box clip). On his device the
-        // picture STILL deformed in the collapsed strip — with
-        // every view-level write enumerated (see
-        // PHASE899B_CHANGES.md), the layer left free to disobey
-        // the view tree is the video SURFACE: PlayerView's
-        // default SurfaceView renders into a window surface
-        // whose buffer is managed outside ordinary view layout
-        // (SurfaceHolder sizing / compositor crop on API 27),
-        // and it followed the strip, not the pinned view.
-        // Phase 8.99b (job B) removes that layer and that pin:
-        //  - the PlayerView now renders into a TextureView
-        //    (surface_type="texture_view" in the layout) — its
-        //    pixels are composited in-window like any other
-        //    view, so ancestor clipping and layout sizes are
-        //    ordinary view semantics on every API level;
-        //  - the PlayerView sits inside a dedicated plain
-        //    FrameLayout STAGE whose height is set ONCE here
-        //    to the natural 16:9 height; the PlayerView is a
-        //    plain match_parent child of the stage and NO code
-        //    ever writes its LayoutParams again;
-        //  - the box (clipChildren=true in XML) is the only
-        //    view whose height ever changes after this block.
-        // The stage overflows the collapsed box symmetrically
-        // (layout_gravity="center" in XML), the box clips it:
-        // the visible strip is the centre band of the intact
-        // 16:9 picture — cropped, never rescaled.
+        // Phase 8.99c (job A): this block only MEASURES. The
+        // box's natural height (the XML 16:9 ratio sizes it)
+        // is captured once as the collapse range's anchor, the
+        // scale pivot is pinned to the box's top-centre, and
+        // the current collapse transform is (re-)applied. The
+        // 8.98 height takeover, the 8.99 PlayerView pin and
+        // the 8.99b stage sizing that used to live here are
+        // all gone: the box, the stage and the PlayerView keep
+        // their XML sizes for the view's whole life, and the
+        // stage needs no sizing of its own — it is a plain
+        // match_parent child of a permanently full-size box.
+        // The change guard is reset before applying because a
+        // recreated view starts at identity transforms while
+        // playerCollapsePx survives in the fragment.
         binding.feedWatchPlayerBox.doOnLayout {
             val box = binding.feedWatchPlayerBox
             if (box.height <= 0) return@doOnLayout
             if (playerFullHeight == 0) {
                 playerFullHeight = box.height
-                playerCompactHeight = (playerFullHeight * 0.45f).roundToInt()
+                playerCompactHeight = (playerFullHeight * PLAYER_MIN_SCALE).roundToInt()
             }
-            // Runs on every view creation (a recreated view
-            // brings the XML ratio back with it).
-            val params = box.layoutParams as ConstraintLayout.LayoutParams
-            params.dimensionRatio = null
-            params.height = playerFullHeight - playerCollapsePx
-            box.layoutParams = params
-            playerAppliedHeight = params.height
-            // The stage's one and only sizing: an exact height
-            // equal to the player's natural 16:9 height. From
-            // here on, the ONLY height written anywhere in the
-            // player subtree is the box's (applyPlayerHeight).
-            val stageParams =
-                binding.feedWatchPlayerStage.layoutParams as FrameLayout.LayoutParams
-            if (stageParams.height != playerFullHeight) {
-                stageParams.height = playerFullHeight
-                binding.feedWatchPlayerStage.layoutParams = stageParams
-            }
+            box.pivotX = box.width / 2f
+            box.pivotY = 0f
+            playerAppliedScale = -1f
+            playerAppliedShift = Int.MIN_VALUE
+            playerAppliedRefreshHeight = -1
+            applyPlayerTransform()
         }
         binding.feedWatchUpnext.addOnScrollListener(playerCollapseListener)
 
@@ -618,7 +700,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                         downX >= view.width * 0.70f -> 2
                         else -> 1
                     }
-                    startBrightness = currentWindowBrightness()
+                    startBrightness = currentFeedBrightness()
                     startVolume = currentVolumeFraction()
                 }
 
@@ -817,7 +899,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // Phase 8.97: onPause handed the window brightness
         // back (see below) — take the gesture's level again
         // now that this screen is the resumed, visible one.
-        savedFeedBrightness?.let { setWindowBrightness(it) }
+        // Phase 8.99c: that round trip exists only in the
+        // window-FALLBACK mode. In system mode there is
+        // nothing to re-apply — the level the gesture set IS
+        // the system level and it never left (the main
+        // player's contract, mirrored).
+        if (!useFeedSystemBrightness) {
+            savedFeedBrightness?.let { setWindowBrightness(it) }
+        }
         if (handedOff) {
             handedOff = false
             context?.let { FeedPlayer.replayCurrent(it) }
@@ -841,6 +930,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // itself is kept in savedFeedBrightness and onResume
         // re-applies it, so a pause/resume round trip is
         // invisible to the viewer.
+        // Phase 8.99c: this restore serves the window-FALLBACK
+        // mode only. In system mode no window override was
+        // ever set, so the call below is a no-op — and the
+        // system level is deliberately NOT handed back: the
+        // main player's release() never restores it either
+        // (screen-level means the level stays set).
         restoreWindowBrightness()
         super.onPause()
     }
@@ -853,6 +948,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         trailerViews = null
         trailerBoundUrl = null
         playerSnapAnimator?.cancel()
+        // Phase 8.99c: teardown never leaves a scaled player
+        // box or shifted followers behind (the view is going
+        // away, but a detached mid-collapse state must not be
+        // what a recreated view or the back stack inherits).
+        resetPlayerCollapse()
         FeedPlayer.removeListener(stateListener)
         TitleResolver.removeListener(watchTitleListener)
         FeedPlayer.exo?.removeListener(iconListener)
@@ -875,6 +975,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // Phase 8.97: onPause already restored it (the override
         // now lives only while this screen is resumed); this
         // stays as the final backstop for teardown paths.
+        // Phase 8.99c: window-FALLBACK backstop only — in
+        // system mode there is no override to hand back and
+        // the system level stays set by design (see onPause).
         restoreWindowBrightness()
         // After a handoff the main player owns the orientation; only
         // restore it when this page is really being left behind.
@@ -1246,22 +1349,66 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     // ---------- Phase 8.92: brightness / volume swipe gestures ----------
 
-    // Phase 8.99b (job A): the 8.99 video-only brightness
-    // (black scrim for dim + media3 Brightness effect for
-    // boost) is REVERTED on his order ("ব্রাইটনেস আগের
-    // সিস্টেম টাই আনো") — the gesture again drives the
-    // hosting window's screenBrightness attribute, the
-    // 8.92/8.97 model restored verbatim below: the level is
-    // snapshotted at touch-down, ± travel × 2.0, kept in
-    // savedFeedBrightness, re-applied by onResume and handed
-    // back (BRIGHTNESS_OVERRIDE_NONE) in onPause and
-    // onDestroyView. The media3-effect dependency added for
-    // 8.99 is removed again — nothing else used it.
+    // Phase 8.99c (job B — his order: full SCREEN-LEVEL
+    // brightness): the gesture now drives the brightness the
+    // way the MAIN PLAYER does, because the main player's
+    // brightness works on his phone while the 8.92–8.99b
+    // window-only model (restored in 8.99b on his "আগের
+    // সিস্টেম টাই আনো" order) had NO effect on his device at
+    // all. The mechanism is mirrored from PlayerGestureHelper
+    // (read first-hand for this change; the helper itself is
+    // not reused — it is bound to the main player's
+    // PlayerView, its lock / extra-brightness machinery and
+    // its rails):
+    //  - read: Settings.System.SCREEN_BRIGHTNESS / 255;
+    //  - write: SCREEN_BRIGHTNESS_MODE_MANUAL first, then
+    //    SCREEN_BRIGHTNESS on the same 0..255 scale;
+    //  - permission: there is no canWrite /
+    //    ACTION_MANAGE_WRITE_SETTINGS flow anywhere in this
+    //    app (grep-verified) — the helper's handling IS the
+    //    exception-driven fail-over: the first system call
+    //    that throws (permission missing) retires the system
+    //    path for this page instance and the window attribute
+    //    takes over, with the helper's 0.004 floor;
+    //  - exit contract: the helper's release() never restores
+    //    the system level — what the gesture set STAYS set
+    //    (that is what screen-level means) and the next
+    //    touch-down re-reads the live level. Mirrored here:
+    //    no system restore on pause/destroy. The WINDOW
+    //    fallback keeps the 8.97 discipline (override handed
+    //    back in onPause/onDestroyView, re-applied in
+    //    onResume) because that override lives on the app's
+    //    shared window; in system mode those calls are
+    //    no-ops.
+    //  One deliberate, flagged deviation: the helper's write
+    //  is literally min(1, fraction x 255) — capped at 1 of
+    //  255, which contradicts its own read (x / 255). The
+    //  feed writes the full 0..255 value the read side
+    //  expects; the path, the manual-mode handling, the
+    //  fallback order and the floors are otherwise the
+    //  helper's own.
 
-    /** The gesture's starting brightness: the window attribute
-     *  when one is set, else the level this page last used,
-     *  else mid. */
-    private fun currentWindowBrightness(): Float {
+    /** The gesture's starting brightness, mirroring
+     *  PlayerGestureHelper.getBrightness: the SYSTEM level
+     *  while the system path is live; a failed read retires
+     *  the path and re-reads on the fallback — the window
+     *  attribute when one is set, else the level this page
+     *  last used, else mid. */
+    private fun currentFeedBrightness(): Float {
+        if (useFeedSystemBrightness) {
+            try {
+                return Settings.System.getInt(
+                    activity?.contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS
+                ) / 255f
+            } catch (_: Exception) {
+                // The helper's lazy permission check: because
+                // true system brightness requires permission,
+                // the throw IS the check.
+                useFeedSystemBrightness = false
+                return currentFeedBrightness()
+            }
+        }
         val attr = activity?.window?.attributes?.screenBrightness ?: -1f
         return when {
             attr >= 0f -> attr
@@ -1270,28 +1417,47 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
-    /**
-     * Brightness applies ONLY over this window (the watch
-     * screen): a WindowManager.LayoutParams.screenBrightness
-     * override on the hosting activity's window. It is never
-     * written to Settings.System. (The main player's helper
-     * defaults to the system setting — deliberately NOT
-     * mirrored here.)
-     * Phase 8.97: the override's lifetime is now this
-     * screen's RESUMED lifetime — set by the gesture (and
-     * re-applied by onResume), handed back in onPause and
-     * again in onDestroyView. Until 8.96 onDestroyView was
-     * the only restore point, so a pause that kept the
-     * fragment alive left the level on the app's shared
-     * window and the whole display followed it.
-     */
+    /** Write a brightness level, mirroring
+     *  PlayerGestureHelper.setBrightness: manual mode first,
+     *  then the system value; any failure retires the system
+     *  path and the same value is written to the window
+     *  fallback instead — the gesture never fails silently. */
+    private fun setFeedBrightness(fraction: Float) {
+        if (useFeedSystemBrightness) {
+            try {
+                val resolver = activity?.contentResolver ?: return
+                Settings.System.putInt(
+                    resolver,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                )
+                Settings.System.putInt(
+                    resolver,
+                    Settings.System.SCREEN_BRIGHTNESS,
+                    (fraction.coerceIn(0f, 1f) * 255).toInt()
+                )
+                return
+            } catch (_: Exception) {
+                useFeedSystemBrightness = false
+                // fall through to the window write below
+            }
+        }
+        setWindowBrightness(fraction)
+    }
+
+    /** The window-attribute write — since 8.99c only the
+     *  fallback for a missing system permission (the main
+     *  player's fallback, its 0.004 floor included: a value
+     *  too close to 0 makes some devices substitute their
+     *  own brightness, per the helper's own note). While
+     *  this override is in play its lifetime is this screen's
+     *  RESUMED lifetime (the 8.97 discipline): set by the
+     *  gesture, re-applied by onResume, handed back in
+     *  onPause and again in onDestroyView. */
     private fun setWindowBrightness(fraction: Float) {
         val act = activity ?: return
         val lp = act.window.attributes
-        // 0.01 floor: a value too close to 0 makes some devices
-        // substitute their own brightness (the main player's
-        // helper documents the same quirk).
-        lp.screenBrightness = fraction.coerceIn(0.01f, 1f)
+        lp.screenBrightness = fraction.coerceIn(0.004f, 1f)
         act.window.attributes = lp
     }
 
@@ -1311,7 +1477,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     private fun applyFeedBrightness(fraction: Float) {
-        setWindowBrightness(fraction)
+        setFeedBrightness(fraction)
         savedFeedBrightness = fraction
         showGestureIndicator(brightness = true, fraction = fraction)
     }
@@ -1746,6 +1912,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (handedOff) return
         handedOff = true
         FeedPlayer.pause()
+        // Phase 8.99c: the handoff leaves this page at the
+        // full, unshifted player — reset the collapse
+        // transform before navigating away.
+        resetPlayerCollapse()
         // Hand over a generator whose episodes carry the LIVE saved
         // positions, exactly as GeneratorPlayer refreshes them itself —
         // the feed's copies were stamped when playback started.
@@ -1783,6 +1953,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     companion object {
+        /** The compact end of the collapse: the player drawn
+         *  at 45% of its natural size — a layout height in
+         *  8.98–8.99b, a uniform scale since 8.99c (job A). */
+        const val PLAYER_MIN_SCALE = 0.45f
+
         fun newInstance(url: String, apiName: String, name: String): Bundle =
             Bundle().apply {
                 putString("url", url)

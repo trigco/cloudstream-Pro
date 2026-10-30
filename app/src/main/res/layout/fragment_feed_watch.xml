@@ -5,10 +5,13 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- Phase 8.99b (job B): clipChildren is set in XML, not
-         code — the box is the collapse clip window and must
-         clip its overflowing stage from the very first frame,
-         before any fragment code runs. -->
+    <!-- Phase 8.99c (job A): the box is NEVER resized after
+         inflation — the XML 16:9 ratio below is its permanent
+         size. Scroll-collapse is a uniform scale transform on
+         this box written from code (ratio locked by
+         construction). clipChildren stays from the 8.99b clip
+         model; under the transform nothing overflows, so it
+         is inert but harmless. -->
     <FrameLayout
         android:id="@+id/feed_watch_player_box"
         android:layout_width="0dp"
@@ -27,22 +30,19 @@
             android:scaleType="centerCrop"
             android:visibility="gone" />
 
-        <!-- Phase 8.99b (job B): the dedicated stage. Its height
-             is set ONCE from code (the player's natural 16:9
-             height) and never written again; layout_gravity
-             centre keeps it centred on the box, so when the box
-             collapses the stage overflows it symmetrically and
-             the box clips the top/bottom — the PlayerView inside
-             (a plain match_parent child whose LayoutParams no
-             code ever touches) keeps its exact 16:9 measured
-             size at every collapse fraction. surface_type is
-             texture_view: the 8.99 exact-height pin on the
-             PlayerView still deformed on device because the
-             default SurfaceView's buffer is managed outside the
-             view layout system; a TextureView composites
-             in-window, so layout size and clipping are ordinary
-             view semantics. The 8.99 brightness scrim that used
-             to sit here is gone (job A revert). -->
+        <!-- The dedicated stage (8.99b), kept as a plain
+             match_parent wrapper: since 8.99c no code sizes it
+             either — it simply follows the box's permanent
+             16:9 layout, and the PlayerView inside (a plain
+             match_parent child whose LayoutParams no code has
+             ever touched) keeps its exact measured size for
+             the view's whole life. Collapse scales the BOX;
+             the whole subtree, stage included, is drawn
+             proportionally smaller. surface_type stays
+             texture_view (8.99b): a TextureView composites
+             in-window like any other view, so the ancestor
+             scale transform applies to the video pixels
+             exactly as it applies to the layout around them. -->
         <FrameLayout
             android:id="@+id/feed_watch_player_stage"
             android:layout_width="match_parent"
