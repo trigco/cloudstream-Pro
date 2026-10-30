@@ -204,3 +204,27 @@ Deleted after push: `ui/feed/FeedHeroAdapter.kt`,
 - Progressive pool publishing is first-build only (page 1 then
   page 2); later builds were already single-page appends/prepends
   that publish once.
+
+## 8.92b — CI fix + player safe-area gesture zones
+
+- **CI fix (run #272):** `FeedFragment.computeChrome` declares
+  `itemsOf` as a LOCAL function, and two call sites passed it by
+  bare name where a `(String) -> List<FeedEntry>` lambda was
+  expected (lines 1043 and 1122) — a local fun is not a value.
+  Both sites now pass `{ t -> itemsOf(t) }`, wrapping the same
+  memoised lookup; behaviour identical. (The other bare-name
+  pass, inside `computePresentTags`, is a lambda-typed parameter
+  and was already valid.) Supersedes the 8.92 deviation above:
+  the top-strip minimise rule is REPLACED by the safe area.
+- **Safe-area gesture zones (his order 2026-10-30 07:42–07:45):**
+  the Feed player's swipe zones are fixed at touch-down x —
+  left 30% = brightness, right 30% = volume, middle 40% = SAFE
+  (no brightness/volume; tap/double-tap unchanged). The
+  pull-down minimise (>160 px, while playing) now starts from
+  the middle zone at any height; side zones never minimise.
+  Everything else from 8.92 D stands: 2%-of-height claim,
+  snapshot ± travel × 2.0, centred indicator pill, brightness =
+  window attribute only (never Settings.System), restored on
+  destroy, volume = STREAM_MUSIC.
+- Files: `ui/feed/FeedFragment.kt`,
+  `ui/feed/FeedWatchFragment.kt`, this file.

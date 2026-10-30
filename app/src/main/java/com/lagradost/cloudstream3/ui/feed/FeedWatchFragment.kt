@@ -330,13 +330,15 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         // Single tap toggles controls; double tap skips ∓10 s; a long
         // downward drag minimises into the Feed's mini player.
-        // Phase 8.92: vertical swipes adjust brightness (left
-        // half) / volume (right half), main-player style — see
-        // the gesture helpers below. The pull-down minimise
-        // survives for downward drags that START in the player's
-        // top strip (pulling the video down by its top edge);
-        // downward swipes starting anywhere else are brightness/
-        // volume adjustments, exactly like the main player.
+        // Phase 8.92: vertical swipes adjust brightness / volume,
+        // main-player style — see the gesture helpers below.
+        // Phase 8.92b (his safe-area order): the swipe zones are
+        // set by the touch-DOWN x — left 30% = brightness, right
+        // 30% = volume, and the middle 40% is a SAFE area: no
+        // brightness/volume there, and the pull-down minimise
+        // now starts from that middle zone at any height (the
+        // 8.92 top-strip rule is gone). Side zones never
+        // minimise.
         val gestureDetector = GestureDetector(
             requireContext(),
             object : GestureDetector.SimpleOnGestureListener() {
@@ -361,6 +363,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         var dragHandled = false
         var adjustClaimed = false
         var adjustBrightness = false
+        // Phase 8.92b: the gesture zone, fixed at touch-down:
+        // 0 = left 30% (brightness), 1 = middle 40% (safe),
+        // 2 = right 30% (volume).
+        var downZone = 1
         var startBrightness = 0.5f
         var startVolume = 0f
         binding.feedWatchPlayer.setOnTouchListener { view, event ->
@@ -370,6 +376,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                     downY = event.y
                     dragHandled = false
                     adjustClaimed = false
+                    downZone = when {
+                        view.width <= 0 -> 1
+                        downX < view.width * 0.30f -> 0
+                        downX >= view.width * 0.70f -> 2
+                        else -> 1
+                    }
                     startBrightness = currentWindowBrightness()
                     startVolume = currentVolumeFraction()
                 }
@@ -377,9 +389,8 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.x - downX
                     val dyDown = event.y - downY
-                    val topStrip = downY < view.height * 0.25f
                     if (!dragHandled && !adjustClaimed &&
-                        dyDown > 160f && topStrip && FeedPlayer.isPlaying
+                        dyDown > 160f && downZone == 1 && FeedPlayer.isPlaying
                     ) {
                         dragHandled = true
                         minimizeToFeed()
@@ -387,15 +398,14 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                         // The main player's claim rule
                         // (PlayerGestureHelper): a mostly-vertical
                         // move past 2% of the height claims the
-                        // gesture; downward drags out of the top
-                        // strip are exempt (minimise candidates).
-                        if (!adjustClaimed &&
+                        // gesture — but only in the side zones;
+                        // the safe middle never adjusts.
+                        if (!adjustClaimed && downZone != 1 &&
                             abs(dyDown) > view.height * 0.02f &&
-                            abs(dyDown) > abs(dx) &&
-                            !(dyDown > 0f && topStrip)
+                            abs(dyDown) > abs(dx)
                         ) {
                             adjustClaimed = true
-                            adjustBrightness = downX < view.width / 2f
+                            adjustBrightness = downZone == 0
                         }
                         if (adjustClaimed && view.height > 0) {
                             // Main-player multiplier (2.0): the

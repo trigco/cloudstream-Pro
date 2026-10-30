@@ -1040,7 +1040,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         }
         // Provider-section rows, in the user's order.
         val sectionPresent = poolSectionTags(poolSnap)
-        for (tag in orderedSectionTags(poolSnap, appCtx, itemsOf)) {
+        for (tag in orderedSectionTags(poolSnap, appCtx, { t -> itemsOf(t) })) {
             if (tag == TAG_TRENDING) continue
             if (wanted(tag)) rows += rowOf(tag)
         }
@@ -1119,7 +1119,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         return ChromeResult(
             tagRows + providerRows,
             computePresentTags(
-                poolSnap, appCtx, itemsOf, hidden, ratingsSnap
+                poolSnap, appCtx, { t -> itemsOf(t) }, hidden, ratingsSnap
             )
         )
     }
