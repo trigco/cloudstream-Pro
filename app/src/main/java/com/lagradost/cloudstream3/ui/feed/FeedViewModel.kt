@@ -1,18 +1,29 @@
 package com.lagradost.cloudstream3.ui.feed
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.apis
+import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.utils.FamilyMode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * One feed card: a provider search result plus the provider it
@@ -89,8 +100,74 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
     private var firstBuild = true
 
     fun loadIfNeeded() {
-        if (building || feed.value is Resource.Success) return
+        if (building) return
+        // Phase 8.99: a Success that came from the disk cache is
+        // a PAINT, not a build — the fresh build still has to
+        // run behind it (stale-while-revalidate).
+        if (feed.value is Resource.Success && !cachePaintOnly) return
         build()
+    }
+
+    // Phase 8.99: stale-while-revalidate state. [freshPublishSeen]
+    // flips on the first REAL publish so a cache read that lands
+    // late can never overwrite fresher pool state.
+    @Volatile
+    private var freshPublishSeen = false
+    private var cachePaintRequested = false
+
+    @Volatile
+    private var cachePaintOnly = false
+
+    /**
+     * Phase 8.99 — paint the last build's pool from disk on a
+     * cold open, before (and independently of) the fresh build.
+     * The observer treats the paint like any Success: grid +
+     * chrome pass render immediately, then the fresh build's
+     * publishes merge in behind it. Paint-time filtering mirrors
+     * publish/fetch-time filtering: hidden items are dropped
+     * (as in [publish]) and, when Family Mode is on NOW, adult
+     * providers/items/shelves are dropped (as in buildFeed) —
+     * the cache stores unfiltered display data, so a cache
+     * written with Family Mode off cannot leak into a session
+     * where it is on.
+     */
+    fun paintCachedPoolIfCold() {
+        if (cachePaintRequested || building) return
+        if (feed.value is Resource.Success || FeedPool.entries.isNotEmpty()) return
+        cachePaintRequested = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val cached = FeedPoolCache.read(getApplication())
+            if (cached.isEmpty() || freshPublishSeen) return@launch
+            val painted = applyPaintFilters(cached)
+            if (painted.isEmpty() || freshPublishSeen) return@launch
+            FeedPool.entries = painted
+            cachePaintOnly = true
+            feed.postValue(Resource.Success(painted))
+        }
+    }
+
+    /** The display-time half of the fetch-time filters, for
+     *  cache-painted entries (see [paintCachedPoolIfCold]). */
+    private fun applyPaintFilters(entries: List<FeedEntry>): List<FeedEntry> {
+        var out = entries
+        val hidden = FeedHidden.getAll(getApplication())
+        if (hidden.isNotEmpty()) {
+            out = out.filterNot { it.response.url in hidden }
+        }
+        if (FamilyMode.isEnabled()) {
+            out = out.filterNot { entry ->
+                val api = APIHolder.getApiFromNameNull(entry.apiName)
+                (api != null && FamilyMode.isAdultApi(api)) ||
+                    FamilyMode.isAdultItem(entry.response) ||
+                    // buildFeed drops adult SHELVES whole; a
+                    // cached entry whose every shelf is adult
+                    // would never have survived a fresh build.
+                    (entry.sections.isNotEmpty() && entry.sections.all {
+                        FamilyMode.isAdultSection(it)
+                    })
+            }
+        }
+        return out
     }
 
     private var prependNext = false
@@ -129,6 +206,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
     private fun build() {
         if (building) return
         building = true
+        cachePaintOnly = false
         feed.postValue(Resource.Loading())
         // Phase 8.92: the whole build runs on Dispatchers.Default.
         // It used to run in viewModelScope's Main dispatcher, and
@@ -151,8 +229,25 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                     // both pages of every provider (the old first
                     // paint waited for the slowest provider twice
                     // over); page 2 merges in behind it.
+                    // Phase 8.99: page 1 now STREAMS — every
+                    // provider completion publishes the pool-so-
+                    // far, so first paint waits for the FIRST
+                    // provider, not the slowest. The old shape
+                    // (amap = unbounded async + awaitAll) held
+                    // the first post until every homepage had
+                    // arrived; on a ~33 KB/s link that was the
+                    // 30 s+ cold load. Page 2 still starts only
+                    // after page 1 has fully settled (all
+                    // providers landed or timed out), so it never
+                    // competes with first paint for bandwidth.
                     page = 2
-                    publish(buildFeed(1), prepend, suppressEmpty = true)
+                    val page1 = buildFeedStreaming(1) { partial ->
+                        publish(partial, prepend, suppressEmpty = true)
+                    }
+                    publish(
+                        page1, prepend, suppressEmpty = true,
+                        completesFirstBuild = true
+                    )
                     publish(buildFeed(2), prepend, suppressEmpty = false)
                 } else {
                     publish(buildFeed(page), prepend, suppressEmpty = false)
@@ -161,6 +256,16 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
                 feed.postValue(Resource.Failure(false, e.message ?: "Feed failed"))
             } finally {
                 building = false
+                // Phase 8.99: snapshot the pool for the next
+                // cold open (stale-while-revalidate). Off the
+                // build thread, capped, best-effort — see
+                // FeedPoolCache.
+                if (FeedPool.entries.isNotEmpty()) {
+                    val snapshot = FeedPool.entries
+                    viewModelScope.launch(Dispatchers.IO) {
+                        FeedPoolCache.save(getApplication(), snapshot)
+                    }
+                }
                 // A pull that arrived mid-build runs now.
                 if (pendingPrepend) {
                     pendingPrepend = false
@@ -176,11 +281,19 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
      * [suppressEmpty] skips the post when the merge is still
      * empty, so an intermediate first-build page cannot flash
      * the failure/empty state before page 2 lands.
+     * [completesFirstBuild] marks the first build's FINAL
+     * page-1 publish: only it runs the liked-boost weave and
+     * flips [firstBuild] — the 8.99 streaming partial publishes
+     * before it must do neither (a boost search round per
+     * provider landing would re-create the storm this batch
+     * exists to remove, and the flag flip would strand the
+     * final publish's own boost).
      */
     private suspend fun publish(
         fresh: List<FeedEntry>,
         prepend: Boolean,
-        suppressEmpty: Boolean
+        suppressEmpty: Boolean,
+        completesFirstBuild: Boolean = false
     ) {
         var entries = if (prepend) {
             val merged = LinkedHashMap<String, FeedEntry>()
@@ -196,7 +309,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             fresh.forEach { unionSections(merged, it) }
             merged.values.toList()
         }
-        if (firstBuild) {
+        if (completesFirstBuild) {
             entries = withLikedBoost(entries)
             firstBuild = false
         }
@@ -206,6 +319,7 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             entries = entries.filterNot { it.response.url in hidden }
         }
         FeedPool.entries = entries
+        freshPublishSeen = true
         lastBuildWasPrepend = prepend
         if (entries.isEmpty() && suppressEmpty) return
         feed.postValue(
@@ -284,45 +398,165 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             .filter { seen.add(it.response.url) }
     }
 
-    private suspend fun buildFeed(page: Int): List<FeedEntry> {
-        val familyOn = FamilyMode.isEnabled()
-        val providers = apis.filter {
+    /** Providers eligible for the feed pool (shared by every
+     *  build path). */
+    private fun homepageProviders(familyOn: Boolean): List<MainAPI> =
+        apis.filter {
             it.hasMainPage && it.name != "None" &&
                 (!familyOn || !FamilyMode.isAdultApi(it))
         }
-        val perProvider: List<List<FeedEntry>> = providers.amap { api ->
-            try {
-                when (val res = APIRepository(api).getMainPage(page, null)) {
-                    is Resource.Success -> res.value
-                        .filterNotNull()
-                        .flatMap { it.items }
-                        // Phase 8.51: drop adult-labelled shelves
-                        // whole, then judge items by title too.
-                        .filterNot {
-                            familyOn && FamilyMode.isAdultSection(it.name)
-                        }
-                        // Phase 8.91: the shelf name rides along
-                        // with each item (it used to be flattened
-                        // away here) — it is the provenance the
-                        // Feed's category rows are built from.
-                        .flatMap { shelf ->
-                            shelf.list.map { item -> item to shelf.name }
-                        }
-                        .filterNot {
-                            familyOn && FamilyMode.isAdultItem(it.first)
-                        }
-                        .take(40)
-                        .map { (item, shelf) ->
-                            FeedEntry(item, api.name, listOf(shelf))
-                        }
 
-                    else -> emptyList()
-                }
+    /**
+     * One provider's homepage page, as feed entries. Phase 8.99:
+     * wrapped in [FEED_PROVIDER_TIMEOUT_MS] — the repository's
+     * own getMainPage timeout defaults to 120 s
+     * (APIRepository.DEFAULT_TIMEOUT), so one hung or
+     * slow-dripping provider could previously gate the whole
+     * await-all build for up to two minutes. A timed-out (or
+     * throwing) provider is skipped for this round and logged;
+     * its content rejoins on the next refresh/load-more round
+     * or from the disk cache painted at cold open.
+     */
+    private suspend fun fetchProviderPage(
+        api: MainAPI,
+        page: Int,
+        familyOn: Boolean
+    ): List<FeedEntry> {
+        val res = withTimeoutOrNull(FEED_PROVIDER_TIMEOUT_MS) {
+            try {
+                APIRepository(api).getMainPage(page, null)
             } catch (e: Exception) {
-                emptyList()
+                null
             }
         }
+        if (res == null) {
+            Log.w(
+                "FeedViewModel",
+                "Skipping ${api.name} page $page " +
+                    "(>${FEED_PROVIDER_TIMEOUT_MS}ms or error)"
+            )
+            return emptyList()
+        }
+        return when (res) {
+            is Resource.Success -> res.value
+                .filterNotNull()
+                .flatMap { it.items }
+                // Phase 8.51: drop adult-labelled shelves
+                // whole, then judge items by title too.
+                .filterNot {
+                    familyOn && FamilyMode.isAdultSection(it.name)
+                }
+                // Phase 8.91: the shelf name rides along
+                // with each item (it used to be flattened
+                // away here) — it is the provenance the
+                // Feed's category rows are built from.
+                .flatMap { shelf ->
+                    shelf.list.map { item -> item to shelf.name }
+                }
+                .filterNot {
+                    familyOn && FamilyMode.isAdultItem(it.first)
+                }
+                .take(40)
+                .map { (item, shelf) ->
+                    FeedEntry(item, api.name, listOf(shelf))
+                }
 
+            else -> emptyList()
+        }
+    }
+
+    /**
+     * Phase 8.99: bounded fan-out. The old code used the
+     * library `amap` (unbounded async + awaitAll): on a slow
+     * link EVERY provider's homepage trickled in at once, each
+     * getting a sliver of the bandwidth, so nothing finished
+     * early and the await-all landed with the last byte of the
+     * slowest provider. [FEED_PROVIDER_PARALLELISM] fetches at
+     * a time lets the front of the queue actually COMPLETE —
+     * which is what first paint (and each streaming partial)
+     * feeds on — without overwhelming a low-end phone's CPU
+     * with a dozen simultaneous homepage parses.
+     */
+    private suspend fun <T> mapProvidersBounded(
+        providers: List<MainAPI>,
+        block: suspend (MainAPI) -> T
+    ): List<T> = coroutineScope {
+        val semaphore = Semaphore(FEED_PROVIDER_PARALLELISM)
+        providers.map { api ->
+            async { semaphore.withPermit { block(api) } }
+        }.awaitAll()
+    }
+
+    private suspend fun buildFeed(page: Int): List<FeedEntry> {
+        val familyOn = FamilyMode.isEnabled()
+        val providers = homepageProviders(familyOn)
+        val liked = FeedLikes.getAll(getApplication())
+        val perProvider = mapProvidersBounded(providers) { api ->
+            fetchProviderPage(api, page, familyOn)
+        }
+        return interleaveAndBoost(perProvider, liked)
+    }
+
+    /**
+     * Phase 8.99: the first build's page 1, streaming. Same
+     * fetch/interleave as [buildFeed], but after EVERY provider
+     * completion the pool-so-far (interleaved over the providers
+     * that have landed, in provider order) is handed to
+     * [onPartial] for an immediate publish — first paint comes
+     * from the first finished provider instead of the slowest.
+     * Returns the complete page once every provider has settled
+     * or timed out; the caller publishes that as the round's
+     * final word (boost + canonical order) before page 2 starts.
+     * Partials are throttled: the first non-empty one always
+     * goes out, later ones only when the pool grew by at least
+     * [FEED_PARTIAL_MIN_GROWTH] entries, so a fast network
+     * cannot turn the observer into a submit storm (the 8.97
+     * ANR lesson) — on his slow link providers land seconds
+     * apart and every landing qualifies anyway.
+     */
+    private suspend fun buildFeedStreaming(
+        page: Int,
+        onPartial: suspend (List<FeedEntry>) -> Unit
+    ): List<FeedEntry> {
+        val familyOn = FamilyMode.isEnabled()
+        val providers = homepageProviders(familyOn)
+        val liked = FeedLikes.getAll(getApplication())
+        val slots = arrayOfNulls<List<FeedEntry>>(providers.size)
+        val gate = Mutex()
+        var lastPublishedCount = 0
+        coroutineScope {
+            val semaphore = Semaphore(FEED_PROVIDER_PARALLELISM)
+            providers.mapIndexed { index, api ->
+                async {
+                    semaphore.withPermit {
+                        val items = fetchProviderPage(api, page, familyOn)
+                        slots[index] = items
+                        gate.withLock {
+                            val merged = interleaveAndBoost(
+                                slots.filterNotNull(), liked
+                            )
+                            if (merged.isNotEmpty() &&
+                                (lastPublishedCount == 0 ||
+                                    merged.size - lastPublishedCount >=
+                                    FEED_PARTIAL_MIN_GROWTH)
+                            ) {
+                                lastPublishedCount = merged.size
+                                onPartial(merged)
+                            }
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+        return interleaveAndBoost(slots.filterNotNull(), liked)
+    }
+
+    /** Round-robin interleave + taste weave (extracted from the
+     *  old buildFeed tail; semantics unchanged). */
+    private fun interleaveAndBoost(
+        perProvider: List<List<FeedEntry>>,
+        liked: List<FeedLikes.Liked>
+    ): List<FeedEntry> {
         // Round-robin interleave so the feed mixes providers evenly.
         // Phase 8.91: a URL shelved twice keeps its FIRST slot but
         // unions the later copy's section provenance.
@@ -351,7 +585,6 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Taste boost: liked types/providers get every third slot.
-        val liked = FeedLikes.getAll(getApplication())
         if (liked.isEmpty()) return interleaved
         val likedTypes = liked.map { it.typeName }.toSet()
         val likedApis = liked.map { it.apiName }.toSet()
@@ -368,5 +601,24 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
             repeat(2) { if (r < rest.size) out.add(rest[r++]) }
         }
         return out
+    }
+
+    private companion object {
+        /** Phase 8.99: concurrent homepage fetches — enough to
+         *  keep a slow link busy, few enough to let the front
+         *  of the queue finish (and paint) early on a low-end
+         *  phone. */
+        const val FEED_PROVIDER_PARALLELISM = 4
+
+        /** Phase 8.99: per-provider page cap inside a build
+         *  round — a quarter of the repository's 120 s default;
+         *  ~1 MB of homepage even at ~33 KB/s, far beyond a
+         *  typical homepage, while a truly hung provider can no
+         *  longer gate the round for minutes. */
+        const val FEED_PROVIDER_TIMEOUT_MS = 30_000L
+
+        /** Phase 8.99: minimum pool growth between streaming
+         *  partial publishes. */
+        const val FEED_PARTIAL_MIN_GROWTH = 10
     }
 }

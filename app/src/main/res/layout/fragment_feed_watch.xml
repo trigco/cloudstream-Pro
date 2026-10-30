@@ -30,6 +30,29 @@
             app:show_buffering="never"
             app:use_controller="false" />
 
+        <!-- Phase 8.99 (job 3): video-only brightness — the DIM
+             half of the brightness gesture is this black scrim
+             over the video surface only. It is a plain child of
+             the player box sized to the box, so it always covers
+             exactly the visible strip of video at every collapse
+             height (the box clips; the PlayerView inside stays
+             full-height). Everything drawn after it — loading,
+             error, seek FX, gesture rails, controls — is NOT
+             dimmed, and nothing outside this box is touched at
+             all: the window's brightness attribute is no longer
+             written by the feed player (the boost half is a
+             media3 video effect — see FeedWatchFragment).
+             Non-clickable/non-focusable, so touches fall through
+             to the PlayerView below. -->
+        <View
+            android:id="@+id/feed_watch_brightness_scrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:background="@android:color/black"
+            android:clickable="false"
+            android:focusable="false" />
+
         <LinearLayout
             android:id="@+id/feed_watch_loading_box"
             android:layout_width="wrap_content"

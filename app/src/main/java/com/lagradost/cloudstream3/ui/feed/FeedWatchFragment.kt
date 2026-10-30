@@ -11,8 +11,10 @@ import android.os.Looper
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.OrientationEventListener
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
@@ -23,8 +25,10 @@ import androidx.core.view.isVisible
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
 import androidx.media3.common.C.TRACK_TYPE_VIDEO
 import androidx.media3.common.C.TRACK_TYPE_TEXT
+import androidx.media3.common.Effect
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.effect.Brightness
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
@@ -82,10 +86,25 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var lastShownUrl: String? = null
 
     /** Phase 8.92: the last brightness the swipe gesture set —
-     *  remembered so a trip to the batch page and back (which
-     *  restores the window attribute) resumes adjusting from
-     *  the user's level instead of the 0.5 default. */
+     *  remembered so a trip to the batch page and back resumes
+     *  adjusting from the user's level instead of the 0.5
+     *  default. Phase 8.99 (job 3): the level lives on the
+     *  video-only model now (scrim + video effect, see the
+     *  gesture helpers) — this field is its one saved value,
+     *  on the unchanged 0..1 gesture scale (0.5 = natural). */
     private var savedFeedBrightness: Float? = null
+
+    /** Phase 8.99 (job 3): the boost gain currently pushed to
+     *  the feed player via setVideoEffects (null = no video
+     *  effect applied). */
+    private var appliedBoostGain: Float? = null
+
+    /** Phase 8.99 (job 3): items that rejected the boost
+     *  effect (a DRM-configured media item, a playback error
+     *  while boosted, or a throwing setVideoEffects call) —
+     *  those stay scrim-only: their boost half is capped at
+     *  the baseline, the dim half keeps working. */
+    private val effectsUnsupportedUrls = mutableSetOf<String>()
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -360,6 +379,18 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         override fun onPlaybackStateChanged(state: Int) {
             updateBuffering()
         }
+
+        override fun onPlayerError(
+            error: androidx.media3.common.PlaybackException
+        ) {
+            // Phase 8.99 (job 3): if a boost effect was live,
+            // it may be what this stream rejected (media3
+            // effects do not run on DRM-protected content or
+            // extension video renderers) — drop it for this
+            // item for good. Errors with no boost live are the
+            // player's own business (FeedPlayer fails over).
+            onBrightnessEffectsFailed()
+        }
     }
 
     override fun fixLayout(view: View) {
@@ -392,7 +423,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // a fixed height and narrow the video. The compact
         // height is 45% of the full height. Playback is never
         // re-attached — only the box's layout height moves, so
-        // position and state are untouched.
+        // position and state are untouched. Phase 8.99: the
+        // PlayerView inside the box is additionally pinned to
+        // the full height (see inside the post block) — the
+        // box clips, the picture never rescales.
         binding.feedWatchPlayerBox.post {
             val box = binding.feedWatchPlayerBox
             if (box.height <= 0) return@post
@@ -407,6 +441,34 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             params.height = playerFullHeight - playerCollapsePx
             box.layoutParams = params
             playerAppliedHeight = params.height
+            // Phase 8.99: pin the PlayerView itself to the FULL
+            // height, centred vertically in the box. The 8.98
+            // collapse shrank the box and — the PlayerView being
+            // match_parent — shrank the PlayerView with it, to a
+            // ~3.6:1 strip; resize_mode="zoom" could not rescue
+            // the picture: AspectRatioFrameLayout adjusts via
+            // its own re-measure, but under the EXACTLY specs a
+            // match_parent child of a fixed-height parent gets,
+            // the surface is laid out (and its buffer sized) at
+            // the squashed height, so the decoded frame was
+            // scaled non-uniformly into the strip — people
+            // visibly flattened instead of cropped (his report).
+            // With the PlayerView's own bounds frozen at the
+            // natural 16:9 size, its aspect handling is byte-for-
+            // byte the full-height case at every collapse
+            // fraction, and the box — a plain clipping window
+            // (clipChildren is the ViewGroup default) — only
+            // decides how much of that correctly-proportioned
+            // picture is visible: centre-crop by construction,
+            // distortion impossible. Touch zones derive from
+            // the view's (unchanged) width and relative movement
+            // only, so gestures/minimise are unaffected.
+            box.clipChildren = true
+            val playerParams =
+                binding.feedWatchPlayer.layoutParams as FrameLayout.LayoutParams
+            playerParams.height = playerFullHeight
+            playerParams.gravity = Gravity.CENTER
+            binding.feedWatchPlayer.layoutParams = playerParams
         }
         binding.feedWatchUpnext.addOnScrollListener(playerCollapseListener)
 
@@ -552,7 +614,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                         downX >= view.width * 0.70f -> 2
                         else -> 1
                     }
-                    startBrightness = currentWindowBrightness()
+                    startBrightness = currentFeedBrightness()
                     startVolume = currentVolumeFraction()
                 }
 
@@ -600,6 +662,15 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // Phase 8.99 (job 3): mid-drag boost steps
+                    // are throttled (each setVideoEffects call
+                    // rebuilds the effects pipeline) — land the
+                    // gesture's exact final gain on release.
+                    if (adjustClaimed && adjustBrightness) {
+                        savedFeedBrightness?.let {
+                            applyBoostEffect(it, force = true)
+                        }
+                    }
                     adjustClaimed = false
                 }
             }
@@ -748,10 +819,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         handler.post(progressRunnable)
         orientationListener?.enable()
-        // Phase 8.97: onPause handed the window brightness
-        // back (see below) — take the gesture's level again
-        // now that this screen is the resumed, visible one.
-        savedFeedBrightness?.let { setWindowBrightness(it) }
+        // Phase 8.97/8.99: onPause cleared the applied
+        // brightness visuals (see below) — put the gesture's
+        // saved level back now that this screen is the resumed,
+        // visible one.
+        savedFeedBrightness?.let { applyBrightnessVisual(it) }
         if (handedOff) {
             handedOff = false
             context?.let { FeedPlayer.replayCurrent(it) }
@@ -763,19 +835,18 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         handler.removeCallbacks(progressRunnable)
         orientationListener?.disable()
         // Phase 8.97: the brightness override must not
-        // outlive this screen's visibility. Until now the
-        // ONLY restore point was onDestroyView — but this
-        // fragment shares MainActivity's window with the
-        // whole app, and any pause that leaves the fragment
-        // alive (the activity covered/backgrounded, e.g. a
-        // call or a system activity) left the gesture's
-        // level sitting on that shared window, so the whole
-        // display — not just this screen — ran at the
-        // video's brightness (his 12:12 report). The level
-        // itself is kept in savedFeedBrightness and onResume
-        // re-applies it, so a pause/resume round trip is
-        // invisible to the viewer.
-        restoreWindowBrightness()
+        // outlive this screen's visibility — 8.97 enforced
+        // that for the old window-attribute path (a pause that
+        // left the fragment alive had left the level sitting
+        // on the app's shared window). Phase 8.99 (job 3): the
+        // level is video-only now (scrim + an effect on the
+        // SHARED feed player), so what is handed back here is
+        // the applied visual state — the mini player and any
+        // other surface must never inherit this screen's
+        // boost. The level itself is kept in
+        // savedFeedBrightness and onResume re-applies it, so a
+        // pause/resume round trip is invisible to the viewer.
+        clearBrightnessVisual()
         super.onPause()
     }
 
@@ -803,13 +874,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         } else if (!handedOff && !FeedPlayer.minimized) {
             FeedPlayer.stop()
         }
-        // Phase 8.92: hand the window's brightness back — the
-        // swipe gesture's override belongs to this screen only
-        // and must not leak into the rest of the app.
-        // Phase 8.97: onPause already restored it (the override
-        // now lives only while this screen is resumed); this
-        // stays as the final backstop for teardown paths.
-        restoreWindowBrightness()
+        // Phase 8.92: the swipe gesture's brightness belongs
+        // to this screen only and must not leak into the rest
+        // of the app. Phase 8.99 (job 3): that is now the
+        // video-only visuals (scrim + player effect) — onPause
+        // already cleared them; this stays as the final
+        // backstop for teardown paths.
+        clearBrightnessVisual()
         // After a handoff the main player owns the orientation; only
         // restore it when this page is really being left behind.
         if (!handedOff) {
@@ -880,6 +951,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (current != null && current != lastShownUrl) {
             lastShownUrl = current
             refreshUpNext(current)
+            // Phase 8.99 (job 3): a new item takes over the
+            // shared player — clear the old item's brightness
+            // visuals, then re-apply the saved level for THIS
+            // item (its own DRM/effects check decides whether
+            // the boost half may run).
+            onBrightnessItemChanged()
         }
         // Phase 8.56: buffering gets the final word — the READY
         // branch above hides the spinner on every state callback,
@@ -1180,62 +1257,161 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     // ---------- Phase 8.92: brightness / volume swipe gestures ----------
 
-    /** The gesture's starting brightness: the window attribute
-     *  when one is set, else the level this page last used,
-     *  else mid. */
-    private fun currentWindowBrightness(): Float {
-        val attr = activity?.window?.attributes?.screenBrightness ?: -1f
-        return when {
-            attr >= 0f -> attr
-            savedFeedBrightness != null -> savedFeedBrightness!!
-            else -> 0.5f
+    // Phase 8.99 (job 3): brightness is VIDEO-ONLY (his
+    // standing order, repeated 2026-10-30 16:30). Until now
+    // the gesture drove the hosting window's screenBrightness
+    // attribute — 8.97 scoped its lifetime to this screen, but
+    // while the screen was up the WHOLE window still
+    // brightened and dimmed with the video: title, pills and
+    // Up next included. The window attribute is no longer
+    // written from the feed path at all. The gesture scale is
+    // unchanged — 0..1, snapshotted at touch-down, ± travel
+    // × 2.0, and 0.5 is the video's natural level:
+    //   below 0.5 — DIM: the black scrim over the video only
+    //     (feed_watch_brightness_scrim), alpha up to
+    //     BRIGHTNESS_SCRIM_MAX at scale 0 — dark, never
+    //     fully black.
+    //   above 0.5 — BOOST: a media3 Brightness video effect
+    //     on the feed player (ExoPlayer.setVideoEffects;
+    //     media3-effect at the same media3 version), gain up
+    //     to BRIGHTNESS_BOOST_MAX at scale 1 — about a third
+    //     of the effect's full +1 range, deliberately
+    //     conservative so highlights do not blow out.
+    // The main player's own brightness is a different player
+    // and keeps its own behaviour — untouched.
+
+    /** Gesture scale 0 → scrim alpha (the dim cap). */
+    private val brightnessScrimMax = 0.85f
+
+    /** Gesture scale 1 → Brightness effect gain (boost cap). */
+    private val brightnessBoostMax = 0.35f
+
+    /** Mid-drag boost re-application threshold, in gain
+     *  units: every setVideoEffects call rebuilds the
+     *  player's effects pipeline, so micro-steps are skipped
+     *  and the exact final gain is flushed on release. */
+    private val brightnessBoostStep = 0.08f
+
+    /** The gesture's starting level: the level this page last
+     *  set, else mid (the video's natural level). */
+    private fun currentFeedBrightness(): Float =
+        savedFeedBrightness ?: 0.5f
+
+    private fun applyFeedBrightness(fraction: Float) {
+        savedFeedBrightness = fraction
+        applyBrightnessVisual(fraction)
+        showGestureIndicator(brightness = true, fraction = fraction)
+    }
+
+    /** Push a level of the gesture scale onto the video: the
+     *  scrim carries the dim half, the video effect carries
+     *  the boost half, and the 0.5 baseline applies neither.
+     *  Nothing outside the video surface is touched. */
+    private fun applyBrightnessVisual(fraction: Float) {
+        val binding = binding ?: return
+        binding.feedWatchBrightnessScrim.alpha =
+            if (fraction < 0.5f) {
+                (0.5f - fraction) * 2f * brightnessScrimMax
+            } else {
+                0f
+            }
+        applyBoostEffect(fraction, force = false)
+    }
+
+    /** The boost half of the scale (see the block comment
+     *  above). Skipped entirely for items known to reject
+     *  video effects, and for DRM-configured media items —
+     *  media3 states effects do not work with DRM-protected
+     *  content. */
+    private fun applyBoostEffect(fraction: Float, force: Boolean) {
+        val gain = if (fraction > 0.5f) {
+            (fraction - 0.5f) * 2f * brightnessBoostMax
+        } else {
+            0f
         }
+        if (gain <= 0f) {
+            // Back at/below baseline: drop the effect, once.
+            if (appliedBoostGain != null) setFeedVideoEffects(null)
+            return
+        }
+        val url = FeedPlayer.currentUrl
+        if (url != null && url in effectsUnsupportedUrls) return
+        val exo = FeedPlayer.exo ?: return
+        if (exo.currentMediaItem?.localConfiguration
+                ?.drmConfiguration != null
+        ) {
+            url?.let { effectsUnsupportedUrls += it }
+            return
+        }
+        val last = appliedBoostGain
+        if (!force && last != null &&
+            abs(gain - last) < brightnessBoostStep
+        ) {
+            return
+        }
+        setFeedVideoEffects(gain)
     }
 
-    /**
-     * Brightness applies ONLY over this window (the watch
-     * screen): a WindowManager.LayoutParams.screenBrightness
-     * override on the hosting activity's window. It is never
-     * written to Settings.System. (The main player's helper
-     * defaults to the system setting — deliberately NOT
-     * mirrored here.)
-     * Phase 8.97: the override's lifetime is now this
-     * screen's RESUMED lifetime — set by the gesture (and
-     * re-applied by onResume), handed back in onPause and
-     * again in onDestroyView. Until 8.96 onDestroyView was
-     * the only restore point, so a pause that kept the
-     * fragment alive left the level on the app's shared
-     * window and the whole display followed it.
-     */
-    private fun setWindowBrightness(fraction: Float) {
-        val act = activity ?: return
-        val lp = act.window.attributes
-        // 0.01 floor: a value too close to 0 makes some devices
-        // substitute their own brightness (the main player's
-        // helper documents the same quirk).
-        lp.screenBrightness = fraction.coerceIn(0.01f, 1f)
-        act.window.attributes = lp
-    }
-
-    /** Hand the window's brightness back to the system/app
-     *  default (BRIGHTNESS_OVERRIDE_NONE). No-op when no
-     *  override is in place. */
-    private fun restoreWindowBrightness() {
-        activity?.window?.let { win ->
-            val lp = win.attributes
-            val none = android.view.WindowManager.LayoutParams
-                .BRIGHTNESS_OVERRIDE_NONE
-            if (lp.screenBrightness != none) {
-                lp.screenBrightness = none
-                win.attributes = lp
+    /** The one door to ExoPlayer.setVideoEffects on the feed
+     *  player. A failure here must never break playback: any
+     *  throw marks the item scrim-only and the effect is
+     *  dropped. */
+    private fun setFeedVideoEffects(gain: Float?) {
+        val exo = FeedPlayer.exo
+        if (exo == null) {
+            appliedBoostGain = null
+            return
+        }
+        try {
+            if (gain == null) {
+                exo.setVideoEffects(arrayListOf<Effect>())
+                appliedBoostGain = null
+            } else {
+                exo.setVideoEffects(
+                    arrayListOf<Effect>(Brightness(gain))
+                )
+                appliedBoostGain = gain
+            }
+        } catch (t: Throwable) {
+            appliedBoostGain = null
+            FeedPlayer.currentUrl?.let {
+                effectsUnsupportedUrls += it
+            }
+            runCatching {
+                exo.setVideoEffects(arrayListOf<Effect>())
             }
         }
     }
 
-    private fun applyFeedBrightness(fraction: Float) {
-        setWindowBrightness(fraction)
-        savedFeedBrightness = fraction
-        showGestureIndicator(brightness = true, fraction = fraction)
+    /** A playback error arrived while a boost effect was
+     *  live (from iconListener.onPlayerError): the stream may
+     *  be one media3 effects cannot run on (DRM-protected
+     *  content, an extension video renderer). Drop the effect
+     *  for good for this item — the dim half keeps working,
+     *  the boost half is capped at baseline for this item. */
+    private fun onBrightnessEffectsFailed() {
+        if (appliedBoostGain == null) return
+        FeedPlayer.currentUrl?.let { effectsUnsupportedUrls += it }
+        setFeedVideoEffects(null)
+    }
+
+    /** Hand the video back to its natural level: scrim off,
+     *  effect cleared. Runs on pause, on view teardown and on
+     *  item change; the level itself survives in
+     *  savedFeedBrightness and is re-applied for whichever
+     *  item is actually on screen. */
+    private fun clearBrightnessVisual() {
+        binding?.feedWatchBrightnessScrim?.alpha = 0f
+        if (appliedBoostGain != null) setFeedVideoEffects(null)
+    }
+
+    /** A new item took over the shared player: the old item's
+     *  visuals are cleared first, then the saved level is
+     *  re-applied for THIS item — its own checks in the apply
+     *  path decide whether its boost half may run. */
+    private fun onBrightnessItemChanged() {
+        clearBrightnessVisual()
+        savedFeedBrightness?.let { applyBrightnessVisual(it) }
     }
 
     private fun audioManager(): AudioManager? =

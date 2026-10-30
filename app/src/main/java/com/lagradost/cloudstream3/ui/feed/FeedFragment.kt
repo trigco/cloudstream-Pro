@@ -478,6 +478,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         FeedPlayer.warmUp(requireContext())
         FeedPlayer.addListener(miniListener)
         updateMiniBar()
+        // Phase 8.99: stale-while-revalidate — on a cold open,
+        // paint the disk-cached pool (grid + a chrome pass over
+        // the cached entries) as soon as it reads, while the
+        // fresh build below swaps real data in behind it. With
+        // no cache this is a no-op and the skeleton path runs
+        // exactly as before.
+        viewModel.paintCachedPoolIfCold()
         viewModel.loadIfNeeded()
     }
 
