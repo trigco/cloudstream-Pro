@@ -279,16 +279,18 @@
              icon over a 5dp-wide vertical ProgressBar drawn
              with @drawable/progress_drawable_vertical (white
              fill on a translucent track), max 100_000 for
-             smoothness, fading out after 1.5 s. Placement
-             follows the gesture zone (his safe-area split):
-             brightness (left zone) rails on the LEFT edge,
-             volume (right zone) on the RIGHT edge. -->
+             smoothness, fading out after 1.5 s. Phase 8.98:
+             the rail stands on the side OPPOSITE its gesture
+             zone (his order — the gesturing hand covered the
+             rail on its own side): the brightness holder
+             (id feed_gesture_left, fed by the left zone) sits
+             on the RIGHT edge, the volume holder on the LEFT. -->
         <LinearLayout
             android:id="@+id/feed_gesture_left"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="start|center_vertical"
-            android:layout_marginStart="12dp"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="12dp"
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:visibility="gone">
@@ -325,8 +327,8 @@
             android:id="@+id/feed_gesture_right"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="end|center_vertical"
-            android:layout_marginEnd="12dp"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginStart="12dp"
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:visibility="gone">

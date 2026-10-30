@@ -22,49 +22,200 @@
         app:shimmer_highlight_alpha="0.3"
         tools:visibility="gone">
 
+        <!-- Phase 8.98: the loading skeleton mirrors the 8.86
+             page structure (until now it was the upstream
+             poster + lines + episode rows, which reads as
+             "only the episodes shimmer"): 280dp backdrop
+             block, the poster/title header at the page's -28dp
+             overlap, Play + Download pill placeholders, a
+             synopsis block, cast circles, and — series variant
+             only — season chips over the existing episode row
+             skeletons. The episode section is
+             result_loading_episodes; ResultFragmentPhone hides
+             it when the pre-load type hint says movie. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="@dimen/result_padding"
             android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="280dp"
+                android:background="@color/grayShimmer" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_marginBottom="@dimen/loading_margin"
-                android:orientation="horizontal">
-
-                <include layout="@layout/loading_poster" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="-28dp"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/result_padding"
+                android:paddingEnd="@dimen/result_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_marginStart="@dimen/loading_margin"
-                    android:layout_marginEnd="@dimen/loading_margin"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:orientation="horizontal">
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="92dp"
+                        android:layout_height="138dp"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="@dimen/rounded_image_radius" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <include layout="@layout/loading_line" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:layout_marginBottom="6dp"
+                            android:orientation="horizontal">
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="76dp"
+                                android:layout_height="26dp"
+                                android:background="@color/grayShimmer"
+                                app:cardCornerRadius="13dp" />
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="56dp"
+                                android:layout_height="26dp"
+                                android:layout_marginStart="8dp"
+                                android:background="@color/grayShimmer"
+                                app:cardCornerRadius="13dp" />
+                        </LinearLayout>
+
+                        <include layout="@layout/loading_line_short" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="26dp" />
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="26dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
                     android:orientation="vertical">
 
-                    <include layout="@layout/loading_line" />
+                    <include layout="@layout/loading_line_short" />
 
                     <include layout="@layout/loading_line" />
 
                     <include layout="@layout/loading_line" />
 
                     <include layout="@layout/loading_line" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="vertical">
 
                     <include layout="@layout/loading_line_short" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/result_loading_episodes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="8dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="8dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+                    </LinearLayout>
+
+                    <include layout="@layout/loading_episode" />
+
+                    <include layout="@layout/loading_episode" />
+
+                    <include layout="@layout/loading_episode" />
                 </LinearLayout>
             </LinearLayout>
-
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="20dp"
-                tools:ignore="ContentDescription" />
-
-            <include layout="@layout/loading_episode" />
-
-            <include layout="@layout/loading_episode" />
-
-            <include layout="@layout/loading_episode" />
         </LinearLayout>
     </com.facebook.shimmer.ShimmerFrameLayout>
 

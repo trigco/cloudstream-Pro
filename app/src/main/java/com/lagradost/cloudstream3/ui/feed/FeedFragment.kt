@@ -2194,6 +2194,37 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         return text?.toDoubleOrNull()
     }
 
+    /**
+     * Phase 8.98: the ONE year source for the Filters Year tab
+     * AND the year filter — they must never disagree (the 8.96
+     * lesson: a row/tab built from one rule and a filter built
+     * from another shows options that select to nothing).
+     * Order: the response's own year field, else a year carried
+     * in the title itself. Until now both sides read ONLY
+     * [MetadataResolver.yearOf] (the response field), which his
+     * providers leave null on homepage items — the tab showed
+     * nothing but "All" (his screenshot) even though the pool
+     * was full of dated titles.
+     */
+    private fun feedYearOf(entry: FeedEntry): Int? {
+        MetadataResolver.yearOf(entry.response)?.let { return it }
+        return titleYearOf(entry.response.name)
+    }
+
+    /** A year embedded in a title: "(2025)" first, else a bare
+     *  19xx/20xx word. Sanity-banded to 1950..next year so
+     *  stray numbers (resolutions, episode counts) stay out. */
+    private fun titleYearOf(name: String): Int? {
+        val maxYear = java.util.Calendar.getInstance()
+            .get(java.util.Calendar.YEAR) + 1
+        val paren = Regex("""\((\d{4})\)""").find(name)
+            ?.groupValues?.get(1)?.toIntOrNull()
+        val candidate = paren
+            ?: Regex("""\b(19\d{2}|20\d{2})\b""").find(name)
+                ?.groupValues?.get(1)?.toIntOrNull()
+        return candidate?.takeIf { it in 1950..maxYear }
+    }
+
     private fun applyFeedFilters(list: List<FeedEntry>): List<FeedEntry> {
         var out = list
         // Phase 8.88: a tapped category tile filters through
@@ -2232,7 +2263,9 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             }
         }
         filterYear?.let { year ->
-            out = out.filter { MetadataResolver.yearOf(it.response) == year }
+            // Phase 8.98: same source as the Year tab
+            // (feedYearOf) — response year or title year.
+            out = out.filter { feedYearOf(it) == year }
         }
         filterRatingMin?.let { min ->
             out = out.filter { scoreOf(it)?.let { s -> s >= min } == true }
@@ -2268,9 +2301,9 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * language, so the 4th tab is the item's provider (Source).
      * Genre matching is the union rule (genreMatchesEntry):
      * resolved metadata genres first, title keywords as the
-     * fallback; Year reads the response's year field where the
-     * class has one; Rating reads the provider score / resolved
-     * rating.
+     * fallback; Year reads feedYearOf (the response's year
+     * field, else a year embedded in the title — Phase 8.98);
+     * Rating reads the provider score / resolved rating.
      */
     private fun showFeedFilters() {
         val ctx = context ?: return
@@ -2431,8 +2464,13 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             }
-            val years = pool.mapNotNull { MetadataResolver.yearOf(it.response) }
-                .distinct().sortedDescending()
+            // Phase 8.98: years from feedYearOf (response year
+            // or the title's own year — see its doc), newest
+            // first, capped at 24 chips; the sheet's scroll
+            // area takes the rest of the sheet either way, and
+            // pool years cluster on the recent end in practice.
+            val years = pool.mapNotNull { feedYearOf(it) }
+                .distinct().sortedDescending().take(24)
             (listOf(-1) + years).forEach { year ->
                 val chip = makeChip(
                     if (year == -1) getString(R.string.all) else year.toString(),

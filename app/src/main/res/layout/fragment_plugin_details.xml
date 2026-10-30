@@ -77,6 +77,26 @@
             android:focusable="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_github_logo" />
+
+        <!-- Phase 8.98: the sheet standard's circular ✕ close
+             button, completing the phone rollout 8.89 deferred
+             here. Starts gone and is revealed + wired from
+             PluginDetailsFragment on PHONE only — TV keeps the
+             header exactly as it was (the reason 8.89 skipped
+             this layout). -->
+        <ImageButton
+            android:id="@+id/plugin_details_close_btt"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/bg_feed_circle_button"
+            android:contentDescription="@string/switcher_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_baseline_close_24"
+            android:visibility="gone"
+            app:tint="?attr/textColor"
+            tools:visibility="visible" />
     </LinearLayout>
 
     <LinearLayout

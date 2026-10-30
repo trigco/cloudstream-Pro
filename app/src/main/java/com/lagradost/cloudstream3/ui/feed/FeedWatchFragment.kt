@@ -12,8 +12,11 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.OrientationEventListener
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -22,6 +25,7 @@ import androidx.media3.common.C.TRACK_TYPE_VIDEO
 import androidx.media3.common.C.TRACK_TYPE_TEXT
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
@@ -232,6 +236,107 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
+    // Phase 8.98: collapsing player — scrolling Up next up
+    // shrinks the video towards a compact height, scrolling
+    // back down (or reaching the list top) restores it, and a
+    // drag/fling that ends mid-way snaps with a light spring
+    // overshoot. playerCollapsePx is the collapsed amount in
+    // px, 0..(full-compact); the snap animator may push it
+    // slightly past either end (the spring), and
+    // applyPlayerHeight clamps the overshoot to a small band.
+    private var playerFullHeight = 0
+    private var playerCompactHeight = 0
+    private var playerCollapsePx = 0
+    private var playerAppliedHeight = -1
+    private var playerSnapAnimator: ValueAnimator? = null
+
+    private val playerCollapseListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            if (playerFullHeight <= 0 || dy == 0) return
+            val range = playerFullHeight - playerCompactHeight
+            if (range <= 0) return
+            var next = playerCollapsePx + dy
+            // The very top of the list always means a full player.
+            if (!recyclerView.canScrollVertically(-1)) next = 0
+            next = next.coerceIn(0, range)
+            if (next != playerCollapsePx) {
+                playerCollapsePx = next
+                applyPlayerHeight()
+            }
+        }
+
+        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+            when (newState) {
+                RecyclerView.SCROLL_STATE_DRAGGING ->
+                    playerSnapAnimator?.cancel()
+                RecyclerView.SCROLL_STATE_IDLE -> snapPlayerCollapse()
+            }
+        }
+    }
+
+    /** Change-guarded height write — at most one layout pass
+     *  per distinct height, driven by scroll events only (no
+     *  frame loop; the 8.97 ANR lesson). */
+    private fun applyPlayerHeight() {
+        val binding = binding ?: return
+        if (playerFullHeight <= 0) return
+        val range = playerFullHeight - playerCompactHeight
+        val height = (playerFullHeight - playerCollapsePx).coerceIn(
+            playerCompactHeight - range / 6,
+            playerFullHeight + range / 6
+        )
+        if (height == playerAppliedHeight) return
+        playerAppliedHeight = height
+        val params = binding.feedWatchPlayerBox.layoutParams
+        params.height = height
+        binding.feedWatchPlayerBox.layoutParams = params
+    }
+
+    /** Spring settle: a collapse left mid-way snaps to the
+     *  nearer end with an overshoot, so hitting the end state
+     *  bounces slightly past it before settling (his "ঠেকে
+     *  গেলে হালকা স্প্রিং"). */
+    private fun snapPlayerCollapse() {
+        val range = playerFullHeight - playerCompactHeight
+        if (range <= 0) return
+        if (playerCollapsePx <= 0 || playerCollapsePx >= range) return
+        val target = if (playerCollapsePx < range / 2) 0 else range
+        playerSnapAnimator?.cancel()
+        playerSnapAnimator = ValueAnimator.ofInt(playerCollapsePx, target).apply {
+            duration = 320L
+            interpolator = android.view.animation.OvershootInterpolator(1.1f)
+            addUpdateListener { anim ->
+                playerCollapsePx = anim.animatedValue as Int
+                applyPlayerHeight()
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (playerCollapsePx != target) {
+                        playerCollapsePx = target
+                        applyPlayerHeight()
+                    }
+                }
+            })
+            start()
+        }
+    }
+
+    private fun resetPlayerCollapse() {
+        playerSnapAnimator?.cancel()
+        if (playerCollapsePx != 0) {
+            playerCollapsePx = 0
+            applyPlayerHeight()
+        }
+    }
+
+    // Phase 8.98: the watch page's own trailer banner (the
+    // Info sheet's slot, shared via FeedInfoSheet) — bound
+    // from FeedPlayer.currentPage exactly like the sheet
+    // binds it, torn down whenever the item changes.
+    private var trailerViews: FeedInfoSheet.TrailerSlotViews? = null
+    private var trailerPlayer: ExoPlayer? = null
+    private var trailerBoundUrl: String? = null
+
     private var lastPlayerStatus: FeedPlayer.Status = FeedPlayer.Status.IDLE
 
     private val iconListener = object : Player.Listener {
@@ -279,6 +384,49 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 3)
         binding.feedWatchUpnext.adapter = upNextAdapter
         setupTitleAutoHide(binding)
+
+        // Phase 8.98: collapsing player (Job 3) — once the box
+        // has its natural 16:9 height, take ownership of that
+        // height: the XML dimension ratio must go first, or
+        // ConstraintLayout would re-derive the box WIDTH from
+        // a fixed height and narrow the video. The compact
+        // height is 45% of the full height. Playback is never
+        // re-attached — only the box's layout height moves, so
+        // position and state are untouched.
+        binding.feedWatchPlayerBox.post {
+            val box = binding.feedWatchPlayerBox
+            if (box.height <= 0) return@post
+            if (playerFullHeight == 0) {
+                playerFullHeight = box.height
+                playerCompactHeight = (playerFullHeight * 0.45f).roundToInt()
+            }
+            // Runs on every view creation (a recreated view
+            // brings the XML ratio back with it).
+            val params = box.layoutParams as ConstraintLayout.LayoutParams
+            params.dimensionRatio = null
+            params.height = playerFullHeight - playerCollapsePx
+            box.layoutParams = params
+            playerAppliedHeight = params.height
+        }
+        binding.feedWatchUpnext.addOnScrollListener(playerCollapseListener)
+
+        // Phase 8.98: trailer banner (Job 4) — the Info
+        // sheet's 16:9 slot, placed in the title box between
+        // the action pills and the "For You" header (the title
+        // box's last child). It stays gone until the loaded
+        // page ships a trailer (see syncTrailer).
+        val trailerSlotViews = FeedInfoSheet.buildTrailerSlot(requireContext())
+        trailerViews = trailerSlotViews
+        binding.feedWatchTitleBox.let { titleBox ->
+            trailerSlotViews.slot.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (12 * resources.displayMetrics.density).toInt() }
+            titleBox.addView(
+                trailerSlotViews.slot,
+                (titleBox.childCount - 1).coerceAtLeast(0)
+            )
+        }
 
         val url = arguments?.getString("url") ?: return
         val apiName = arguments?.getString("apiName") ?: return
@@ -632,6 +780,13 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     override fun onDestroyView() {
+        // Phase 8.98: the trailer's inline player dies with
+        // the view (the sheet releases its own on dismiss).
+        trailerPlayer?.release()
+        trailerPlayer = null
+        trailerViews = null
+        trailerBoundUrl = null
+        playerSnapAnimator?.cancel()
         FeedPlayer.removeListener(stateListener)
         TitleResolver.removeListener(watchTitleListener)
         FeedPlayer.exo?.removeListener(iconListener)
@@ -730,6 +885,64 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // branch above hides the spinner on every state callback,
         // including the churn that precedes a rebuffer.
         updateBuffering()
+        syncTrailer()
+    }
+
+    /**
+     * Phase 8.98: bind the trailer banner from the player's
+     * loaded page — the same data path the Info sheet uses
+     * (FeedPlayer.currentPage for the current url). The banner
+     * appears only when the page ships a trailer; tapping it
+     * swaps in the inline player in the same slot via the
+     * sheet's own playTrailer (which pauses the feed video
+     * first). A new item tears the old trailer down.
+     */
+    private fun syncTrailer() {
+        val views = trailerViews ?: return
+        val url = FeedPlayer.currentUrl
+        val page = FeedPlayer.currentPage?.takeIf { it.url == url }
+        if (page == null) {
+            // Page not loaded (yet) for this item; if the item
+            // changed under a bound trailer, tear it down now.
+            if (trailerBoundUrl != null && trailerBoundUrl != url) {
+                resetTrailer()
+            }
+            return
+        }
+        if (trailerBoundUrl == url) return
+        resetTrailer()
+        trailerBoundUrl = url
+        val trailer = page.trailers.firstOrNull() ?: return
+        val bannerArt = page.backgroundPosterUrl
+            ?: page.posterUrl ?: FeedPlayer.currentPoster
+        if (!bannerArt.isNullOrBlank()) {
+            views.image.loadImage(bannerArt, page.posterHeaders)
+        }
+        views.slot.isVisible = true
+        views.banner.setOnClickListener {
+            val ctx = context ?: return@setOnClickListener
+            FeedInfoSheet.playTrailer(
+                ctx, views.slot, views.banner, trailer,
+                viewLifecycleOwner.lifecycleScope
+            ) { player ->
+                trailerPlayer = player
+            }
+        }
+    }
+
+    /** Release the trailer player (if any) and restore the
+     *  slot to its banner-only, hidden state. */
+    private fun resetTrailer() {
+        trailerPlayer?.release()
+        trailerPlayer = null
+        trailerBoundUrl = null
+        val views = trailerViews ?: return
+        for (i in views.slot.childCount - 1 downTo 0) {
+            val child = views.slot.getChildAt(i)
+            if (child !== views.banner) views.slot.removeViewAt(i)
+        }
+        views.banner.isVisible = true
+        views.slot.isGone = true
     }
 
     private fun updateBuffering() {
@@ -838,6 +1051,9 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var upNextShownUrls: Set<String> = emptySet()
 
     private fun refreshUpNext(exceptUrl: String, rotate: Boolean = false) {
+        // Phase 8.98: a fresh list starts at the top — the
+        // player goes back to full height with it.
+        resetPlayerCollapse()
         val all = FeedPool.entries.filter { it.response.url != exceptUrl }
         if (!rotate) {
             upNextShownUrls = all.take(30).map { it.response.url }.toSet()
@@ -1074,14 +1290,19 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     /**
      * The on-video gesture feedback: the MAIN PLAYER's slim
      * side rail (his order — the 8.92 centred dark box with
-     * its thick bar is gone). The rail stands at the side of
-     * the gesture's own zone (brightness left, volume right):
+     * its thick bar is gone). Phase 8.98: the rail stands on
+     * the side OPPOSITE the gesture zone (brightness is
+     * adjusted from the left zone, its rail renders on the
+     * right edge — the gesturing hand used to cover it):
      * icon + percentage over a 5dp vertical level bar drawn
      * with the main player's own progress_drawable_vertical
      * at its 100_000 max (progress clamped to the same
      * 2_000 floor PlayerGestureHelper uses). The other rail
      * hides immediately; the shown rail fades out 1.5 s
      * after the gesture settles, like the main player's.
+     * (The holder ids keep their 8.97 names — feedGestureLeft
+     * is the brightness holder; only its screen side moved,
+     * in fragment_feed_watch.xml.)
      */
     private fun showGestureIndicator(brightness: Boolean, fraction: Float) {
         val binding = binding ?: return

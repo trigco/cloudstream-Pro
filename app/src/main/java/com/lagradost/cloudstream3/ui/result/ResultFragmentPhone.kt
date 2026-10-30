@@ -457,6 +457,28 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
     }
 
     var loadingDialog: Dialog? = null
+
+    /**
+     * Phase 8.98: best pre-load type hint for the details
+     * skeleton variant. The LoadResponse (and with it the real
+     * type) has not arrived while the skeleton shows, so the
+     * hint comes from data the app already has for this url:
+     * the Feed pool entry (its SearchResponse carries the
+     * type), else the type TitleResolver cached from an
+     * earlier open. Unknown → NOT a movie, i.e. the series
+     * variant with its episode section shows — the upstream
+     * skeleton's always-episodes behaviour.
+     */
+    private fun isMovieSkeletonHint(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val type =
+            com.lagradost.cloudstream3.ui.feed.FeedPool.entries
+                .firstOrNull { it.response.url == url }?.response?.type
+                ?: com.lagradost.cloudstream3.ui.search.TitleResolver
+                    .cachedType(context, url)
+        return type == com.lagradost.cloudstream3.TvType.Movie ||
+            type == com.lagradost.cloudstream3.TvType.AnimeMovie
+    }
     var popupDialog: Dialog? = null
 
     /**
@@ -1339,6 +1361,14 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 resultFinishLoading.isVisible = data is Resource.Success
 
                 resultLoading.isVisible = data is Resource.Loading
+                // Phase 8.98: the skeleton's episode section
+                // (season chips + episode rows) belongs to the
+                // series variant only — hide it when the
+                // pre-load hint says this page is a movie.
+                if (data is Resource.Loading) {
+                    resultLoadingEpisodes.isVisible =
+                        !isMovieSkeletonHint(storedData.url)
+                }
 
                 resultLoadingError.isVisible = data is Resource.Failure
                 resultErrorText.isVisible = data is Resource.Failure
