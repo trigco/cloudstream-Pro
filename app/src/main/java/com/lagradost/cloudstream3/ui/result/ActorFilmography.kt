@@ -126,7 +126,7 @@ object ActorFilmography {
         val wd = resolveWikidata(
             name = name,
             sourceClean = sourceClean,
-            tvMazeVerified = tv?.second == true,
+            tvMazeVerified = tv?.verified == true,
         )
 
         val merged = LinkedHashMap<String, FilmoEntry>()
@@ -134,7 +134,7 @@ object ActorFilmography {
             cleanTitle(e.title) + "|" + (e.year?.toString() ?: "")
 
         // TVmaze first: it owns posters + character names.
-        tv?.first?.entries.orEmpty().forEach { e -> merged[keyOf(e)] = e }
+        tv?.filmo?.entries.orEmpty().forEach { e -> merged[keyOf(e)] = e }
         wd.orEmpty().forEach { e ->
             val key = keyOf(e)
             val existing = merged[key]
@@ -164,7 +164,7 @@ object ActorFilmography {
         ).take(MAX_ENTRIES)
         if (entries.isEmpty()) return null
         return ActorFilmo(
-            personImage = tv?.first?.personImage,
+            personImage = tv?.filmo?.personImage,
             entries = entries,
         )
     }

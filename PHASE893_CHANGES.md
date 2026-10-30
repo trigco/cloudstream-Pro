@@ -134,3 +134,32 @@ HTTP client, off the main thread):
   no subtitle-count field, so no count is fabricated for
   freshly fetched pages.
 - Phone only; TV layouts and behaviour untouched.
+
+## 8.93b — CI fix + Trailer banner (2026-10-30)
+
+- **CI fix (run #278):** every error was in
+  `ui/result/ActorFilmography.kt`. Root cause: `resolve()` used
+  the `TvPersonResult` returned by `resolveTvMaze()` as if it
+  were a Kotlin `Pair` — calling `.second` (line 129) and
+  `.first` (lines 137, 167) — but `TvPersonResult` is a data
+  class with `filmo` / `verified` properties. The Char type
+  errors at 137 were recovery cascades from the unresolved
+  `.first` in the `forEach` seed expression. Fixed by using the
+  real properties (`tv?.verified`, `tv?.filmo?.entries`,
+  `tv?.filmo?.personImage`); merge/dedupe/sort behaviour is
+  byte-for-byte the same logic. A file-wide re-scan confirms no
+  other `.first`/`.second`-on-wrong-receiver sites (the only
+  `Pair` in the file, the TVmaze fallback, is destructured).
+- **Trailer banner (his order):** the Feed Info sheet's
+  Trailer *button* is replaced by a 16:9 poster/banner block
+  (user's "poster banner style, in the player's ratio"): full
+  content width, 16dp rounded corners (outline-clipped slot),
+  backdrop art (`backgroundPosterUrl`, else the item poster,
+  centre-crop) under the existing feed-hero scrim, a centred
+  circular play badge (feed circle-button surface + white ▶)
+  and a white "Trailer" label at bottom-left. Still shown ONLY
+  when the page ships a trailer. Tapping swaps the banner for
+  the in-sheet ExoPlayer inside the same 16:9 slot (feed video
+  pauses, player released on dismiss, as before); if
+  extraction fails the banner comes back instead of leaving a
+  dead slot. `play_trailer_button` string is now unused.

@@ -3,11 +3,13 @@ package com.lagradost.cloudstream3.ui.feed
 import android.app.Activity
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -58,8 +60,9 @@ import kotlinx.coroutines.withContext
  * Phase 8.93: the Feed watch screen's Info, rebuilt as the rich
  * "More details" sheet he pointed at in the reference app: poster
  * + meta header, genres, subtitle count, description, a Trailer
- * button (only when the provider actually ships a trailer) that
- * plays inside the sheet, and a Starring cast grid whose taps open
+ * banner in player ratio (only when the provider actually ships
+ * a trailer; tapping swaps it for an inline player in the same
+ * 16:9 slot), and a Starring cast grid whose taps open
  * the in-app actor page (see ActorFilmography — no Wikipedia).
  *
  * Data: the already-loaded page is reused when the sheet is opened
@@ -174,23 +177,88 @@ object FeedInfoSheet {
         }
         content.addView(headerRow)
 
-        // Trailer: button first; tapping swaps in an inline player.
-        val trailerBox = FrameLayout(ctx).apply {
+        // Trailer: a 16:9 banner (backdrop art + scrim + centred
+        // play badge + "Trailer" label) in a rounded slot; tapping
+        // it swaps the banner for an inline player in the same
+        // slot. The slot only becomes visible when the loaded page
+        // actually ships a trailer (see populate).
+        val trailerSlot = object : FrameLayout(ctx) {
+            override fun onMeasure(
+                widthMeasureSpec: Int,
+                heightMeasureSpec: Int,
+            ) {
+                val width = MeasureSpec.getSize(widthMeasureSpec)
+                super.onMeasure(
+                    widthMeasureSpec,
+                    MeasureSpec.makeMeasureSpec(
+                        width * 9 / 16, MeasureSpec.EXACTLY
+                    )
+                )
+            }
+        }.apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0
-            )
-            isGone = true
-        }
-        content.addView(trailerBox)
-        val trailerButton = SheetChrome.secondaryButton(
-            ctx, R.string.play_trailer_button
-        ).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 48)
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 14) }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(
+                        0, 0, view.width, view.height, dp(ctx, 16).toFloat()
+                    )
+                }
+            }
+            clipToOutline = true
             isGone = true
         }
-        content.addView(trailerButton)
+        val trailerImage = ImageView(ctx).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundResource(R.drawable.feed_skeleton_poster)
+        }
+        val trailerBanner = FrameLayout(ctx).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            addView(trailerImage)
+            addView(View(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundResource(R.drawable.bg_feed_hero_scrim)
+            })
+            addView(ImageView(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    dp(ctx, 52), dp(ctx, 52), Gravity.CENTER
+                )
+                setBackgroundResource(R.drawable.bg_feed_circle_button)
+                setImageResource(R.drawable.ic_baseline_play_arrow_24)
+                imageTintList =
+                    ContextCompat.getColorStateList(ctx, R.color.white)
+                val pad = dp(ctx, 14)
+                setPadding(pad, pad, pad, pad)
+            })
+            addView(TextView(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.START
+                ).apply {
+                    leftMargin = dp(ctx, 12)
+                    bottomMargin = dp(ctx, 10)
+                }
+                setText(R.string.trailer)
+                setTextColor(Color.WHITE)
+                textSize = 13.5f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            })
+        }
+        trailerSlot.addView(trailerBanner)
+        content.addView(trailerSlot)
 
         val descHeader = sectionHeader(ctx, R.string.feed_info_description)
         content.addView(descHeader)
@@ -296,10 +364,19 @@ object FeedInfoSheet {
             }
             val trailer = page.trailers.firstOrNull()
             if (trailer != null) {
-                trailerButton.isVisible = true
-                trailerButton.setOnClickListener {
-                    trailerButton.isGone = true
-                    playTrailer(ctx, trailerBox, trailer, scope) { player ->
+                // Banner art: the page's backdrop when there is
+                // one, else the (portrait) poster — centre-crop is
+                // right for a 16:9 banner either way.
+                val bannerArt = page.backgroundPosterUrl
+                    ?: page.posterUrl ?: fallbackPoster
+                if (!bannerArt.isNullOrBlank()) {
+                    trailerImage.loadImage(bannerArt, page.posterHeaders)
+                }
+                trailerSlot.isVisible = true
+                trailerBanner.setOnClickListener {
+                    playTrailer(
+                        ctx, trailerSlot, trailerBanner, trailer, scope
+                    ) { player ->
                         trailerPlayer = player
                     }
                 }
@@ -368,17 +445,14 @@ object FeedInfoSheet {
      */
     private fun playTrailer(
         ctx: Context,
-        box: FrameLayout,
+        slot: FrameLayout,
+        banner: View,
         trailer: TrailerData,
         scope: CoroutineScope,
         onPlayer: (ExoPlayer) -> Unit,
     ) {
         FeedPlayer.exo?.playWhenReady = false
-        box.layoutParams = (box.layoutParams as LinearLayout.LayoutParams).apply {
-            height = dp(ctx, 190)
-            topMargin = dp(ctx, 14)
-        }
-        box.isVisible = true
+        banner.isGone = true
         val playerView = PlayerView(ctx).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -386,12 +460,12 @@ object FeedInfoSheet {
             )
             setBackgroundColor(Color.BLACK)
         }
-        box.removeAllViews()
-        box.addView(playerView)
+        slot.addView(playerView)
         scope.launch {
             val link = extractTrailerLink(trailer)
             if (link == null) {
-                box.isGone = true
+                slot.removeView(playerView)
+                banner.isVisible = true
                 return@launch
             }
             val exo = ExoPlayer.Builder(ctx).build()
