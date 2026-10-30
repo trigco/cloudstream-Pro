@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui.feed
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
@@ -72,6 +73,53 @@ class FeedAdapter(
             if (!index.containsKey(key)) index[key] = i
         }
         ratingIndex = index
+        retryUnresolvedTitles()
+    }
+
+    /** Phase 8.99b (job C): the context of the RecyclerView this
+     *  adapter is attached to (application context — no view or
+     *  activity is retained), captured for title retries. */
+    private var attachedContext: Context? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        attachedContext = recyclerView.context.applicationContext
+        retryUnresolvedTitles()
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        attachedContext = null
+        super.onDetachedFromRecyclerView(recyclerView)
+    }
+
+    /**
+     * Phase 8.99b (job C): re-kick title resolution for every
+     * listed item whose card would render blank (id-like raw
+     * name, nothing resolved yet). A card's title kick used to
+     * be one-shot — it fired only from bind(), and bind() does
+     * not re-run for an item a later pool publish leaves
+     * unchanged (DiffUtil: same url+apiName = contents same).
+     * The 8.99 streaming build made that fatal for providers
+     * whose homepage items carry id-like titles (his Hotstar /
+     * Pixar cards): the first kicks fire from the cache paint
+     * WHILE the streaming build, page 2 and the metadata
+     * pre-kick saturate his slow link, the resolver's load
+     * times out, and no later bind ever retries — the name
+     * stays blank for the whole session. Re-kicking on every
+     * list application (and on attach) keeps retrying across
+     * publishes until a load lands; TitleResolver.resolve
+     * self-guards (cached / in-flight), so repeat kicks for
+     * resolved or running items are no-ops.
+     */
+    fun retryUnresolvedTitles() {
+        val context = attachedContext ?: return
+        for (entry in currentList) {
+            val response = entry.response
+            if (response.url in titleOverrides) continue
+            if (!TitleResolver.isIdLike(response.name)) continue
+            if (TitleResolver.cached(context, response.url) != null) continue
+            onTitleNeeded(entry)
+        }
     }
 
     fun setRatingOverride(key: String, rating: String) {

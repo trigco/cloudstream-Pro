@@ -5,10 +5,15 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
+    <!-- Phase 8.99b (job B): clipChildren is set in XML, not
+         code — the box is the collapse clip window and must
+         clip its overflowing stage from the very first frame,
+         before any fragment code runs. -->
     <FrameLayout
         android:id="@+id/feed_watch_player_box"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:clipChildren="true"
         app:layout_constraintDimensionRatio="16:9"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -22,36 +27,37 @@
             android:scaleType="centerCrop"
             android:visibility="gone" />
 
-        <androidx.media3.ui.PlayerView
-            android:id="@+id/feed_watch_player"
+        <!-- Phase 8.99b (job B): the dedicated stage. Its height
+             is set ONCE from code (the player's natural 16:9
+             height) and never written again; layout_gravity
+             centre keeps it centred on the box, so when the box
+             collapses the stage overflows it symmetrically and
+             the box clips the top/bottom — the PlayerView inside
+             (a plain match_parent child whose LayoutParams no
+             code ever touches) keeps its exact 16:9 measured
+             size at every collapse fraction. surface_type is
+             texture_view: the 8.99 exact-height pin on the
+             PlayerView still deformed on device because the
+             default SurfaceView's buffer is managed outside the
+             view layout system; a TextureView composites
+             in-window, so layout size and clipping are ordinary
+             view semantics. The 8.99 brightness scrim that used
+             to sit here is gone (job A revert). -->
+        <FrameLayout
+            android:id="@+id/feed_watch_player_stage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:resize_mode="zoom"
-            app:show_buffering="never"
-            app:use_controller="false" />
+            android:layout_gravity="center">
 
-        <!-- Phase 8.99 (job 3): video-only brightness — the DIM
-             half of the brightness gesture is this black scrim
-             over the video surface only. It is a plain child of
-             the player box sized to the box, so it always covers
-             exactly the visible strip of video at every collapse
-             height (the box clips; the PlayerView inside stays
-             full-height). Everything drawn after it — loading,
-             error, seek FX, gesture rails, controls — is NOT
-             dimmed, and nothing outside this box is touched at
-             all: the window's brightness attribute is no longer
-             written by the feed player (the boost half is a
-             media3 video effect — see FeedWatchFragment).
-             Non-clickable/non-focusable, so touches fall through
-             to the PlayerView below. -->
-        <View
-            android:id="@+id/feed_watch_brightness_scrim"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:alpha="0"
-            android:background="@android:color/black"
-            android:clickable="false"
-            android:focusable="false" />
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/feed_watch_player"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:resize_mode="zoom"
+                app:show_buffering="never"
+                app:surface_type="texture_view"
+                app:use_controller="false" />
+        </FrameLayout>
 
         <LinearLayout
             android:id="@+id/feed_watch_loading_box"

@@ -104,7 +104,15 @@ object TitleResolver {
             try {
                 semaphore.withPermit {
                     val api = getApiFromNameNull(apiName) ?: return@withPermit
-                    val loaded = withTimeoutOrNull(20_000) {
+                    // Phase 8.99b (job C): 20s was too tight
+                    // for JS-bridge providers (a Sky load spins
+                    // up QuickJS and fetches over the user's
+                    // slow link) when the kick fires during the
+                    // feed build storm — the load timed out and
+                    // the card stayed blank. 45s, still bounded;
+                    // FeedAdapter.retryUnresolvedTitles re-kicks
+                    // across publishes until a load lands.
+                    val loaded = withTimeoutOrNull(45_000) {
                         APIRepository(api).load(url)
                     }
                     val loadedValue = (loaded as? Resource.Success)?.value
