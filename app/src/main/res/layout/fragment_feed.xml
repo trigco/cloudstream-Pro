@@ -10,7 +10,11 @@
      Phase 8.96: the ConcatAdapter is skeleton rows (while the
      chrome pass runs) + category rows + cards, and the header
      search button pushes the FEED-scoped search page
-     (navigation_feed_search, FeedSearchFragment). -->
+     (navigation_feed_search, FeedSearchFragment).
+     Phase 8.97: the ConcatAdapter gains a "For You" header
+     item between the category rows and the cards — the header
+     left the floating bar (title + chips only now) so it can
+     never float over a blank band again. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -54,10 +58,35 @@
                          the final page's structure — category
                          rows first (same mirror layout the
                          in-list skeleton rows use), then the
-                         For You poster grid. -->
+                         For You poster grid.
+                         Phase 8.97: a title bar now stands over
+                         the poster grid, mirroring the in-list
+                         For You header item the grid gained
+                         (feed_for_you_header.xml: 16sp line +
+                         34x3dp red underline, same margins). -->
                     <include layout="@layout/feed_category_row_skeleton" />
 
                     <include layout="@layout/feed_category_row_skeleton" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="6dp"
+                        android:orientation="vertical">
+
+                        <View
+                            android:layout_width="72dp"
+                            android:layout_height="20dp"
+                            android:background="@drawable/feed_skeleton_bar" />
+
+                        <View
+                            android:layout_width="34dp"
+                            android:layout_height="3dp"
+                            android:layout_marginTop="4dp"
+                            android:background="@color/colorPrimaryRed" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -319,32 +348,15 @@
 
         </FrameLayout>
 
-        <!-- Phase 8.85: the "For You" header (red underline, 8.73
-             treatment) moves into the page flow above the grid —
-             it used to exist only on the watch screen. -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="10dp"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-medium"
-                android:text="@string/feed_for_you"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <View
-                android:layout_width="34dp"
-                android:layout_height="3dp"
-                android:layout_marginTop="4dp"
-                android:background="@color/colorPrimaryRed" />
-        </LinearLayout>
+        <!-- Phase 8.97: the "For You" header no longer lives
+             in this floating header. It is a list item directly
+             above the card grid now (feed_for_you_header.xml,
+             FeedForYouHeaderAdapter): down here it floated over
+             the top of the list — category rows in the loaded
+             state — while its own grid sat at the list's end,
+             and the space under it read as a blank band over
+             content that was not its own (his 12:01 report).
+             The floating header is title bar + chips only. -->
 
     </LinearLayout>
 

@@ -45,14 +45,39 @@ class FeedAdapter(
      *  keyed by its title+year cache key. */
     private val ratingOverrides = mutableMapOf<String, String>()
 
+    /** Phase 8.97: rating key → first index in the current
+     *  list, rebuilt once per list change. setRatingOverride
+     *  used to find its item with an indexOfFirst that ran
+     *  MetadataResolver.keyFor over every entry until the
+     *  match — keyFor is cleanPosterTitle + a two-Regex
+     *  normalize, so EACH rating landing cost an O(pool)
+     *  regex-heavy scan on the main thread. Ratings land in
+     *  bursts throughout the load window (the fragment's
+     *  24-item pre-kick plus per-bind resolves), which made
+     *  this a steady main-thread tax in exactly the seconds
+     *  taps were ANR'ing (his 12:09 report). The map build
+     *  pays the same keyFor cost ONCE per list, and each
+     *  landing is now a map lookup + one notifyItemChanged. */
+    private var ratingIndex: Map<String, Int> = emptyMap()
+
+    override fun onCurrentListChanged(
+        previousList: MutableList<FeedEntry>,
+        currentList: MutableList<FeedEntry>
+    ) {
+        val index = HashMap<String, Int>(currentList.size)
+        currentList.forEachIndexed { i, entry ->
+            val key = MetadataResolver.keyFor(
+                entry.response.name, MetadataResolver.yearOf(entry.response)
+            )
+            if (!index.containsKey(key)) index[key] = i
+        }
+        ratingIndex = index
+    }
+
     fun setRatingOverride(key: String, rating: String) {
         ratingOverrides[key] = rating
-        val idx = currentList.indexOfFirst {
-            MetadataResolver.keyFor(
-                it.response.name, MetadataResolver.yearOf(it.response)
-            ) == key
-        }
-        if (idx >= 0) notifyItemChanged(idx)
+        val idx = ratingIndex[key] ?: -1
+        if (idx >= 0 && idx < currentList.size) notifyItemChanged(idx)
     }
 
     object Diff : DiffUtil.ItemCallback<FeedEntry>() {

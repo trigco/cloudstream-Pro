@@ -231,6 +231,33 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      *  pass runs (see chromeAwaitingPost). */
     private val chromeSkeletonAdapter = FeedChromeSkeletonAdapter()
 
+    /** Phase 8.97: the "For You" header as a ConcatAdapter
+     *  item directly above the grid (see
+     *  FeedForYouHeaderAdapter) — it was the bottom block of
+     *  the floating header until 8.96, visibly detached from
+     *  the grid it titles. Shown exactly while the Feed is
+     *  browsing and the grid holds cards (see submitFeedList). */
+    private val forYouHeaderAdapter = FeedForYouHeaderAdapter()
+
+    /** Phase 8.97: every grid submit in this fragment goes
+     *  through here so the For You header item tracks the
+     *  grid's content 1:1 — the header exists in the adapter
+     *  chain only while browsing (no live query/filter) with
+     *  a non-empty grid, and can never float over a void. */
+    private fun submitFeedList(
+        list: List<FeedEntry>,
+        commitCallback: (() -> Unit)? = null
+    ) {
+        val showHeader = searchQuery.isEmpty() && !filtersActive &&
+            list.isNotEmpty()
+        forYouHeaderAdapter.setShowing(showHeader)
+        if (commitCallback != null) {
+            adapter.submitList(list, commitCallback)
+        } else {
+            adapter.submitList(list)
+        }
+    }
+
     /** Phase 8.88: resolved metadata lands here — queue a calm
      *  refresh of the category surfaces (same debounce-until-idle
      *  pattern as resolved titles, so a burst of resolutions
@@ -293,24 +320,33 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     }
 
     override fun onBindingCreated(binding: FragmentFeedBinding) {
+        // Phase 8.97: a fresh view starts from the XML padding,
+        // so the change-only padding guards (updateHeaderPadding)
+        // must not carry a previous view's values into it.
+        lastHeaderPad = -1
+        lastProgressOffset = -1
         // Phase 8.85: 3 columns like Home's grid (was 2).
         // Phase 8.92: the ConcatAdapter is category rows + cards
         // — the hero header item is gone with the hero itself.
         val gridLayoutManager = GridLayoutManager(context, 3)
         gridLayoutManager.spanSizeLookup =
             object : GridLayoutManager.SpanSizeLookup() {
-                // Category rows AND their skeleton placeholders
-                // (one adapter item PER ROW) span the full grid
-                // width; cards take one column.
+                // Category rows, their skeleton placeholders
+                // (one adapter item PER ROW) and the For You
+                // section header span the full grid width;
+                // cards take one column.
                 override fun getSpanSize(position: Int): Int {
                     val headers = categoryRowsAdapter.itemCount +
-                        chromeSkeletonAdapter.itemCount
+                        chromeSkeletonAdapter.itemCount +
+                        forYouHeaderAdapter.itemCount
                     return if (position < headers) 3 else 1
                 }
             }
         binding.feedRecycler.layoutManager = gridLayoutManager
-        binding.feedRecycler.adapter =
-            ConcatAdapter(categoryRowsAdapter, chromeSkeletonAdapter, adapter)
+        binding.feedRecycler.adapter = ConcatAdapter(
+            categoryRowsAdapter, chromeSkeletonAdapter,
+            forYouHeaderAdapter, adapter
+        )
         // Fixed size + no change animations: the grid must never
         // relayout or flash mid-scroll (Phase 8.23 jitter fix).
         binding.feedRecycler.setHasFixedSize(true)
@@ -406,7 +442,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                             scrollTopOnNextFeed = false
                             listState = null
                         }
-                        adapter.submitList(filtered) {
+                        submitFeedList(filtered) {
                             if (goTop) {
                                 binding.feedRecycler.scrollToPosition(0)
                             } else {
@@ -479,7 +515,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 if (query.isEmpty()) {
                     val filtered = applyFeedFilters(pool)
                     binding?.setFeedEmpty( filtered.isEmpty() )
-                    adapter.submitList(filtered)
+                    submitFeedList(filtered)
                 } else {
                     applySearch(query)
                 }
@@ -516,15 +552,29 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             val chip = binding.feedChips.getChildAt(i) as? TextView ?: continue
             val tag = chip.tag as? String ?: continue
             styleChip(chip, selected = tag == selected)
-            // Phase 8.91: one presence rule for every tag kind —
-            // the memoised tagItems (provider sections first,
-            // metadata second) decides; special handling survives
-            // only for All / the selection / the two fixed tags.
+            // Phase 8.91: one presence rule for every tag kind.
+            // Phase 8.97: presence is read from
+            // [currentTabNames] — the tag list the last chrome
+            // pass POSTED, which computePresentTags built as
+            // exactly "tags with at least one pool item". The
+            // 8.91 form called the memoised tagItems(tag) per
+            // chip, on the MAIN thread: every rating landing
+            // bumps tagGeneration, which lazily invalidates
+            // that memo, so a refresh during the load window
+            // recomputed tag lists over the whole pool on the
+            // main thread (per entry: a TitleResolver prefs
+            // read + a MetadataResolver prefs read + JSON
+            // parse attempt, misses never negatively cached).
+            // Ratings land in bursts while the pool loads, and
+            // this refresh runs on every applySearch / chip tap
+            // — a proven main-thread storm in exactly the
+            // window where taps ANR'd (his 12:09 report). The
+            // posted list carries the same semantics at O(1).
             chip.alpha = when {
                 tag == "All" || tag == selected -> 1f
                 tag == TAG_TRENDING || tag == TAG_TOP_RATED -> 1f
                 else ->
-                    if (tagItems(tag).isNotEmpty()) 1f else 0.45f
+                    if (tag in currentTabNames) 1f else 0.45f
             }
         }
     }
@@ -657,15 +707,28 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      *  normalize() Regex instantiations, which is what made a
      *  single pass take seconds on the 8.1 phone. Null
      *  outside a pass: main-thread callers use the resolver's
-     *  own caches exactly as before. */
-    @Volatile
-    private var passMetaCache:
-        MutableMap<String, MetadataResolver.Meta?>? = null
+     *  own caches exactly as before.
+     *  Phase 8.97: the memo lives in a ThreadLocal, set only
+     *  on the pass thread (computeChrome installs it; the
+     *  pass body has no suspension points, so it never hops
+     *  threads). The 8.95 form was a plain @Volatile field
+     *  holding a Collections.synchronizedMap — while a pass
+     *  ran, MAIN-thread metaOf callers (grid binds, filters)
+     *  also routed through that shared map. Its per-call
+     *  locks were never held across the slow resolver read
+     *  (containsKey → read → put are separate calls), so it
+     *  was not itself an ANR mechanism — but confining the
+     *  memo to the pass thread removes the contention class
+     *  entirely: the main thread now NEVER waits on any pass
+     *  structure, and its metaOf calls use the resolver's
+     *  own caches exactly as they did before 8.94. */
+    private val passMetaCache =
+        ThreadLocal<MutableMap<String, MetadataResolver.Meta?>>()
 
     /** The item's resolved metadata (genres / language /
      *  country), when MetadataResolver has it cached. */
     private fun metaOf(entry: FeedEntry): MetadataResolver.Meta? {
-        val cache = passMetaCache
+        val cache = passMetaCache.get()
         if (cache != null) {
             val url = entry.response.url
             if (cache.containsKey(url)) return cache[url]
@@ -1245,16 +1308,16 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         // the COMMON case and metaOf memoises it too.
         // ConcurrentHashMap rejects null values with an NPE,
         // which crashed the pass (and the app) on the first
-        // uncached pool entry. A synchronized HashMap allows
-        // nulls; its per-call synchronization is enough here
-        // (a lost race only repeats one resolver lookup).
-        passMetaCache = java.util.Collections.synchronizedMap(
-            mutableMapOf()
-        )
+        // uncached pool entry.
+        // Phase 8.97: the memo is a plain HashMap again — it
+        // is confined to this pass thread by the ThreadLocal,
+        // so no synchronization is needed at all and no other
+        // thread can ever contend on it.
+        passMetaCache.set(mutableMapOf())
         try {
             return computeChromePass(poolSnap, ratingsSnap, appCtx)
         } finally {
-            passMetaCache = null
+            passMetaCache.remove()
         }
     }
 
@@ -1770,6 +1833,28 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             // below it.
             updateHeaderPadding(binding)
         }
+        // Phase 8.97: keep the reserve honest for the header's
+        // whole life, not just at setup. The one-shot post{}
+        // measure above (and the animator's re-measure-if-zero)
+        // could leave headerFullHeight describing a header
+        // that no longer exists — the chips row rebuilds when
+        // a chrome pass posts, and any height drift between
+        // the measured value and the rendered header shows up
+        // as dead space (or overlap) between the header's
+        // bottom edge and the first list item. A layout
+        // listener tracks the real height; updateHeaderPadding
+        // itself is change-only (see below), so this costs
+        // nothing when nothing changed.
+        binding.feedHeader.addOnLayoutChangeListener {
+                _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            val height = bottom - top
+            if (height > 0 && height != headerFullHeight &&
+                height != oldBottom - oldTop
+            ) {
+                headerFullHeight = height
+                updateHeaderPadding(binding)
+            }
+        }
         binding.feedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(
                 recyclerView: RecyclerView, newState: Int
@@ -1937,7 +2022,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
             binding.feedLoading.isVisible = false
             val filtered = applyFeedFilters(pool)
             binding.setFeedEmpty( filtered.isEmpty() )
-            adapter.submitList(filtered)
+            submitFeedList(filtered)
             return
         }
         val local = applyFeedFilters(pool.filter {
@@ -1952,15 +2037,15 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
         if (local.isNotEmpty()) {
             binding.feedLoading.isVisible = false
             binding.setFeedEmpty( false )
-            adapter.submitList(local)
+            submitFeedList(local)
         } else if (query.length >= 3) {
             binding.setFeedEmpty( false )
             binding.feedLoading.isVisible = true
-            adapter.submitList(local)
+            submitFeedList(local)
         } else {
             binding.feedLoading.isVisible = false
             binding.setFeedEmpty( !viewModel.isBuilding )
-            adapter.submitList(local)
+            submitFeedList(local)
             return
         }
         if (query.length < 3) return
@@ -1979,7 +2064,7 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
                 })
                 binding.feedLoading.isVisible = false
                 binding.setFeedEmpty( merged.isEmpty() )
-                adapter.submitList(merged)
+                submitFeedList(merged)
             }
         }
         pendingSearch = task
@@ -2043,25 +2128,47 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
      * the Trending row). The animator now re-runs this on
      * every frame, so the padding follows the header exactly;
      * fully hidden, the reserve collapses to the plain 6dp.
+     * Phase 8.97: the application is CHANGE-ONLY. View
+     * .setPadding calls requestLayout() unconditionally —
+     * it does not check whether the value changed — and
+     * this function is called from the header animator's
+     * every frame AND from applySearch, which the debounced
+     * metadata runnable re-runs on every resolver burst
+     * while a filter is live. During the load window that
+     * was a stream of full RecyclerView layout passes for
+     * a padding value that had not moved (a proven piece
+     * of the load-window ANR, his 12:09 report). The
+     * refresh-ring offset only depends on the full height,
+     * so it is set when that changes, not per frame.
      */
+    private var lastHeaderPad = -1
+    private var lastProgressOffset = -1
+
     private fun updateHeaderPadding(binding: FragmentFeedBinding) {
         if (headerFullHeight > 0) {
             val topPad = (headerFullHeight +
                 binding.feedHeader.translationY).toInt()
                 .coerceAtLeast(0) + dp(6)
-            binding.feedRecycler.setPadding(
-                binding.feedRecycler.paddingLeft, topPad,
-                binding.feedRecycler.paddingRight,
-                binding.feedRecycler.paddingBottom
-            )
-            binding.feedSkeleton.setPadding(
-                binding.feedSkeleton.paddingLeft, topPad,
-                binding.feedSkeleton.paddingRight,
-                binding.feedSkeleton.paddingBottom
-            )
-            binding.feedSwipeRefresh.setProgressViewOffset(
-                false, 0, headerFullHeight + dp(10)
-            )
+            if (topPad != lastHeaderPad) {
+                lastHeaderPad = topPad
+                binding.feedRecycler.setPadding(
+                    binding.feedRecycler.paddingLeft, topPad,
+                    binding.feedRecycler.paddingRight,
+                    binding.feedRecycler.paddingBottom
+                )
+                binding.feedSkeleton.setPadding(
+                    binding.feedSkeleton.paddingLeft, topPad,
+                    binding.feedSkeleton.paddingRight,
+                    binding.feedSkeleton.paddingBottom
+                )
+            }
+            val progressOffset = headerFullHeight + dp(10)
+            if (progressOffset != lastProgressOffset) {
+                lastProgressOffset = progressOffset
+                binding.feedSwipeRefresh.setProgressViewOffset(
+                    false, 0, progressOffset
+                )
+            }
         }
     }
 

@@ -305,9 +305,11 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchToTop.isVisible = first >= 8
             }
         })
-        // Phase 8.93: the Info pill opens the rich details sheet
+        // Phase 8.93: the Info link opens the rich details sheet
         // (FeedInfoSheet: description, cast, trailer) — it no
         // longer expands the plot inline under the title.
+        // Phase 8.97: it is a text link now ("Info ›"), not a
+        // pill button (his order — see fragment_feed_watch.xml).
         binding.feedWatchMore.isVisible = true
         binding.feedWatchMore.setOnClickListener { view ->
             view.hapticTick()
@@ -598,6 +600,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         handler.post(progressRunnable)
         orientationListener?.enable()
+        // Phase 8.97: onPause handed the window brightness
+        // back (see below) — take the gesture's level again
+        // now that this screen is the resumed, visible one.
+        savedFeedBrightness?.let { setWindowBrightness(it) }
         if (handedOff) {
             handedOff = false
             context?.let { FeedPlayer.replayCurrent(it) }
@@ -608,6 +614,20 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.savePosition()
         handler.removeCallbacks(progressRunnable)
         orientationListener?.disable()
+        // Phase 8.97: the brightness override must not
+        // outlive this screen's visibility. Until now the
+        // ONLY restore point was onDestroyView — but this
+        // fragment shares MainActivity's window with the
+        // whole app, and any pause that leaves the fragment
+        // alive (the activity covered/backgrounded, e.g. a
+        // call or a system activity) left the gesture's
+        // level sitting on that shared window, so the whole
+        // display — not just this screen — ran at the
+        // video's brightness (his 12:12 report). The level
+        // itself is kept in savedFeedBrightness and onResume
+        // re-applies it, so a pause/resume round trip is
+        // invisible to the viewer.
+        restoreWindowBrightness()
         super.onPause()
     }
 
@@ -631,15 +651,10 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // Phase 8.92: hand the window's brightness back — the
         // swipe gesture's override belongs to this screen only
         // and must not leak into the rest of the app.
-        activity?.window?.let { win ->
-            val lp = win.attributes
-            val none = android.view.WindowManager.LayoutParams
-                .BRIGHTNESS_OVERRIDE_NONE
-            if (lp.screenBrightness != none) {
-                lp.screenBrightness = none
-                win.attributes = lp
-            }
-        }
+        // Phase 8.97: onPause already restored it (the override
+        // now lives only while this screen is resumed); this
+        // stays as the final backstop for teardown paths.
+        restoreWindowBrightness()
         // After a handoff the main player owns the orientation; only
         // restore it when this page is really being left behind.
         if (!handedOff) {
@@ -803,7 +818,7 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             )
         }
-        // Phase 8.93: the Info pill stays available whenever the
+        // Phase 8.93: the Info link stays available whenever the
         // watch screen is up — the sheet loads whatever the
         // player has not loaded yet, so it no longer waits for a
         // plot to exist.
@@ -965,12 +980,18 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
      * Brightness applies ONLY over this window (the watch
      * screen): a WindowManager.LayoutParams.screenBrightness
      * override on the hosting activity's window. It is never
-     * written to Settings.System, and onDestroyView restores
-     * BRIGHTNESS_OVERRIDE_NONE, so the rest of the app is
-     * never affected. (The main player's helper defaults to
-     * the system setting — deliberately NOT mirrored here.)
+     * written to Settings.System. (The main player's helper
+     * defaults to the system setting — deliberately NOT
+     * mirrored here.)
+     * Phase 8.97: the override's lifetime is now this
+     * screen's RESUMED lifetime — set by the gesture (and
+     * re-applied by onResume), handed back in onPause and
+     * again in onDestroyView. Until 8.96 onDestroyView was
+     * the only restore point, so a pause that kept the
+     * fragment alive left the level on the app's shared
+     * window and the whole display followed it.
      */
-    private fun applyFeedBrightness(fraction: Float) {
+    private fun setWindowBrightness(fraction: Float) {
         val act = activity ?: return
         val lp = act.window.attributes
         // 0.01 floor: a value too close to 0 makes some devices
@@ -978,6 +999,25 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // helper documents the same quirk).
         lp.screenBrightness = fraction.coerceIn(0.01f, 1f)
         act.window.attributes = lp
+    }
+
+    /** Hand the window's brightness back to the system/app
+     *  default (BRIGHTNESS_OVERRIDE_NONE). No-op when no
+     *  override is in place. */
+    private fun restoreWindowBrightness() {
+        activity?.window?.let { win ->
+            val lp = win.attributes
+            val none = android.view.WindowManager.LayoutParams
+                .BRIGHTNESS_OVERRIDE_NONE
+            if (lp.screenBrightness != none) {
+                lp.screenBrightness = none
+                win.attributes = lp
+            }
+        }
+    }
+
+    private fun applyFeedBrightness(fraction: Float) {
+        setWindowBrightness(fraction)
         savedFeedBrightness = fraction
         showGestureIndicator(brightness = true, fraction = fraction)
     }
@@ -1004,18 +1044,78 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     private val gestureHideRunnable = Runnable {
-        binding?.feedGestureIndicator?.isVisible = false
+        val binding = binding ?: return@Runnable
+        // Phase 8.97: the main player's rails fade out (300 ms)
+        // rather than hard-cutting — mirror that.
+        for (holder in listOf(
+            binding.feedGestureLeft, binding.feedGestureRight
+        )) {
+            if (holder.isVisible) {
+                holder.animate().cancel()
+                holder.animate().alpha(0f).setDuration(300)
+                    .withEndAction {
+                        holder.isVisible = false
+                        holder.alpha = 1f
+                    }
+                    .start()
+            }
+        }
     }
 
-    /** The on-video feedback pill: sun/volume icon + the new
-     *  percentage + a level bar (the main player's side-rail
-     *  indicator in miniature). Auto-hides after the gesture
-     *  settles. */
+    /** Phase 8.97: the main player's brightness icons, by
+     *  level (PlayerGestureHelper.brightnessIcons) — the feed
+     *  used to hard-code the middle sun for every level. */
+    private val brightnessIcons = listOf(
+        R.drawable.sun_1, R.drawable.sun_2, R.drawable.sun_3,
+        R.drawable.sun_4, R.drawable.sun_5, R.drawable.sun_6,
+        R.drawable.sun_7
+    )
+
+    /**
+     * The on-video gesture feedback: the MAIN PLAYER's slim
+     * side rail (his order — the 8.92 centred dark box with
+     * its thick bar is gone). The rail stands at the side of
+     * the gesture's own zone (brightness left, volume right):
+     * icon + percentage over a 5dp vertical level bar drawn
+     * with the main player's own progress_drawable_vertical
+     * at its 100_000 max (progress clamped to the same
+     * 2_000 floor PlayerGestureHelper uses). The other rail
+     * hides immediately; the shown rail fades out 1.5 s
+     * after the gesture settles, like the main player's.
+     */
     private fun showGestureIndicator(brightness: Boolean, fraction: Float) {
         val binding = binding ?: return
-        binding.feedGestureIcon.setImageResource(
+        val holder = if (brightness) {
+            binding.feedGestureLeft
+        } else {
+            binding.feedGestureRight
+        }
+        val other = if (brightness) {
+            binding.feedGestureRight
+        } else {
+            binding.feedGestureLeft
+        }
+        val icon = if (brightness) {
+            binding.feedGestureLeftIcon
+        } else {
+            binding.feedGestureRightIcon
+        }
+        val text = if (brightness) {
+            binding.feedGestureLeftText
+        } else {
+            binding.feedGestureRightText
+        }
+        val bar = if (brightness) {
+            binding.feedGestureLeftBar
+        } else {
+            binding.feedGestureRightBar
+        }
+        icon.setImageResource(
             if (brightness) {
-                R.drawable.sun_4
+                val idx = (fraction * brightnessIcons.lastIndex)
+                    .roundToInt()
+                    .coerceIn(0, brightnessIcons.lastIndex)
+                brightnessIcons[idx]
             } else when {
                 fraction <= 0.01f -> R.drawable.ic_baseline_volume_mute_24
                 fraction < 0.5f -> R.drawable.ic_baseline_volume_down_24
@@ -1023,11 +1123,17 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             }
         )
         val percent = (fraction * 100).roundToInt()
-        binding.feedGestureText.text = "$percent%"
-        binding.feedGestureBar.progress = percent
-        binding.feedGestureIndicator.isVisible = true
+        text.text = "$percent%"
+        bar.progress = (fraction * 100_000).toInt()
+            .coerceIn(2_000, 100_000)
+        other.animate().cancel()
+        other.isVisible = false
+        other.alpha = 1f
+        holder.animate().cancel()
+        holder.alpha = 1f
+        holder.isVisible = true
         handler.removeCallbacks(gestureHideRunnable)
-        handler.postDelayed(gestureHideRunnable, 1_200L)
+        handler.postDelayed(gestureHideRunnable, 1_500L)
     }
 
     // ---------- pickers ----------
