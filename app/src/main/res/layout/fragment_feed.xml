@@ -33,7 +33,7 @@
                 android:paddingStart="6dp"
                 android:paddingTop="6dp"
                 android:paddingEnd="6dp"
-                android:paddingBottom="70dp" />
+                android:paddingBottom="80dp" />
 
             <com.facebook.shimmer.ShimmerFrameLayout
                 android:id="@+id/feed_skeleton"

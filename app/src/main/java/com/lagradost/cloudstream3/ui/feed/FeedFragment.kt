@@ -1114,7 +1114,17 @@ class FeedFragment : BaseFragment<FragmentFeedBinding>(
     ): ChromeResult {
         // Phase 8.94: install the per-pass meta memo (see
         // passMetaCache) for the duration of the pass.
-        passMetaCache = java.util.concurrent.ConcurrentHashMap()
+        // Phase 8.95 (crash fix): the memo map must tolerate
+        // NULL values — "no metadata cached for this entry" is
+        // the COMMON case and metaOf memoises it too.
+        // ConcurrentHashMap rejects null values with an NPE,
+        // which crashed the pass (and the app) on the first
+        // uncached pool entry. A synchronized HashMap allows
+        // nulls; its per-call synchronization is enough here
+        // (a lost race only repeats one resolver lookup).
+        passMetaCache = java.util.Collections.synchronizedMap(
+            mutableMapOf()
+        )
         try {
             return computeChromePass(poolSnap, ratingsSnap, appCtx)
         } finally {

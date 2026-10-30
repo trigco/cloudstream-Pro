@@ -978,6 +978,14 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             }
         }
 
+        // Phase 8.94 (Job 3, CI #281 fix): the launch query is
+        // declared OUTSIDE the binding.apply block below — the
+        // standalone-search block after it reads the same value
+        // to decide whether an explicit query was passed. It was
+        // a local inside the block, which left the later read an
+        // unresolved reference.
+        var sq: String? = null
+
         binding.apply {
             searchHistoryRecycler.adapter = historyAdapter
             searchHistoryRecycler.setLinearListLayout(isHorizontal = false, nextRight = FOCUS_SELF)
@@ -1001,7 +1009,7 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             searchMasterRecycler.layoutManager = GridLayoutManager(context, 1)
 
             // Automatically search the specified query, this allows the app search to launch from intent
-            var sq =
+            sq =
                 arguments?.getString(SEARCH_QUERY) ?: savedInstanceState?.getString(SEARCH_QUERY)
             if (sq.isNullOrBlank()) {
                 sq = MainActivity.nextSearchQuery

@@ -155,7 +155,7 @@
         android:paddingStart="8dp"
         android:paddingTop="5dp"
         android:paddingEnd="8dp"
-        android:paddingBottom="82dp"
+        android:paddingBottom="92dp"
         android:visibility="gone"
         app:spanCount="3"
         tools:listitem="@layout/search_result_grid" />
@@ -168,7 +168,7 @@
         android:layout_height="match_parent"
         android:layoutAnimation="@anim/settings_list_layout_animation"
         android:clipToPadding="false"
-        android:paddingBottom="82dp"
+        android:paddingBottom="92dp"
 
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
@@ -184,7 +184,7 @@
         android:layout_height="match_parent"
         android:layoutAnimation="@anim/settings_list_layout_animation"
         android:clipToPadding="false"
-        android:paddingBottom="82dp"
+        android:paddingBottom="92dp"
         android:background="?attr/primaryBlackBackground"
         android:descendantFocusability="afterDescendants"
         android:nextFocusLeft="@id/nav_rail_view"

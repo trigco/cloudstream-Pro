@@ -46,15 +46,30 @@
              away, so the nav zone shrank 88dp -> 70dp and the
              main-tab screens' bottom paddings dropped by the
              same 18dp (fragment_home/library/downloads/search,
-             main_settings, fragment_feed). -->
+             main_settings, fragment_feed).
+             Phase 8.95 (nav polish v2): phone bar height is now
+             @dimen/nav_view_height_phone = 80dp, the Material 3
+             standard for icon+label mode — at 70dp the labels
+             were clipped at the bottom on device. The nav zone
+             is 80dp and the main-tab screens' compensations went
+             UP by the same 10dp (their air gaps are unchanged).
+             The indicator pill is now the dark-grey tonal
+             @color/extButtonBackground (NavActiveIndicator) —
+             red stays Play-only. On API 30+ the bar additionally
+             grows by the system-bar bottom inset and pads its
+             content above it (fixSystemBarsPadding in
+             MainActivity, fed the same phone dimen), so the
+             labels can never slide under the gesture area; the
+             TV layout keeps the 70dp dimen and is untouched. -->
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/nav_view"
-            android:layout_height="@dimen/nav_view_height"
+            android:layout_height="@dimen/nav_view_height_phone"
             android:layout_width="0dp"
             app:labelVisibilityMode="labeled"
             android:background="@drawable/bg_nav_bar"
             android:elevation="0dp"
 
+            app:itemIconSize="24dp"
             app:itemActiveIndicatorStyle="@style/NavActiveIndicator"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"

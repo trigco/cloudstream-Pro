@@ -1513,7 +1513,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         binding?.apply {
             fixSystemBarsPadding(
                 navView,
-                heightResId = R.dimen.nav_view_height,
+                // Phase 8.95: on API 30+ this height is RE-derived
+                // from the dimen (base + bottom inset), so the
+                // phone bar must be fed its 80dp phone dimen —
+                // feeding the shared 70dp one would silently
+                // shrink the polished bar back on modern phones.
+                // TV keeps the shared dimen, untouched.
+                heightResId = if (isLayout(TV)) {
+                    R.dimen.nav_view_height
+                } else {
+                    R.dimen.nav_view_height_phone
+                },
                 padTop = false,
                 overlayCutout = false
             )

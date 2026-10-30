@@ -946,13 +946,19 @@
         <item name="expandedActiveIndicatorPaddingBottom">0dp</item>
     </style>
 
-    <!-- Phase 8.94: the flat bottom bar's ONE red accent — a
-         small red pill behind the ACTIVE item's icon. Icon and
+    <!-- Phase 8.94: the flat bottom bar's active indicator —
+         a small pill behind the ACTIVE item's icon. Icon and
          label themselves stay white when active / grey when
-         not (@color/item_select_color), so red remains the
-         Play-only accent everywhere else. -->
+         not (@color/item_select_color).
+         Phase 8.95 (nav polish v2): the pill is now the
+         dark-grey tonal chip colour (@color/extButtonBackground,
+         #262626) with the white icon on top — the Material 3 /
+         YouTube-style tonal indicator. On device the red pill
+         read as a wide grey-red smear and fought the bar; the
+         tonal pill reads crisp, and red stays strictly
+         Play-only as per the app's accent rule. -->
     <style name="NavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">@color/colorPrimaryRed</item>
+        <item name="android:color">@color/extButtonBackground</item>
     </style>
 
     <style name="BlackButton" parent="NiceButton">

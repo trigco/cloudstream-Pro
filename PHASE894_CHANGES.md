@@ -281,3 +281,198 @@ Search):
   destination, and the shared layout's back button stays
   GONE there (TV uses its own SearchFragment landing and
   never sets the argument).
+
+
+---
+
+# Phase 8.95 — Crash audit of 8.94 Jobs 1–2 + nav polish v2 + CI #281 fix
+
+Prepared locally, NOT pushed (his instruction: the device
+crash stack trace is being collected in parallel; nothing
+here ships until he confirms).
+
+## Part A — Crash audit of commit 267890b5 (Jobs 1–2) vs 5b922f12
+
+Device evidence: the #280 build crashed into CloudStream
+safe mode ("All extensions were turned off due to a crash").
+Every changed file in the commit was reviewed for runtime
+crash risks on the startup / Home / Feed paths.
+
+### A1 — CERTAIN BUG (fixed locally): ConcurrentHashMap null-value NPE in the Feed chrome pass
+
+- `ui/feed/FeedFragment.kt`, `computeChrome` (was line 1117
+  in the pushed commit): the 8.94 pass-local meta memo was
+  installed as `java.util.concurrent.ConcurrentHashMap()`.
+- `metaOf` (line ~619) memoises EVERY result, including
+  nulls: `cache[url] = meta` where
+  `meta: MetadataResolver.Meta?`.
+- `MetadataResolver.metaCached` returns null whenever a
+  title has no resolved metadata yet — the normal case for
+  most of a fresh pool (it only returns non-null for titles
+  the resolver already stored).
+- `ConcurrentHashMap` rejects null values: `put(url, null)`
+  throws `NullPointerException`.
+- Reachability is guaranteed on real use: `computeChromePass`
+  runs `categoriesOfEntry(it)` → `metaOf(it)` over the whole
+  pool (rating rows ~lines 883–898, present-tags ~line 1275,
+  and `itemsOf` for every genre tag). The first uncached
+  entry in the first pass after a pool post throws.
+- The pass runs in
+  `viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Default)`;
+  an uncaught exception in a `launch` goes to the thread's
+  uncaught-exception handler (a SupervisorJob stops sibling
+  cancellation, it does not swallow launch exceptions), so
+  the process dies → CloudStream's crash flag → safe mode on
+  the next start. Trigger matches the device story: open
+  Feed → pool posts → first chrome pass → crash. The same
+  null-put could also fire on the MAIN thread: while a pass
+  is running, main-thread `metaOf` callers (the grid filter)
+  share the memo.
+- FIX (local): the memo is now
+  `java.util.Collections.synchronizedMap(mutableMapOf())` —
+  a HashMap tolerates null values, per-call synchronization
+  keeps the background-pass/main-thread sharing safe, and a
+  lost contains-then-put race only repeats one resolver
+  lookup. Memo design, scheduler, and row vocabulary
+  unchanged. (Confirmation against the collected stack trace
+  is still his call — the defect itself is proven from the
+  code alone.)
+
+### A2 — Reviewed, plausible but NOT fixed: scheduler wedge if a pass ever throws
+
+If `computeChrome` throws for any other reason, the
+`withContext(Main)` completion never runs, so
+`chromeRunning` stays true and later triggers only set
+`chromeDirty` — rows/chips would freeze for the session.
+The mechanism is real, but the only concrete throwing
+source found was A1, which is fixed; hardening the
+scheduler further without a failing case would be
+speculative. Recorded here so a future trace showing a
+frozen (not crashed) Feed points straight at it.
+
+### A3 — Reviewed, unlikely / not bugs
+
+- `sectionTagsOf` lock (FeedFragment): the synchronized
+  block only calls the pure `FeedSectionTags.canonicalTag`;
+  the monitor is re-entrant for the nested same-thread
+  calls; no cross-lock ordering exists, so no deadlock
+  path. Its read of the `pool` field from the background
+  thread is a plain reference read — worst case one extra
+  cache clear.
+- `metaOf` reading the fragment `context` from the
+  background thread: null-safe (`context?.let`), and
+  `metaCachedFor(null, …)` returns null by design.
+- Cancellation interplay: `onDestroyView` and the
+  search/filter branch cancel `chromeJob`; a mid-compute
+  cancel surfaces as CancellationException at the
+  `withContext(Main)` boundary and is swallowed by the
+  coroutine machinery; `passMetaCache` is still cleared by
+  the `finally`. No crash path.
+- Startup / nav restyle (`activity_main.xml`, `styles.xml`,
+  `bg_nav_bar.xml`): presentation-only. The
+  `NavActiveIndicator` style and `itemActiveIndicatorStyle`
+  are Material 1.14 library features (AAPT-linked in CI
+  #280 and visibly rendered on device); the layer-list
+  `android:height` item attribute is API 23+ and minSdk is
+  23. No throwing code path found on the startup or Home
+  paths.
+- `fragment_home.xml` and the other eight layout files in
+  the commit: padding/margin number changes only.
+
+## Part B — Nav polish v2 (device evidence: labels clipped at the bottom)
+
+His ask: Facebook/Instagram-quality bar. Diagnosis: the
+70dp bar is below the Material 3 labeled-bar standard
+(80dp) — the item layout (32dp indicator pill + 24dp icon +
+12sp label + internal spacing) does not fit in 70dp, so the
+labels were cut at the bottom edge. Insets were NOT the
+clip cause on his phone: edge-to-edge is only enabled on
+API 30+ (`UIHelper.enableEdgeToEdgeCompat` returns below
+R), and on API 30+ the app already grows the bar by the
+bottom inset via `fixSystemBarsPadding` — but that helper
+re-derives the bar height from a dimen, which Part B had to
+keep in sync (see MainActivity below).
+
+Changes:
+
+- `res/values/dimens.xml`: NEW `nav_view_height_phone` =
+  80dp. The shared `nav_view_height` stays 70dp — the TV
+  layout uses it and is untouched.
+- `res/layout/activity_main.xml`: phone bar height →
+  `@dimen/nav_view_height_phone`; explicit
+  `app:itemIconSize="24dp"`. Label size stays the Material
+  navigation-bar default (labelMedium, 12sp) for both
+  states — nothing in the app theme overrides it.
+- `MainActivity.kt` (`fixSystemBarsPadding` call for
+  navView): `heightResId` is now
+  `if (isLayout(TV)) R.dimen.nav_view_height else
+  R.dimen.nav_view_height_phone`. Without this, API 30+
+  phones would have been silently reset to 70dp + inset by
+  the inset listener. Behaviour, ids and call shape
+  otherwise unchanged. (Home's scroll auto-hide reads
+  `nav.height` at runtime, so it adapts on its own.)
+- Active state (choice, per instructions): WHITE icon +
+  WHITE label (@color/item_select_color, unchanged) on the
+  Material 3 tonal pill — `NavActiveIndicator` colour is
+  now `@color/extButtonBackground` (#262626, the app's chip
+  grey). The red pill from 8.94 is dropped: on device it
+  read as a wide smear, and the tonal pill is the crisp
+  Facebook/YouTube-style active marker; red stays Play-only.
+  Inactive items keep the outline-weight icons + grey
+  (#B3B3B3) labels from the same selector.
+- `res/drawable/bg_nav_bar.xml`: solid is now PURE black
+  #000000 (was #0B0B0B), matching the pure-black page
+  background; the 1dp white-9% top hairline stays.
+- Geometry rebalance (+10dp on every value 8.94 set, air
+  gaps preserved — nav zone 70dp → 80dp):
+  - `fragment_feed.xml`: grid paddingBottom 70 → 80dp
+  - `fragment_home.xml`: list paddingBottom 82 → 92dp;
+    Random FAB marginBottom 94 → 104dp
+  - `fragment_search.xml`: three result lists 82 → 92dp
+  - `main_settings.xml`: 82 → 92dp
+  - `fragment_library.xml`: tab strip marginBottom
+    82 → 92dp; ViewPager paddingBottom 122 → 132dp; FAB
+    wrapper marginBottom 122 → 132dp; loading grid
+    paddingBottom 102 → 112dp
+  - `fragment_downloads.xml`: list paddingBottom
+    182 → 192dp; queue bar marginBottom 82 → 92dp
+  - `fragment_child_downloads.xml`,
+    `fragment_download_queue.xml`: 82 → 92dp
+  - `feed_mini_player.xml`: marginBottom 82 → 92dp (12dp
+    gap above the bar kept)
+  Deeper settings sub-pages keep their 100dp paddings —
+  still ≥ the 80dp zone.
+
+## CI #281 fix — SearchFragment unresolved `sq` (Job 3)
+
+CI #281's only error: `SearchFragment.kt:1056:17
+Unresolved reference 'sq'` (both variants). Cause: Job 3's
+standalone-search block (after the `binding.apply { … }`
+block) reads `sq` to decide whether an explicit query was
+passed, but `sq` was declared as a local INSIDE that apply
+block (it is assigned and consumed there), so the name was
+out of scope at the later read. Fix (minimal, local):
+the declaration is hoisted above `binding.apply` —
+`var sq: String? = null` — and the in-block statement is
+now the assignment `sq = …`. Nothing else changed; the
+value the standalone block reads is the captured one
+(deliberately NOT a re-read of the arguments, which the
+consumption block has already cleared), so an explicit
+SEARCH_QUERY still suppresses the landing reset exactly as
+designed.
+
+## Files touched locally in 8.95 (not pushed)
+
+`ui/feed/FeedFragment.kt` (A1 fix),
+`ui/search/SearchFragment.kt` (CI #281 fix),
+`MainActivity.kt` (phone height dimen selection),
+`res/values/dimens.xml` (new phone dimen),
+`res/values/styles.xml` (indicator colour),
+`res/drawable/bg_nav_bar.xml` (pure black),
+`res/layout/activity_main.xml` (80dp + icon size),
+`res/layout/fragment_feed.xml`, `fragment_home.xml`,
+`fragment_search.xml`, `main_settings.xml`,
+`fragment_library.xml`, `fragment_downloads.xml`,
+`fragment_child_downloads.xml`,
+`fragment_download_queue.xml`, `feed_mini_player.xml`
+(+10dp rebalances), this file.

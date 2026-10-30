@@ -2,14 +2,17 @@
 <!-- Phase 8.94: FLAT bottom-nav background, replacing the
      floating pill (bg_nav_floating). His verdict on the pill:
      "sucks" — the worst nav, per community comments too. The
-     bar is now a flush full-width surface: solid near-black
-     with a single 1dp hairline on TOP (white ~9%) as the only
+     bar is now a flush full-width surface: solid black with a
+     single 1dp hairline on TOP (white ~9%) as the only
      separation from scrolling content. No corners, no stroke
-     box, no elevation shadow. -->
+     box, no elevation shadow.
+     Phase 8.95: solid is now PURE black (#000000), matching
+     the app's pure-black page background, so bar and content
+     read as one surface split only by the hairline. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#FF0B0B0B" />
+            <solid android:color="#FF000000" />
         </shape>
     </item>
     <item

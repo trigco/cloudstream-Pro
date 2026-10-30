@@ -48,7 +48,7 @@
                 android:paddingStart="10dp"
                 android:paddingTop="10dp"
                 android:paddingEnd="10dp"
-                android:paddingBottom="82dp"
+                android:paddingBottom="92dp"
                 app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
                 tools:listitem="@layout/download_queue_item" />
 
