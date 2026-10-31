@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.99e: Lucide network (stroke). Was Lucide `server` in
+     8.99d — an exact look-alike of ic_settings_providers (also
+     server) inside the same Settings flow. This drawable labels the
+     DNS preference and the feed watch Sources row, where the
+     node-tree glyph reads as network/DNS and no longer collides.
+     Geometry from lucide-static 0.469.0 network.svg (rects as
+     rounded-rect paths), converted 1:1. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -11,26 +18,33 @@
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M4 2h16a2.0 2.0 0 0 1 2.0 2.0v4a2.0 2.0 0 0 1 -2.0 2.0h-16a2.0 2.0 0 0 1 -2.0 -2.0v-4a2.0 2.0 0 0 1 2.0 -2.0Z"/>
+        android:pathData="M17 16h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z"/>
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M4 14h16a2.0 2.0 0 0 1 2.0 2.0v4a2.0 2.0 0 0 1 -2.0 2.0h-16a2.0 2.0 0 0 1 -2.0 -2.0v-4a2.0 2.0 0 0 1 2.0 -2.0Z"/>
+        android:pathData="M3 16h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1H3a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z"/>
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M6 6L6.01 6"/>
+        android:pathData="M10 2h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1V3a1 1 0 0 1 1 -1Z"/>
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M6 18L6.01 18"/>
+        android:pathData="M5 16v-3a1 1 0 0 1 1 -1h12a1 1 0 0 1 1 1v3"/>
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12 12V8"/>
 </vector>

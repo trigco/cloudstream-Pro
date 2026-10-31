@@ -17,9 +17,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.appcompat.app.AlertDialog
-import androidx.core.view.doOnLayout
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
@@ -279,176 +277,16 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
-    // Phase 8.98: collapsing player — scrolling Up next up
-    // shrinks the video towards a compact size, scrolling
-    // back down (or reaching the list top) restores it, and a
-    // drag/fling that ends mid-way snaps with a light spring
-    // overshoot. playerCollapsePx is the collapsed amount in
-    // px, 0..(full-compact); the snap animator may push it
-    // slightly past either end (the spring), and
-    // applyPlayerTransform clamps the overshoot to a small
-    // band.
-    // Phase 8.99c (job A — his order: "ratio area lock করো"):
-    // the collapse is now a pure TRANSFORM of the player box,
-    // never a layout change. 8.98 resized the box's layout
-    // height; 8.99 pinned the PlayerView at full height
-    // inside a clipping box; 8.99b moved the rendering to a
-    // TextureView stage — the picture STILL deformed on his
-    // Android 8.1 device under every one of them, so this
-    // round takes layout out of the equation entirely: after
-    // creation NOTHING in the player subtree (box, stage,
-    // PlayerView) ever receives a layout size write again and
-    // the box keeps its natural XML 16:9 size permanently.
-    // Collapse writes only the box's scaleX/scaleY — uniform,
-    // so the picture CANNOT deform (that is the ratio lock) —
-    // with the pivot at the top-centre so it shrinks toward
-    // the top; the layout space it frees is reclaimed by
-    // translating the title box and the Up-next container up
-    // by the same px amount the height system used to remove.
-    // The scroll accumulation is unchanged: collapsePx still
-    // runs 0..(full-compact) and the compact end still means
-    // 45% — of the SCALE now, not of a layout height.
-    private var playerFullHeight = 0
-    private var playerCompactHeight = 0
-    private var playerCollapsePx = 0
-    private var playerAppliedScale = -1f
-    private var playerAppliedShift = Int.MIN_VALUE
-    private var playerRefreshBaseHeight = 0
-    private var playerAppliedRefreshHeight = -1
-    private var playerSnapAnimator: ValueAnimator? = null
-
-    private val playerCollapseListener = object : RecyclerView.OnScrollListener() {
-        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-            if (playerFullHeight <= 0 || dy == 0) return
-            val range = playerFullHeight - playerCompactHeight
-            if (range <= 0) return
-            var next = playerCollapsePx + dy
-            // The very top of the list always means a full player.
-            if (!recyclerView.canScrollVertically(-1)) next = 0
-            next = next.coerceIn(0, range)
-            if (next != playerCollapsePx) {
-                playerCollapsePx = next
-                applyPlayerTransform()
-            }
-        }
-
-        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-            when (newState) {
-                RecyclerView.SCROLL_STATE_DRAGGING ->
-                    playerSnapAnimator?.cancel()
-                RecyclerView.SCROLL_STATE_IDLE -> snapPlayerCollapse()
-            }
-        }
-    }
-
-    /** Change-guarded transform write — driven by scroll
-     *  events only (no frame loop, no layout pass; the 8.97
-     *  ANR lesson). The scale runs 1.0 at collapsePx 0 down
-     *  to [PLAYER_MIN_SCALE] at full collapse; the snap
-     *  overshoot may push it a small band past either end
-     *  (the same range/6 px band the height system allowed).
-     *  The freed vertical space, (1 - scale) x full height,
-     *  is exactly the clamped collapse amount in px — the
-     *  compact end is 45%, so range = 55% of the full height
-     *  and the two expressions coincide — so the followers
-     *  translate up by that many px and sit flush under the
-     *  shrunken player. Title box and Up-next container get
-     *  the identical value: no gap, no overlap between them.
-     *  The Up-next container additionally grows in layout
-     *  height by the same amount (see inside) so its bottom
-     *  edge stays on the screen bottom — a follower-only
-     *  write; the player subtree gets none. */
-    private fun applyPlayerTransform() {
-        val binding = binding ?: return
-        if (playerFullHeight <= 0) return
-        val range = playerFullHeight - playerCompactHeight
-        if (range <= 0) return
-        val refresh = binding.feedWatchUpnextRefresh
-        // The refresh container's natural (rest) height,
-        // captured before the first compensation write —
-        // a fresh or not-yet-compensated view always shows
-        // it, so the first apply is a safe capture point.
-        if (playerRefreshBaseHeight == 0 && refresh.height > 0) {
-            playerRefreshBaseHeight = refresh.height
-        }
-        val clampedPx = playerCollapsePx.coerceIn(-range / 6, range + range / 6)
-        val scale = 1f - (clampedPx.toFloat() / range) * (1f - PLAYER_MIN_SCALE)
-        if (scale == playerAppliedScale && clampedPx == playerAppliedShift) return
-        playerAppliedScale = scale
-        playerAppliedShift = clampedPx
-        val box = binding.feedWatchPlayerBox
-        box.scaleX = scale
-        box.scaleY = scale
-        val shift = -clampedPx.toFloat()
-        binding.feedWatchTitleBox.translationY = shift
-        refresh.translationY = shift
-        // The refresh container is bottom-pinned with a 0dp
-        // (match-constraints) height: translated up alone it
-        // would leave a dead black band at the screen bottom
-        // and shorten the list by the same amount — the
-        // blank-band pattern he flagged in 8.96. So its
-        // layout height grows by the collapse amount (top
-        // anchored by bias 0) and its bottom edge stays on
-        // the screen bottom. This write is on a FOLLOWER,
-        // never on the player subtree — the box, stage and
-        // PlayerView still receive no layout writes at all.
-        if (playerRefreshBaseHeight > 0) {
-            val targetHeight = playerRefreshBaseHeight + clampedPx
-            if (targetHeight != playerAppliedRefreshHeight) {
-                playerAppliedRefreshHeight = targetHeight
-                val params = refresh.layoutParams as ConstraintLayout.LayoutParams
-                params.verticalBias = 0f
-                params.height = targetHeight
-                refresh.layoutParams = params
-            }
-        }
-    }
-
-    /** Spring settle: a collapse left mid-way snaps to the
-     *  nearer end with an overshoot, so hitting the end state
-     *  bounces slightly past it before settling (his "ঠেকে
-     *  গেলে হালকা স্প্রিং"). */
-    private fun snapPlayerCollapse() {
-        val range = playerFullHeight - playerCompactHeight
-        if (range <= 0) return
-        if (playerCollapsePx <= 0 || playerCollapsePx >= range) return
-        val target = if (playerCollapsePx < range / 2) 0 else range
-        playerSnapAnimator?.cancel()
-        playerSnapAnimator = ValueAnimator.ofInt(playerCollapsePx, target).apply {
-            duration = 320L
-            interpolator = android.view.animation.OvershootInterpolator(1.1f)
-            addUpdateListener { anim ->
-                playerCollapsePx = anim.animatedValue as Int
-                applyPlayerTransform()
-            }
-            addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (playerCollapsePx != target) {
-                        playerCollapsePx = target
-                        applyPlayerTransform()
-                    }
-                }
-            })
-            start()
-        }
-    }
-
-    /** Back to the full player: collapse amount zeroed and
-     *  the transform re-applied, which writes scale 1 and
-     *  translations 0 (the change guard cannot skip this —
-     *  the applied values only ever equal f(collapsePx), so
-     *  at 0 they ARE identity; the doOnLayout guard reset
-     *  covers view recreation). Called on item change (via
-     *  refreshUpNext), on the fullscreen handoff and on view
-     *  teardown, so nothing downstream can inherit a scaled
-     *  box or shifted followers. */
-    private fun resetPlayerCollapse() {
-        playerSnapAnimator?.cancel()
-        if (playerCollapsePx != 0) {
-            playerCollapsePx = 0
-            applyPlayerTransform()
-        }
-    }
+    // Phase 8.99e (his order: "ratio area lock"): the collapsing
+    // player is GONE. Three shrink mechanisms (8.98 layout height,
+    // 8.99 pinned PlayerView + clip box, 8.99b TextureView stage,
+    // 8.99c uniform scale + follower translation) all still
+    // deformed the picture on his device, and the scale version
+    // left a black gap under the player. The player area is now
+    // locked at its natural XML 16:9 forever: nothing in this
+    // fragment writes the player box's size, scale or translation,
+    // and the title / Up-next region below scrolls in its own
+    // layout region exactly as the layout separates them.
 
     // Phase 8.98: the watch page's own trailer banner (the
     // Info sheet's slot, shared via FeedInfoSheet) — bound
@@ -527,36 +365,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 3)
         binding.feedWatchUpnext.adapter = upNextAdapter
         setupTitleAutoHide(binding)
-
-        // Phase 8.99c (job A): this block only MEASURES. The
-        // box's natural height (the XML 16:9 ratio sizes it)
-        // is captured once as the collapse range's anchor, the
-        // scale pivot is pinned to the box's top-centre, and
-        // the current collapse transform is (re-)applied. The
-        // 8.98 height takeover, the 8.99 PlayerView pin and
-        // the 8.99b stage sizing that used to live here are
-        // all gone: the box, the stage and the PlayerView keep
-        // their XML sizes for the view's whole life, and the
-        // stage needs no sizing of its own — it is a plain
-        // match_parent child of a permanently full-size box.
-        // The change guard is reset before applying because a
-        // recreated view starts at identity transforms while
-        // playerCollapsePx survives in the fragment.
-        binding.feedWatchPlayerBox.doOnLayout {
-            val box = binding.feedWatchPlayerBox
-            if (box.height <= 0) return@doOnLayout
-            if (playerFullHeight == 0) {
-                playerFullHeight = box.height
-                playerCompactHeight = (playerFullHeight * PLAYER_MIN_SCALE).roundToInt()
-            }
-            box.pivotX = box.width / 2f
-            box.pivotY = 0f
-            playerAppliedScale = -1f
-            playerAppliedShift = Int.MIN_VALUE
-            playerAppliedRefreshHeight = -1
-            applyPlayerTransform()
-        }
-        binding.feedWatchUpnext.addOnScrollListener(playerCollapseListener)
 
         // Phase 8.98: trailer banner (Job 4) — the Info
         // sheet's 16:9 slot, placed in the title box between
@@ -947,12 +755,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         trailerPlayer = null
         trailerViews = null
         trailerBoundUrl = null
-        playerSnapAnimator?.cancel()
-        // Phase 8.99c: teardown never leaves a scaled player
-        // box or shifted followers behind (the view is going
-        // away, but a detached mid-collapse state must not be
-        // what a recreated view or the back stack inherits).
-        resetPlayerCollapse()
         FeedPlayer.removeListener(stateListener)
         TitleResolver.removeListener(watchTitleListener)
         FeedPlayer.exo?.removeListener(iconListener)
@@ -1220,9 +1022,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var upNextShownUrls: Set<String> = emptySet()
 
     private fun refreshUpNext(exceptUrl: String, rotate: Boolean = false) {
-        // Phase 8.98: a fresh list starts at the top — the
-        // player goes back to full height with it.
-        resetPlayerCollapse()
         val all = FeedPool.entries.filter { it.response.url != exceptUrl }
         if (!rotate) {
             upNextShownUrls = all.take(30).map { it.response.url }.toSet()
@@ -1912,10 +1711,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         if (handedOff) return
         handedOff = true
         FeedPlayer.pause()
-        // Phase 8.99c: the handoff leaves this page at the
-        // full, unshifted player — reset the collapse
-        // transform before navigating away.
-        resetPlayerCollapse()
         // Hand over a generator whose episodes carry the LIVE saved
         // positions, exactly as GeneratorPlayer refreshes them itself —
         // the feed's copies were stamped when playback started.
@@ -1953,11 +1748,6 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     }
 
     companion object {
-        /** The compact end of the collapse: the player drawn
-         *  at 45% of its natural size — a layout height in
-         *  8.98–8.99b, a uniform scale since 8.99c (job A). */
-        const val PLAYER_MIN_SCALE = 0.45f
-
         fun newInstance(url: String, apiName: String, name: String): Bundle =
             Bundle().apply {
                 putString("url", url)

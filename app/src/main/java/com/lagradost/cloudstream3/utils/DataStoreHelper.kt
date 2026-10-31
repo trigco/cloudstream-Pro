@@ -53,6 +53,7 @@ const val RESULT_FAVORITES_STATE_DATA = "result_favorites_state_data"
 const val RESULT_RESUME_WATCHING = "result_resume_watching_2" // Changed due to id changes
 const val RESULT_RESUME_WATCHING_OLD = "result_resume_watching"
 const val RESULT_RESUME_WATCHING_HAS_MIGRATED = "result_resume_watching_migrated"
+const val LAST_PLAYED_ID = "last_played_id"
 const val RESULT_EPISODE = "result_episode"
 const val RESULT_SEASON = "result_season"
 const val RESULT_DUB = "result_dub"
@@ -269,7 +270,9 @@ object DataStoreHelper {
     )
 
     var playBackSpeed: Float by UserPreferenceDelegate("playback_speed", 1.0f)
-    var resizeMode: Int by UserPreferenceDelegate("resize_mode", 0)
+    // Phase 8.99e: default resize mode is Zoom (PlayerResize.Zoom.ordinal);
+    // Fit was removed from the player's resize cycle on his order.
+    var resizeMode: Int by UserPreferenceDelegate("resize_mode", 2)
     var librarySortingMode: Int by UserPreferenceDelegate(
         "library_sorting_mode",
         ListSorting.AlphabeticalA.ordinal
@@ -814,8 +817,29 @@ object DataStoreHelper {
         return getKey<FavoritesData>("$currentAccount/$RESULT_FAVORITES_STATE_DATA", id.toString())
     }
 
+    // Phase 8.99e: the content id most recently loaded into a player.
+    // Every setViewPos caller is a playback path (main player, feed
+    // player, offline/download player), so recording the id here is a
+    // truthful "what the player had loaded last" signal. It drives
+    // the thumbnail state badge (his rule): the Continue Watching
+    // card / episode row for this id shows PAUSE, all others PLAY.
+    private var lastPlayedIdCache: Int? = null
+
+    val lastPlayedContentId: Int?
+        get() {
+            if (lastPlayedIdCache == null) {
+                lastPlayedIdCache =
+                    getKey<Int>("$currentAccount/$LAST_PLAYED_ID", "current")
+            }
+            return lastPlayedIdCache
+        }
+
     fun setViewPos(id: Int?, pos: Long, dur: Long) {
         if (id == null) return
+        if (lastPlayedIdCache != id) {
+            lastPlayedIdCache = id
+            setKey("$currentAccount/$LAST_PLAYED_ID", "current", id)
+        }
         if (dur < 30_000) return // too short
         setKey("$currentAccount/$VIDEO_POS_DUR", id.toString(), PosDur(pos, dur))
     }

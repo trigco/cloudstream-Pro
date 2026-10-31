@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.99e: filled companion of library_icon (Lucide
+     book-marked) — the book silhouette filled, the bookmark ribbon
+     knocked out via evenOdd, matching the 8.99d filled family's
+     construction. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -7,11 +11,6 @@
     android:viewportHeight="24">
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M4.4 4h1.1a1.0 1.0 0 0 1 1.0 1.0v14a1.0 1.0 0 0 1 -1.0 1.0h-1.1a1.0 1.0 0 0 1 -1.0 -1.0v-14a1.0 1.0 0 0 1 1.0 -1.0Z"/>
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M10.2 4h1.1a1.0 1.0 0 0 1 1.0 1.0v14a1.0 1.0 0 0 1 -1.0 1.0h-1.1a1.0 1.0 0 0 1 -1.0 -1.0v-14a1.0 1.0 0 0 1 1.0 -1.0Z"/>
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M15.9 4.6l2.9-.9 4.5 15.2-2.9.9z"/>
+        android:fillType="evenOdd"
+        android:pathData="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1 -1 1H6.5A2.5 2.5 0 0 1 4 19.5Z M10 2h6v8l-3 -3 -3 3Z"/>
 </vector>

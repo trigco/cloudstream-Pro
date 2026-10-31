@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Phase 8.84: the compact provider pill in the Home top bar
      (beside the profile avatar) — dark chip surface, fully rounded,
-     readable over the hero photo like the reference's pill. -->
+     readable over the hero photo like the reference's pill.
+     Phase 8.99e (his verdict): the fill is now semi-transparent
+     black (~65% alpha) instead of the solid chip colour, so the
+     hero photo shows through slightly; the label/icon are white,
+     so contrast over photos is preserved. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <corners android:radius="20dp" />
-    <solid android:color="@color/extButtonBackground" />
+    <solid android:color="#A6000000" />
 </shape>

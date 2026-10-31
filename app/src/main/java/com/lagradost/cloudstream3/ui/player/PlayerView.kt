@@ -301,6 +301,11 @@ class PlayerView @JvmOverloads constructor(
      */
     fun initialize() {
         resizeMode = DataStoreHelper.resizeMode
+        // Phase 8.99e: Fit is out of the cycle and Zoom is the default —
+        // a legacy stored Fit lands on Zoom (resize() also re-stores it).
+        if (resizeMode == PlayerResize.Fit.ordinal) {
+            resizeMode = PlayerResize.Zoom.ordinal
+        }
         resize(resizeMode, false)
 
         player.releaseCallbacks()
@@ -743,7 +748,13 @@ class PlayerView @JvmOverloads constructor(
     /** Resize */
 
     fun nextResize() {
-        resizeMode = (resizeMode + 1) % PlayerResize.entries.size
+        // Phase 8.99e (his order): the resize button cycles Zoom <-> Fill
+        // only — "fit to screen" is gone from the cycle, Zoom is default.
+        resizeMode = when (resizeMode) {
+            PlayerResize.Fill.ordinal -> PlayerResize.Zoom.ordinal
+            PlayerResize.Zoom.ordinal -> PlayerResize.Fill.ordinal
+            else -> PlayerResize.Zoom.ordinal
+        }
         resize(resizeMode, true)
     }
 

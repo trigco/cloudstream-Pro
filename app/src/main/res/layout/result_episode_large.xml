@@ -50,8 +50,13 @@
                 <!-- Phase 8.86: centered play badge over the thumbnail,
                      SkyStream-style. Purely decorative (not clickable):
                      taps fall through to the poster / card handlers, and
-                     watched state stays on the bottom progress bar. -->
+                     watched state stays on the bottom progress bar.
+                     Phase 8.99e: the badge is now a state icon driven
+                     by EpisodeAdapter — PAUSE for the episode the
+                     player most recently had loaded, PLAY otherwise;
+                     hidden while the upcoming (hourglass) badge shows. -->
                 <ImageView
+                    android:id="@+id/episode_state_icon"
                     android:layout_width="34dp"
                     android:layout_height="34dp"
                     android:layout_gravity="center"

@@ -570,10 +570,15 @@
                         android:layout_marginTop="10dp"
                         android:orientation="vertical">
 
+                        <!-- Phase 8.99e: marginBottom gives the pill column a
+                             consistent 10dp separation in every state — with a
+                             resume, this holder sits directly above the
+                             full-width Download pill and they used to touch. -->
                         <FrameLayout
                             android:id="@+id/result_resume_progress_holder"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:layout_marginBottom="10dp"
                             android:visibility="gone"
                             tools:visibility="visible">
 
@@ -671,7 +676,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="52dp"
                                 android:layout_gravity="center_vertical"
-                                android:layout_marginVertical="5dp"
+                                android:layout_marginBottom="10dp"
                                 android:layout_marginStart="0dp"
                                 android:layout_marginEnd="0dp"
                                 android:ellipsize="end"

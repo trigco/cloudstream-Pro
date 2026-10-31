@@ -397,19 +397,17 @@
     </LinearLayout>
 
 
-    <!-- Phase 8.8: Continue Watching is now a rounded section card
-         (bg_settings_group = ?attr/primaryGrayBackground, 20dp radius —
-         the same surface as the settings cards) with 16dp side margins
-         on the unified page background, instead of a flat full-width
-         band. 12dp top margin is the gap under the hero frame. -->
+    <!-- Phase 8.8: Continue Watching was a rounded section card
+         (bg_settings_group). Phase 8.99e (his verdict): the grey panel
+         goes — the section now sits flat on the pure-black page like
+         the homepage rows below it: no background, no side margins,
+         header aligned to the rows' 16dp side padding. Everything
+         else (12dp top gap, bottom padding, strip insets) unchanged. -->
     <LinearLayout
         android:id="@+id/home_watch_holder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
         android:layout_marginTop="12dp"
-        android:background="@drawable/bg_settings_group"
         android:orientation="vertical"
         android:paddingBottom="12dp"
         android:visibility="gone"
@@ -424,7 +422,8 @@
             android:background="?android:attr/selectableItemBackground"
             android:contentDescription="@string/home_more_info"
             android:fontFamily="sans-serif-medium"
-            android:padding="12dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
             android:text="@string/continue_watching"
             app:drawableRightCompat="@drawable/ic_baseline_arrow_forward_24"
             app:drawableTint="?attr/white" />

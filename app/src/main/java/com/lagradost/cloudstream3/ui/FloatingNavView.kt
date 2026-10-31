@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.util.AttributeSet
@@ -19,6 +20,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.DrawableRes
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -45,6 +47,13 @@ import kotlin.math.abs
  * BottomNavigationView and reads the true result back via
  * [syncSelection], so the existing debounced navigate listener and the
  * checked-state bookkeeping in updateNavBar run exactly as before.
+ *
+ * Phase 8.99e: the highlight is no longer a separate View chasing the
+ * selected item from onLayout (the stretched vector ellipse lagged and
+ * sat off-centre on device). The selected item now carries the blob as
+ * its OWN background — an organic-radius GradientDrawable drawn by the
+ * item itself, so it tracks the animated width exactly and the
+ * icon+label group is centred inside it by construction.
  */
 class FloatingNavView @JvmOverloads constructor(
     context: Context,
@@ -118,7 +127,6 @@ class FloatingNavView @JvmOverloads constructor(
     private val inactiveTint = Color.rgb(168, 168, 168)
 
     private val pill: FrameLayout
-    private val blob: View
     private val row: LinearLayout
     private val itemViews = mutableListOf<LinearLayout>()
     private val iconViews = mutableListOf<ImageView>()
@@ -157,12 +165,6 @@ class FloatingNavView @JvmOverloads constructor(
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             elevation = dp(8f).toFloat()
         }
-
-        blob = View(context).apply {
-            layoutParams = LayoutParams(collapsedWidthPx, itemHeightPx)
-            setBackgroundResource(R.drawable.bg_nav_blob)
-        }
-        pill.addView(blob)
 
         row = LinearLayout(context).apply {
             layoutParams = LayoutParams(
@@ -229,7 +231,7 @@ class FloatingNavView @JvmOverloads constructor(
             labelViews.add(label)
             expandedWidths.add(
                 itemPadPx + iconPx + labelGapPx +
-                    labelPaint.measureText(labelText).toInt() + dp(2f) + itemPadPx
+                    labelPaint.measureText(labelText).toInt() + itemPadPx
             )
         }
         addView(pill)
@@ -243,23 +245,6 @@ class FloatingNavView @JvmOverloads constructor(
                 view.updatePadding(bottom = baseBottomLiftPx + systemBottom)
             }
             insets
-        }
-    }
-
-    /** Keep the blob glued behind the selected item (runs every layout,
-     *  including each animation frame). */
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        val selected = itemViews.getOrNull(selectedIndex) ?: return
-        val lp = blob.layoutParams as LayoutParams
-        val targetLeft = row.left + selected.left
-        if (lp.leftMargin != targetLeft || lp.topMargin != row.top ||
-            lp.width != selected.width
-        ) {
-            lp.leftMargin = targetLeft
-            lp.topMargin = row.top
-            lp.width = selected.width
-            blob.layoutParams = lp
         }
     }
 
@@ -321,11 +306,45 @@ class FloatingNavView @JvmOverloads constructor(
         return itemViews.getOrNull(index)
     }
 
+    /** The organic blob from the approved preview (border-radius
+     *  58% 42% 55% 45% / 52% 55% 45% 48% on the settled ~110x50dp item),
+     *  expressed as fixed per-corner radii so the shape reads the same
+     *  on every tab. Radii sums stay below the smallest expanded width
+     *  and the item height, so nothing clamps at rest; mid-animation
+     *  the platform scales them down, which is what morphs the shape
+     *  from pill to blob as the item springs open. Fill is the settled
+     *  grey (@color/extButtonBackground, #262626). A fresh instance per
+     *  application — a Drawable can only live on one View at a time. */
+    private fun makeBlobBackground(): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(ContextCompat.getColor(context, R.color.extButtonBackground))
+            cornerRadii = floatArrayOf(
+                dp(56f).toFloat(), dp(24f).toFloat(), // top-left
+                dp(44f).toFloat(), dp(25f).toFloat(), // top-right
+                dp(54f).toFloat(), dp(21f).toFloat(), // bottom-right
+                dp(46f).toFloat(), dp(22f).toFloat(), // bottom-left
+            )
+        }
+    }
+
+    private fun refreshItemBackgrounds() {
+        itemViews.forEachIndexed { index, view ->
+            val shouldHave = index == selectedIndex
+            if (shouldHave && view.background == null) {
+                view.background = makeBlobBackground()
+            } else if (!shouldHave && view.background != null) {
+                view.background = null
+            }
+        }
+    }
+
     private fun applySelection(animate: Boolean) {
         val targets = IntArray(navItems.size) { index ->
             if (index == selectedIndex) expandedWidths[index] else collapsedWidthPx
         }
         widthAnimator?.cancel()
+        refreshItemBackgrounds()
         iconViews[selectedIndex].setColorFilter(Color.WHITE)
         if (!animate) {
             itemViews.forEachIndexed { index, view ->

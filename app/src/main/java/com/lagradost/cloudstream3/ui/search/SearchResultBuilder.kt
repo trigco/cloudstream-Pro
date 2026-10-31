@@ -383,6 +383,17 @@ object SearchResultBuilder {
                     bar?.progress = (pos.position / 1000).toInt()
                     bar?.visibility = View.VISIBLE
                 }
+                // Phase 8.99e (his rule): the centre badge is a state
+                // icon — PAUSE on the card the player most recently
+                // had loaded, PLAY on every other card. Set in both
+                // directions because holders recycle.
+                playImg?.setImageResource(
+                    if (card.id != null && card.id == DataStoreHelper.lastPlayedContentId) {
+                        R.drawable.ic_baseline_pause_24
+                    } else {
+                        R.drawable.play_button_transparent
+                    }
+                )
                 playImg?.visibility = View.VISIBLE
                 if (card.type?.isMovieType() == false && showEpisodeText) {
                     episodeText?.context?.getShortSeasonText(card.episode, card.season)?.let {text->

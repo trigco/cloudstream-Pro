@@ -865,9 +865,7 @@
                             android:nextFocusLeft="@id/player_skip_episode"
                             android:nextFocusRight="@id/player_resize_btt"
                             android:text="@string/video_lock"
-                            app:icon="@drawable/video_locked"
-
-                            app:iconSize="30dp" />
+                            app:icon="@drawable/video_locked" />
 
                         <LinearLayout
                             android:id="@+id/player_lock_holder"

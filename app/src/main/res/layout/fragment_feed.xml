@@ -30,6 +30,11 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
+            <!-- Phase 8.99e: bottom padding is exactly the floating
+                 bar's footprint — 14dp lift + 62dp pill = the pill's
+                 top edge 76dp above the screen bottom (API 27; the
+                 80dp from the flat-bar era left a dead black band
+                 under the last row). -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/feed_recycler"
                 android:layout_width="match_parent"
@@ -38,7 +43,7 @@
                 android:paddingStart="6dp"
                 android:paddingTop="6dp"
                 android:paddingEnd="6dp"
-                android:paddingBottom="80dp" />
+                android:paddingBottom="76dp" />
 
             <com.facebook.shimmer.ShimmerFrameLayout
                 android:id="@+id/feed_skeleton"
