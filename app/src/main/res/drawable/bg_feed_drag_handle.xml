@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.85: the drag handle at the top of the Feed Filters
+     bottom sheet. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <solid android:color="#FF4A4A4A" />
+    <size
+        android:width="36dp"
+        android:height="4dp" />
+</shape>

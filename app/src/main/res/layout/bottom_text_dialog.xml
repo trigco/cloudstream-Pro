@@ -1,27 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Phase 8.11-E1: horizontal padding was
-         ?android:attr/listPreferredItemPaddingStart (16dp), which left the
-         paragraph running nearly edge-to-edge on this full-width sheet.
-         20dp matches the plugin details sheet's header inset. -->
-    <TextView
-        android:id="@+id/dialog_title"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginBottom="10dp"
-        android:textStyle="bold"
-        android:textSize="20sp"
-        android:textColor="?attr/textColor"
+    <!-- Phase 8.89: standard sheet chrome (Feed Filters reference). -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_feed_drag_handle" />
+
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_rowWeight="1"
-        tools:text="Test"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
+
+        <TextView
+            android:id="@+id/dialog_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_rowWeight="1"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="?attr/textColor"
+            tools:text="Test" />
+
+        <ImageButton
+            android:id="@+id/close_btt"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_feed_circle_button"
+            android:contentDescription="@string/switcher_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_baseline_close_24"
+            app:tint="?attr/textColor" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/dialog_text"

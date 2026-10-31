@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 8.81: Installed tab page of the Extensions screen — every
+     downloaded native plugin across repositories (PluginAdapter
+     rows, grouped by repository), with an empty-state text. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/primaryBlackBackground">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/installed_recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?attr/primaryBlackBackground"
+        android:clipToPadding="false"
+        android:nextFocusLeft="@id/nav_rail_view"
+        android:nextFocusDown="@id/plugin_storage_appbar"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+        tools:listitem="@layout/repository_item" />
+
+    <TextView
+        android:id="@+id/installed_empty_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="24dp"
+        android:text="@string/extensions_installed_empty"
+        android:textColor="?attr/textColor"
+        android:textSize="14sp"
+        android:visibility="gone" />
+</FrameLayout>

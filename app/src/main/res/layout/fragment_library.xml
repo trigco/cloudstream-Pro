@@ -125,7 +125,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingBottom="140dp"
+            android:paddingBottom="132dp"
             tools:listitem="@layout/library_viewpager_page" />
 
         <LinearLayout
@@ -155,7 +155,7 @@
                     android:gravity="center"
                     android:horizontalSpacing="10dp"
                     android:numColumns="3"
-                    android:paddingBottom="120dp"
+                    android:paddingBottom="112dp"
                     android:verticalSpacing="10dp"
                     tools:listitem="@layout/loading_poster_dynamic" />
             </com.facebook.shimmer.ShimmerFrameLayout>
@@ -170,7 +170,7 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="140dp">
+        android:layout_marginBottom="132dp">
 
         <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
             android:id="@+id/library_random"
@@ -203,14 +203,24 @@
          floating nav zone, restoring its pre-overlay on-screen position.
          Phase 8C: 88dp -> 100dp. At 88dp the strip's bottom edge sat exactly
          ON the pill's top edge (nav zone = 70dp height + 18dp margin) with
-         zero gap; 100dp leaves a real 12dp gap above the pill. -->
+         zero gap; 100dp leaves a real 12dp gap above the pill.
+         Phase 8.94: the pill is now a flat 70dp bar with no bottom
+         margin (nav zone 88dp -> 70dp), so the strip drops by the
+         same 18dp: marginBottom 100dp -> 82dp, keeping the 12dp gap.
+         The ViewPager padding (140dp -> 122dp), the FAB wrapper
+         margin (140dp -> 122dp) and the shimmer grid padding
+         (120dp -> 102dp) drop by the same 18dp.
+         Phase 8.95: phone bar is 80dp (zone 70dp -> 80dp) — the
+         strip margin rises 82dp -> 92dp (12dp gap kept), the
+         ViewPager padding and FAB wrapper margin rise 122dp ->
+         132dp, and the shimmer grid padding rises 102dp -> 112dp. -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/library_tab_layout"
         style="@style/Theme.Widget.Tabs"
         android:layout_width="match_parent"
         android:layout_height="40dp"
         android:layout_gravity="bottom"
-        android:layout_marginBottom="100dp"
+        android:layout_marginBottom="92dp"
         android:background="?attr/primaryGrayBackground"
         android:focusable="true"
         android:paddingHorizontal="5dp"

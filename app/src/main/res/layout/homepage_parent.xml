@@ -1,40 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 8.8: each provider section is now one rounded card
-     (bg_settings_group = ?attr/primaryGrayBackground, 20dp radius — the
-     same surface as the settings cards and the Continue Watching /
-     Bookmarks cards in fragment_home_head) with 16dp side margins on
-     the unified page background (?attr/primaryBlackBackground, the
-     window background), instead of a flat full-width band whose hard
-     straight edges striped the page. The 12dp top margin is the
-     section rhythm; the card's own paddingBottom (was 6dp) is 12dp so
-     the poster row sits inside the card with a finished bottom inset.
-     Margins live on the item root: ParentItemAdapter inflates this
-     layout with the RecyclerView as parent, so they are preserved, and
-     item recycling is unaffected (background + margins are static). -->
+<!-- Phase 8.84: SkyStream-style FLAT section rows (his verdict on the
+     8.8 cards): no card surface — the row sits directly on the page
+     background (now pure black). The header is a title with the short
+     accent-red underline bar (same treatment as the Feed "For You"
+     header: 34dp x 3dp, 4dp below the title, @color/colorPrimaryRed)
+     and a "View All" pill button at the right, which carries the old
+     arrow's click (ParentItemAdapter wires both the title and the
+     pill to moreInfoClickCallback). Margins: the card's 16dp side
+     margins are gone; the header pads 16dp so the title lines up
+     with the reference, the poster strip keeps its own 10dp inset. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         xmlns:tools="http://schemas.android.com/tools"
         android:orientation="vertical"
-        android:background="@drawable/bg_settings_group"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="8dp"
-        android:paddingBottom="8dp"
+        android:layout_marginTop="12dp"
+        android:paddingBottom="2dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-    <TextView
-        android:id="@+id/home_child_more_info"
-        style="@style/WatchHeaderText"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="0dp"
-        android:padding="12dp"
-        tools:text="@string/continue_watching"
-        app:drawableRightCompat="@drawable/ic_baseline_arrow_forward_24"
-        app:drawableTint="?attr/white"
-        android:background="?android:attr/selectableItemBackground"
-        android:contentDescription="@string/home_more_info"/>
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/home_child_more_info"
+                style="@style/WatchHeaderText"
+                android:fontFamily="sans-serif-medium"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="0dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/home_more_info"
+                tools:text="@string/continue_watching" />
+
+            <View
+                android:layout_width="34dp"
+                android:layout_height="3dp"
+                android:layout_marginTop="4dp"
+                android:background="@color/colorPrimaryRed" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/home_child_view_all"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_home_view_all"
+            android:contentDescription="@string/home_more_info"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp"
+            android:text="@string/home_view_all"
+            android:textColor="?attr/textColor"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            app:drawableRightCompat="@drawable/ic_baseline_keyboard_arrow_right_24"
+            app:drawableTint="?attr/white" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
             android:nextFocusUp="@id/home_child_more_info"

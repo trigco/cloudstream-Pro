@@ -32,6 +32,11 @@ import kotlinx.serialization.Serializable
  * and [openActor]). Shows the actor photo/name/role, a best-effort biography
  * extract fetched from Wikipedia (silently hidden on any failure), and a
  * button that opens the regular search screen pre-filled with the actor name.
+ *
+ * Phase 8.93: a Filmography grid (TVmaze + Wikidata, see
+ * [ActorFilmography]) sits between the overview and the search
+ * button — the works themselves now live in-app instead of the
+ * actor being just a Wikipedia lookup.
  */
 class ActorFragment : BaseFragment<FragmentActorBinding>(
     BindingCreator.Inflate(FragmentActorBinding::inflate)
@@ -122,6 +127,52 @@ class ActorFragment : BaseFragment<FragmentActorBinding>(
 
         if (name.isNotBlank()) {
             fetchWikipediaOverview(name, image)
+            fetchFilmography(name, sourceTitle, image)
+        }
+    }
+
+    /**
+     * Phase 8.93: the filmography grid under the overview —
+     * TVmaze + Wikidata via [ActorFilmography] (no TMDB, no
+     * Wikipedia search). Tapping a work opens the regular search
+     * screen pre-filled with its title, same as the search button
+     * below does for the actor's name.
+     */
+    private fun fetchFilmography(name: String, sourceTitle: String?, image: String?) {
+        val filmoAdapter = FilmoAdapter { entry ->
+            activity.navigate(R.id.navigation_search, Bundle().apply {
+                putString(SearchFragment.SEARCH_QUERY, entry.title)
+            })
+        }
+        binding?.apply {
+            actorFilmoGrid.layoutManager =
+                androidx.recyclerview.widget.GridLayoutManager(context, 3)
+            actorFilmoGrid.adapter = filmoAdapter
+            actorFilmoHeader.isVisible = true
+            actorFilmoProgress.isVisible = true
+        }
+        ioSafe {
+            val result = context?.let {
+                ActorFilmography.fetch(it, name, sourceTitle)
+            }
+            main {
+                binding?.apply {
+                    actorFilmoProgress.isGone = true
+                    val entries = result?.entries.orEmpty()
+                    if (entries.isEmpty()) {
+                        actorFilmoEmpty.isVisible = true
+                    } else {
+                        filmoAdapter.submit(entries)
+                        actorFilmoGrid.isVisible = true
+                    }
+                    // Same photo-upgrade rule as the Wikipedia fetch:
+                    // only when the provider supplied no photo.
+                    val filmoImage = result?.personImage
+                    if (image.isNullOrBlank() && !filmoImage.isNullOrBlank()) {
+                        actorPhoto.loadImage(filmoImage)
+                    }
+                }
+            }
         }
     }
 

@@ -6,17 +6,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.EdgeEffect
-import android.widget.AbsListView
-import android.widget.ArrayAdapter
 import android.widget.ImageView
-import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -35,8 +33,10 @@ import android.os.Looper
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.io.File
 import java.util.Collections
 import com.lagradost.cloudstream3.plugins.PluginManager
+import com.lagradost.cloudstream3.plugins.RepositoryManager
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getActivity
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -53,7 +53,8 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentHomeBinding
 import com.lagradost.cloudstream3.databinding.HomeEpisodesExpandedBinding
-import com.lagradost.cloudstream3.databinding.HomeSelectMainpageBinding
+import com.lagradost.cloudstream3.databinding.HomeProviderSwitcherBinding
+import com.lagradost.cloudstream3.databinding.HomeProviderSwitcherRowBinding
 import com.lagradost.cloudstream3.databinding.TvtypesChipsBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.logError
@@ -64,6 +65,9 @@ import com.lagradost.cloudstream3.ui.APIRepository.Companion.noneApi
 import com.lagradost.cloudstream3.ui.APIRepository.Companion.randomApi
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.nuvio.NuvioProvider
+import com.lagradost.cloudstream3.sky.SkyPluginProvider
+import com.lagradost.cloudstream3.stremio.StremioAddonProvider
 import com.lagradost.cloudstream3.ui.search.MetadataResolver
 import com.lagradost.cloudstream3.ui.search.TitleResolver
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
@@ -407,19 +411,34 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
             validAPIs.add(0, randomApi)
             validAPIs.add(0, noneApi)
-            //val builder: AlertDialog.Builder = AlertDialog.Builder(this)
-            //builder.setView(R.layout.home_select_mainpage)
-            val builder =
-                BottomSheetDialog(this)
 
-            builder.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            val binding: HomeSelectMainpageBinding = HomeSelectMainpageBinding.inflate(
-                builder.layoutInflater,
-                null,
-                false
-            )
+            // Phase 8.83: SkyStream-style smart switcher sheet —
+            // title, type-filter chips (All + the tv-type chips this
+            // picker has always had), and a radio list whose rows
+            // carry source tags (repository name / bridge source).
+            // Every data rule below is the pre-8.83 logic unchanged
+            // (pinned first via DataStoreHelper.pinnedProviders,
+            // custom lists appended with "custom:<id>" pin keys,
+            // Family Mode filter); only the presentation moved from
+            // a ListView to this RecyclerView sheet. SearchFragment
+            // keeps the old home_select_mainpage layout untouched.
+            val dialog = BottomSheetDialog(this, R.style.AppBottomSheetDialogTheme)
+            val binding: HomeProviderSwitcherBinding =
+                HomeProviderSwitcherBinding.inflate(
+                    dialog.layoutInflater,
+                    null,
+                    false
+                )
+            dialog.setContentView(binding.root)
+            // Phase 8.84: the sheet opened STATE_EXPANDED to the full
+            // screen and read as "too big" — cap it at ~72% of the
+            // screen height. The list is wrap_content and scrolls
+            // internally past the cap; the filter chips stay pinned
+            // above it (they are outside the RecyclerView).
+            dialog.behavior.maxHeight =
+                (resources.displayMetrics.heightPixels * 0.72).toInt()
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
 
-            builder.setContentView(binding.root)
             // Phase 8.47: his custom lists are appended to this
             // same picker (his request) so providers and custom
             // lists are managed in one place.
@@ -427,251 +446,351 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             // Phase 8.74: the customs as DISPLAYED (pinned ones first);
             // updateList() recomputes it, click/pin handlers read it.
             var displayCustoms: List<HomeCustomLists.CustomList> = customLists
-            builder.show()
-            builder.let { dialog ->
-                val isMultiLang = getApiProviderLangSettings().let { set ->
-                    set.size > 1 || set.contains(AllLanguagesName)
+
+            val isMultiLang = getApiProviderLangSettings().let { set ->
+                set.size > 1 || set.contains(AllLanguagesName)
+            }
+
+            var currentApiName = selectedApiName
+
+            var currentValidApis: MutableList<MainAPI> = mutableListOf()
+            val preSelectedTypes = DataStoreHelper.homePreference.toMutableList()
+            val validTypesAll = validAPIs.flatMap { it.supportedTypes }.distinct()
+
+            var pinnedphashset = DataStoreHelper.pinnedProviders.toHashSet()
+
+            // ---- Phase 8.83: row model + source tags ----
+
+            data class SwitcherTag(val text: String, val cloud: Boolean)
+
+            class SwitcherRow(
+                val api: MainAPI?,
+                val custom: HomeCustomLists.CustomList?,
+                val title: String,
+                val tags: List<SwitcherTag>,
+                val selected: Boolean,
+                val pinned: Boolean,
+                val settingsPlugin: Plugin?,
+            )
+
+            class SwitcherHolder(val rowBinding: HomeProviderSwitcherRowBinding) :
+                RecyclerView.ViewHolder(rowBinding.root)
+
+            /** Repository display name for a downloaded native
+             *  plugin: its file lives in a folder named after the
+             *  sanitized repository URL (PluginManager.getPluginPath),
+             *  matched against the stored + prebuilt repositories. */
+            fun repositoryTagFor(api: MainAPI): String? {
+                val path = api.sourcePlugin ?: return null
+                val folder = File(path).parentFile?.name ?: return null
+                val repos = RepositoryManager.getRepositories().toList() +
+                    RepositoryManager.PREBUILT_REPOSITORIES.toList()
+                return repos.firstOrNull {
+                    PluginManager.getPluginSanitizedFileName(it.url) == folder
+                }?.name
+            }
+
+            fun tagsFor(api: MainAPI): List<SwitcherTag> {
+                if (api.name == noneApi.name || api.name == randomApi.name) {
+                    return emptyList()
                 }
-                //dialog.window?.setGravity(Gravity.BOTTOM)
+                return when {
+                    api is SkyPluginProvider -> listOf(
+                        SwitcherTag(
+                            if (api.sub != null) {
+                                api.stored.name
+                            } else {
+                                getString(R.string.switcher_tag_skystream)
+                            },
+                            false
+                        )
+                    )
 
-                var currentApiName = selectedApiName
+                    api is StremioAddonProvider -> listOf(
+                        SwitcherTag(
+                            getString(R.string.switcher_tag_stremio),
+                            false
+                        )
+                    )
 
-                var currentValidApis: MutableList<MainAPI> = mutableListOf()
-                val preSelectedTypes = DataStoreHelper.homePreference.toMutableList()
+                    api is NuvioProvider -> emptyList()
 
-                binding.cancelBtt.setOnClickListener {
-                    dialog.dismissSafe()
-                }
-
-                binding.applyBtt.setOnClickListener {
-                    if (currentApiName != selectedApiName) {
-                        currentApiName?.let(callback)
+                    api.sourcePlugin != null -> buildList {
+                        repositoryTagFor(api)?.let { add(SwitcherTag(it, false)) }
+                        add(
+                            SwitcherTag(
+                                getString(R.string.switcher_tag_cloudstream),
+                                true
+                            )
+                        )
                     }
-                    dialog.dismissSafe()
+
+                    else -> listOf(
+                        SwitcherTag(
+                            getString(R.string.switcher_tag_cloudstream),
+                            true
+                        )
+                    )
                 }
+            }
 
-                var pinnedphashset = DataStoreHelper.pinnedProviders.toHashSet()
+            fun titleFor(api: MainAPI): String {
+                // Sky sub-providers headline with the sub name; the
+                // plugin name moves to the source tag (SkyStream's
+                // Select Provider rows work the same way).
+                val base = if (api is SkyPluginProvider && api.sub != null) {
+                    api.sub.name
+                } else {
+                    getDisplayName(api.name) ?: api.name
+                }
+                return if (isMultiLang) {
+                    "${getFlagFromIso(api.lang)?.plus(" ") ?: ""}$base"
+                } else {
+                    base
+                }
+            }
 
-                val listView = dialog.findViewById<ListView>(R.id.listview1)
+            val rows = mutableListOf<SwitcherRow>()
+            lateinit var switcherAdapter: RecyclerView.Adapter<SwitcherHolder>
 
-                val arrayAdapter = object : ArrayAdapter<String>(
-                    this, R.layout.sort_bottom_single_provider_choice,
-                    mutableListOf()
-                ) {
-                    override fun getView(
-                        position: Int,
-                        convertView: View?,
-                        parent: ViewGroup
-                    ): View {
-                        val view = convertView ?: LayoutInflater.from(context)
-                            .inflate(R.layout.sort_bottom_single_provider_choice, parent, false)
-                        val titleText = view.findViewById<TextView>(R.id.text1)
-                        val pinIcon = view.findViewById<ImageView>(R.id.pinicon)
-                        val settingsIcon = view.findViewById<ImageView>(R.id.action_settings)
+            fun updateList() {
+                DataStoreHelper.homePreference = preSelectedTypes
+                val pinnedp = DataStoreHelper.pinnedProviders.toList()
+                pinnedphashset = pinnedp.toHashSet()
+                val sortedApis = validAPIs
+                    .filter {
+                        val isPinned = pinnedphashset.contains(it.name)
 
-                        val name = getItem(position)
-                        titleText?.text = name
-
-                        // Phase 8.11-E1: the row's CheckLabel check is a static
-                        // compound drawable whose stateful tint never
-                        // discriminated on device (every row rendered
-                        // checked). Drive it from the ListView's checked
-                        // state explicitly instead — updateList() seeds it
-                        // via setItemChecked before filling the adapter, and
-                        // both branches run on every bind so recycled rows
-                        // never keep a stale check. Same explicit-tint
-                        // pattern as SingleSelectionHelper's IconArrayAdapter.
-                        val isChecked =
-                            (parent as? ListView)?.isItemChecked(position) == true
-                        if (isChecked) {
-                            val checkDrawable = ContextCompat.getDrawable(
-                                view.context, R.drawable.ic_baseline_check_24_listview
-                            )?.mutate()
-                            if (checkDrawable != null) {
-                                DrawableCompat.setTint(
-                                    checkDrawable,
-                                    view.context.getResourceColor(R.attr.textColor)
-                                )
-                                titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                                    checkDrawable, null, null, null
-                                )
-                            }
-                            titleText?.setTextColor(
-                                view.context.getResourceColor(R.attr.textColor)
-                            )
-                        } else {
-                            titleText?.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                                0, 0, 0, 0
-                            )
-                            titleText?.setTextColor(
-                                view.context.getResourceColor(R.attr.grayTextColor)
-                            )
+                        // Hide pinned NSFW when NSFW not selected. NSFW is distracting when not chosen.
+                        if (isPinned && !preSelectedTypes.contains(TvType.NSFW)) {
+                            if (it.supportedTypes.all { type -> type == TvType.NSFW }) return@filter false
                         }
 
-                        val providerApi =
-                            currentValidApis.getOrNull(position)
-                        // Phase 8.74: custom lists pin too — their key
-                        // in the same pinned store is "custom:<id>".
-                        val customAtPos = if (providerApi == null) {
-                            displayCustoms.getOrNull(
-                                position - currentValidApis.size
-                            )
+                        it.hasMainPage && (isPinned || it.supportedTypes.any(
+                            preSelectedTypes::contains
+                        ))
+                    }
+                    .sortedBy { it.name.lowercase() }
+
+                val sortedApiMap = LinkedHashMap<String, MainAPI>().apply {
+                    sortedApis.forEach { put(it.name, it) }
+                }
+
+                val pinnedApis = pinnedp.asReversed().mapNotNull { name ->
+                    sortedApiMap[name]
+                }
+
+                val remainingApis = sortedApis.filterNot { pinnedphashset.contains(it.name) }
+
+                currentValidApis = mutableListOf<MainAPI>().apply {
+                    addAll(validAPIs.take(2))
+                    addAll(pinnedApis)
+                    addAll(remainingApis)
+                }
+
+                // Phase 8.50: Family Mode hides adult providers
+                // from the picker entirely.
+                if (FamilyMode.isEnabled()) {
+                    currentValidApis.removeAll {
+                        FamilyMode.isAdultApi(it)
+                    }
+                }
+
+                // Phase 8.74: pinned customs join the top group
+                // like pinned providers (same store, "custom:<id>"
+                // keys, most-recent pin first), and the star
+                // prefix beside custom names is gone (his call).
+                val pinnedCustoms = pinnedp.asReversed()
+                    .mapNotNull { key ->
+                        if (key.startsWith("custom:")) {
+                            customLists.firstOrNull {
+                                "custom:" + it.id == key
+                            }
                         } else {
                             null
                         }
-                        val isPinned =
-                            (providerApi != null &&
-                                pinnedphashset.contains(providerApi.name)) ||
-                                (customAtPos != null &&
-                                    pinnedphashset.contains(
-                                        "custom:" + customAtPos.id
-                                    ))
-                        pinIcon.visibility = if (isPinned) View.VISIBLE else View.GONE
+                    }
+                displayCustoms = pinnedCustoms + customLists.filterNot {
+                    pinnedphashset.contains("custom:" + it.id)
+                }
 
-                        val pluginInstance = providerApi?.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
-                        val isDownloadedPluginWithSettings = pluginInstance?.openSettings != null && !isLayout(TV)
-
-                        settingsIcon.visibility = if (isDownloadedPluginWithSettings) View.VISIBLE else View.GONE
-                        if (isDownloadedPluginWithSettings) {
-                            settingsIcon.setOnClickListener {
-                                try {
-                                    val activityContext = it.context.getActivity() ?: it.context
-                                    pluginInstance.openSettings?.invoke(activityContext)
-                                } catch (e: Throwable) {
-                                    logError(e)
-                                }
-                            }
+                // The old ListView seeded its checked row from the
+                // active custom list first, the current api second;
+                // the rows carry that same selection state now.
+                val activeCustom =
+                    HomeCustomLists.activeList(this@selectHomepage)
+                        ?.takeIf { active ->
+                            displayCustoms.any { it.id == active.id }
                         }
 
-                        return view
-                    }
+                rows.clear()
+                for (api in currentValidApis) {
+                    val pluginInstance =
+                        api.sourcePlugin?.let { PluginManager.plugins[it] } as? Plugin
+                    val settingsPlugin =
+                        if (pluginInstance?.openSettings != null && !isLayout(TV)) {
+                            pluginInstance
+                        } else {
+                            null
+                        }
+                    rows += SwitcherRow(
+                        api = api,
+                        custom = null,
+                        title = titleFor(api),
+                        tags = tagsFor(api),
+                        selected = activeCustom == null &&
+                            api.name == currentApiName,
+                        pinned = pinnedphashset.contains(api.name),
+                        settingsPlugin = settingsPlugin,
+                    )
                 }
-                listView?.adapter = arrayAdapter
-                listView?.choiceMode = AbsListView.CHOICE_MODE_SINGLE
+                for (custom in displayCustoms) {
+                    rows += SwitcherRow(
+                        api = null,
+                        custom = custom,
+                        title = custom.name,
+                        tags = emptyList(),
+                        selected = activeCustom?.id == custom.id,
+                        pinned = pinnedphashset.contains("custom:" + custom.id),
+                        settingsPlugin = null,
+                    )
+                }
+                switcherAdapter.notifyDataSetChanged()
 
-                listView?.setOnItemClickListener { _, _, i, _ ->
-                    if (i in currentValidApis.indices) {
-                        currentApiName = currentValidApis[i].name
-                        //to switch to apply simply remove this
-                        currentApiName.let(callback)
-                        dialog.dismissSafe()
-                    } else if (onCustomSelect != null) {
-                        val list = displayCustoms.getOrNull(
-                            i - currentValidApis.size
+                // Keep the All chip in sync with the tv-type chips.
+                binding.switcherChipAll.isChecked =
+                    validTypesAll.isNotEmpty() &&
+                        preSelectedTypes.containsAll(validTypesAll)
+            }
+
+            switcherAdapter = object : RecyclerView.Adapter<SwitcherHolder>() {
+                override fun onCreateViewHolder(
+                    parent: ViewGroup,
+                    viewType: Int
+                ): SwitcherHolder {
+                    val rowBinding = HomeProviderSwitcherRowBinding.inflate(
+                        LayoutInflater.from(parent.context),
+                        parent,
+                        false
+                    )
+                    return SwitcherHolder(rowBinding)
+                }
+
+                override fun getItemCount(): Int = rows.size
+
+                override fun onBindViewHolder(holder: SwitcherHolder, position: Int) {
+                    val row = rows[position]
+                    val rb = holder.rowBinding
+                    val rowContext = holder.itemView.context
+
+                    rb.switcherRowRadio.setImageResource(
+                        if (row.selected) {
+                            R.drawable.ic_switcher_radio_checked
+                        } else {
+                            R.drawable.ic_switcher_radio_unchecked
+                        }
+                    )
+                    rb.switcherRowTitle.text = row.title
+                    rb.switcherRowTitle.typeface = if (row.selected) {
+                        Typeface.DEFAULT_BOLD
+                    } else {
+                        Typeface.DEFAULT
+                    }
+                    rb.switcherRowTitle.setTextColor(
+                        rowContext.getResourceColor(
+                            if (row.selected) R.attr.textColor
+                            else R.attr.grayTextColor
                         )
-                        if (list != null) {
-                            onCustomSelect(list)
+                    )
+
+                    rb.switcherRowTags.removeAllViews()
+                    row.tags.forEachIndexed { index, tag ->
+                        val chip = TextView(rowContext).apply {
+                            text = tag.text
+                            textSize = 11f
+                            setTextColor(
+                                ContextCompat.getColor(
+                                    rowContext,
+                                    if (tag.cloud) R.color.switcherTagCloudText
+                                    else R.color.switcherTagText
+                                )
+                            )
+                            setBackgroundResource(
+                                if (tag.cloud) R.drawable.bg_switcher_tag_cloud
+                                else R.drawable.bg_switcher_tag
+                            )
+                            setPadding(8.toPx, 3.toPx, 8.toPx, 3.toPx)
+                            layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            ).apply {
+                                if (index > 0) marginStart = 6.toPx
+                            }
+                        }
+                        rb.switcherRowTags.addView(chip)
+                    }
+
+                    rb.switcherRowPin.visibility =
+                        if (row.pinned) View.VISIBLE else View.GONE
+
+                    val settingsPlugin = row.settingsPlugin
+                    rb.switcherRowSettings.visibility =
+                        if (settingsPlugin != null) View.VISIBLE else View.GONE
+                    if (settingsPlugin != null) {
+                        rb.switcherRowSettings.setOnClickListener { view ->
+                            try {
+                                val activityContext =
+                                    view.context.getActivity() ?: view.context
+                                settingsPlugin.openSettings?.invoke(activityContext)
+                            } catch (e: Throwable) {
+                                logError(e)
+                            }
+                        }
+                    } else {
+                        rb.switcherRowSettings.setOnClickListener(null)
+                    }
+
+                    rb.root.setOnClickListener {
+                        val pos = holder.bindingAdapterPosition
+                        if (pos == RecyclerView.NO_POSITION) return@setOnClickListener
+                        val clicked = rows[pos]
+                        if (clicked.api != null) {
+                            currentApiName = clicked.api.name
+                            //to switch to apply simply remove this
+                            currentApiName?.let(callback)
+                            dialog.dismissSafe()
+                        } else if (clicked.custom != null && onCustomSelect != null) {
+                            onCustomSelect(clicked.custom)
                             dialog.dismissSafe()
                         }
                     }
-                }
 
-                fun updateList() {
-                    DataStoreHelper.homePreference = preSelectedTypes
-                    val pinnedp = DataStoreHelper.pinnedProviders.toList()
-                    pinnedphashset = pinnedp.toHashSet()
-                    arrayAdapter.clear()
-                    val sortedApis = validAPIs
-                        .filter {
-                            val isPinned = pinnedphashset.contains(it.name)
-
-                            // Hide pinned NSFW when NSFW not selected. NSFW is distracting when not chosen.
-                            if (isPinned && !preSelectedTypes.contains(TvType.NSFW)) {
-                                if (it.supportedTypes.all { type -> type == TvType.NSFW }) return@filter false
-                            }
-
-                            it.hasMainPage && (isPinned || it.supportedTypes.any(
-                                preSelectedTypes::contains
-                            ))
+                    // pin provider on hold
+                    rb.root.setOnLongClickListener {
+                        val pos = holder.bindingAdapterPosition
+                        if (pos == RecyclerView.NO_POSITION) {
+                            return@setOnLongClickListener true
                         }
-                        .sortedBy { it.name.lowercase() }
-
-                    val sortedApiMap = LinkedHashMap<String, MainAPI>().apply {
-                        sortedApis.forEach { put(it.name, it) }
-                    }
-
-                    val pinnedApis = pinnedp.asReversed().mapNotNull { name ->
-                        sortedApiMap[name]
-                    }
-
-                    val remainingApis = sortedApis.filterNot { pinnedphashset.contains(it.name) }
-
-                    currentValidApis = mutableListOf<MainAPI>().apply {
-                        addAll(validAPIs.take(2))
-                        addAll(pinnedApis)
-                        addAll(remainingApis)
-                    }
-
-                    // Phase 8.50: Family Mode hides adult providers
-                    // from the picker entirely.
-                    if (FamilyMode.isEnabled()) {
-                        currentValidApis.removeAll {
-                            FamilyMode.isAdultApi(it)
-                        }
-                    }
-
-                    val names = currentValidApis.map {
-                        val displayName = getDisplayName(it.name)
-                        if (isMultiLang) "${getFlagFromIso(it.lang)?.plus(" ") ?: ""}$displayName" else displayName
-                    }
-                    // Phase 8.74: pinned customs join the top group
-                    // like pinned providers (same store, "custom:<id>"
-                    // keys, most-recent pin first), and the star
-                    // prefix beside custom names is gone (his call).
-                    val pinnedCustoms = pinnedp.asReversed()
-                        .mapNotNull { key ->
-                            if (key.startsWith("custom:")) {
-                                customLists.firstOrNull {
-                                    "custom:" + it.id == key
+                        val clicked = rows[pos]
+                        val pinnedp =
+                            DataStoreHelper.pinnedProviders.toMutableList()
+                        if (clicked.api != null) {
+                            // none/random (the first two rows) cannot be pinned
+                            if (currentValidApis.indexOf(clicked.api) > 1) {
+                                val thisapi = clicked.api.name
+                                if (pinnedp.contains(thisapi)) {
+                                    pinnedp.remove(thisapi)
+                                } else {
+                                    pinnedp.add(thisapi)
                                 }
-                            } else {
-                                null
+                                DataStoreHelper.pinnedProviders =
+                                    pinnedp.toTypedArray()
+                                updateList()
                             }
-                        }
-                    displayCustoms = pinnedCustoms + customLists.filterNot {
-                        pinnedphashset.contains("custom:" + it.id)
-                    }
-                    val customNames = displayCustoms.map { it.name }
-                    var index = currentValidApis.map { it.name }
-                        .indexOf(currentApiName)
-                    val activeCustomPos =
-                        HomeCustomLists.activeList(this@selectHomepage)
-                            ?.let { active ->
-                                displayCustoms.indexOfFirst {
-                                    it.id == active.id
-                                }
-                            } ?: -1
-                    if (activeCustomPos >= 0) {
-                        index = currentValidApis.size + activeCustomPos
-                    }
-                    listView?.setItemChecked(index, true)
-                    arrayAdapter.addAll(names + customNames)
-                    arrayAdapter.notifyDataSetChanged()
-                }
-                // pin provider on hold
-                listView?.setOnItemLongClickListener { _, _, i, _ ->
-                    if (currentValidApis.isNotEmpty() && i > 1 &&
-                        i in currentValidApis.indices
-                    ) {
-                        val pinnedp = DataStoreHelper.pinnedProviders.toMutableList()
-                        val thisapi = currentValidApis[i].name
-                        if (pinnedp.contains(thisapi)) {
-                            pinnedp.remove(thisapi)
-                        } else {
-                            pinnedp.add(thisapi)
-                        }
-                        DataStoreHelper.pinnedProviders = pinnedp.toTypedArray()
-                        updateList()
-                    } else {
-                        // Phase 8.74: custom lists pin/unpin on hold
-                        // exactly like providers.
-                        val custom = displayCustoms.getOrNull(
-                            i - currentValidApis.size
-                        )
-                        if (custom != null) {
-                            val pinnedp =
-                                DataStoreHelper.pinnedProviders.toMutableList()
-                            val key = "custom:" + custom.id
+                        } else if (clicked.custom != null) {
+                            // Phase 8.74: custom lists pin/unpin on hold
+                            // exactly like providers.
+                            val key = "custom:" + clicked.custom.id
                             if (pinnedp.contains(key)) {
                                 pinnedp.remove(key)
                             } else {
@@ -681,21 +800,56 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                                 pinnedp.toTypedArray()
                             updateList()
                         }
+                        true
                     }
-                    true
                 }
+            }
 
-                bindChips(
-                    binding.tvtypesChipsScroll.tvtypesChips,
-                    preSelectedTypes,
-                    validAPIs.flatMap { it.supportedTypes }.distinct()
-                ) { list ->
+            binding.switcherRecycler.layoutManager = LinearLayoutManager(this)
+            binding.switcherRecycler.adapter = switcherAdapter
+
+            // Phase 8.89: dismissal moved to the title row's ✕
+            // (standard sheet chrome); the old bottom Close row
+            // was removed from the layout.
+            binding.switcherCloseBtt.setOnClickListener {
+                dialog.dismissSafe()
+            }
+
+            // The All chip drives the same selection the tv-type
+            // chips write: on = every type present, off = none.
+            binding.switcherChipAll.isFocusable = true
+            if (isLayout(TV)) {
+                binding.switcherChipAll.isFocusableInTouchMode = true
+            }
+            binding.switcherChipAll.setOnClickListener {
+                if (binding.switcherChipAll.isChecked) {
                     preSelectedTypes.clear()
-                    preSelectedTypes.addAll(list)
-                    updateList()
+                    preSelectedTypes.addAll(validTypesAll)
+                } else {
+                    preSelectedTypes.clear()
                 }
+                updateChips(binding.switcherTvtypesChips, preSelectedTypes)
                 updateList()
             }
+
+            bindChips(
+                binding.switcherTvtypesChips,
+                preSelectedTypes,
+                validTypesAll
+            ) { list ->
+                preSelectedTypes.clear()
+                preSelectedTypes.addAll(list)
+                updateList()
+            }
+            updateList()
+
+            dialog.show()
+            // The dialog's own sheet frame stays transparent — the
+            // sheet root's rounded_dialog background is the only
+            // surface (same recipe as the 8.82 settings sheet).
+            dialog.findViewById<View>(
+                com.google.android.material.R.id.design_bottom_sheet
+            )?.setBackgroundColor(Color.TRANSPARENT)
         }
     }
 
@@ -833,14 +987,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         MetadataResolver.removeListener(metadataResolveListener)
         homeAutoRotateHandler.removeCallbacks(titleNotifyRunnable)
         // Phase 8.73: never leave the activity's bottom nav translated
-        // away (or the switcher either) when Home's view goes away.
+        // away when Home's view goes away.
         homeChromeHidden = false
         homeChromeDy = 0
-        activity?.findViewById<View>(R.id.nav_view)?.let {
-            it.animate().cancel()
-            it.translationY = 0f
-        }
-        binding?.homeApiFab?.let {
+        // Phase 8.99d: the translated chrome bar is the floating overlay
+        // on the phone layout; nav_view is its invisible holder there.
+        (activity?.findViewById<View>(R.id.floating_nav_view)
+            ?: activity?.findViewById<View>(R.id.nav_view))?.let {
             it.animate().cancel()
             it.translationY = 0f
         }
@@ -1100,41 +1253,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
 
         // Fix grid
         configEvent.invoke()
-
-        // Phase 8.5C: re-anchor the provider switcher (rotation lands here)
-        anchorHomeApiFab()
-    }
-
-    /** Phase 8.5C: anchor the provider switcher (home_api_fab) from the
-     * activity's REAL bottom-nav view instead of a hand-computed dp constant.
-     * The switcher's XML margins were already right on paper twice (7.5, 8C)
-     * and the on-device failure turned out not to be the margin at all: in
-     * the top-of-home state the FAB was not drawn at all (pixel-verified in
-     * PHASE85C_CHANGES.md). This makes the placement self-correcting:
-     * bottom margin = the nav view's measured height + the nav's own bottom
-     * margin + the original 16dp gap, recomputed on binding creation, on
-     * every successful page load, and on every fixLayout (rotation) — so it
-     * also tracks the API 30+ inset growth MainActivity applies to the pill.
-     * The XML 104dp margin remains as the pre-layout fallback. */
-    private fun anchorHomeApiFab() {
-        if (!isLayout(PHONE)) return
-        val fab = binding?.homeApiFab ?: return
-        val nav = activity?.findViewById<View>(R.id.nav_view) ?: return
-        val apply = {
-            if (nav.isVisible && nav.height > 0) {
-                val navBottomMargin =
-                    (nav.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
-                val desired = nav.height + navBottomMargin + 16.toPx
-                val lp = fab.layoutParams as? FrameLayout.LayoutParams
-                if (lp != null && lp.bottomMargin != desired) {
-                    lp.gravity = Gravity.BOTTOM or Gravity.END
-                    lp.bottomMargin = desired
-                    lp.marginEnd = 16.toPx
-                    fab.layoutParams = lp
-                }
-            }
-        }
-        if (nav.height > 0) apply() else nav.post { apply() }
     }
 
     /**
@@ -1150,19 +1268,23 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
      * are untouched.
      *
      * This never fights [HomeScrollTransformer]: the transformer runs on
-     * the pager's *horizontal* page changes and only writes page padding,
-     * while this writes scale/alpha/translationY on the outer frame from
-     * the *vertical* list scroll — disjoint properties on disjoint views.
+     * the pager's *horizontal* page changes and only writes page
+     * alpha/translationX, while this writes scale/alpha/translationY on
+     * the outer frame from the *vertical* list scroll — disjoint
+     * properties on disjoint views.
      */
-    // Phase 8.73: provider-switcher + bottom-nav auto-hide state.
+    // Phase 8.73: bottom-nav auto-hide state (8.84: the provider
+    // switcher left the chrome — it is the top-bar pill now).
     private var homeChromeHidden = false
     private var homeChromeDy = 0
 
     /**
      * Phase 8.73 (his request): while scrolling down through Home, the
-     * provider switcher and the bottom navigation slide away; a slight
-     * scroll back up brings both back. Accumulated-delta thresholds so
-     * slow drags count too, not just flings. Transforms only.
+     * bottom navigation slides away; a slight scroll back up brings it
+     * back. Accumulated-delta thresholds so slow drags count too, not
+     * just flings. Transforms only. (8.84: the provider switcher is no
+     * longer floating chrome — it moved to the top bar — so only the
+     * nav is animated here.)
      */
     private fun setupHomeChromeAutoHide(recyclerView: RecyclerView) {
         if (!isLayout(PHONE)) return
@@ -1195,15 +1317,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
     }
 
     private fun applyHomeChromeVisibility() {
-        val fab = binding?.homeApiFab
-        val nav = activity?.findViewById<View>(R.id.nav_view)
+        val nav = activity?.findViewById<View>(R.id.floating_nav_view)
+            ?: activity?.findViewById<View>(R.id.nav_view)
         if (homeChromeHidden) {
-            if (fab != null) {
-                val lp = fab.layoutParams as? ViewGroup.MarginLayoutParams
-                val shift = fab.height + (lp?.bottomMargin ?: 0) + 8.toPx
-                fab.animate().translationY(shift.toFloat())
-                    .setDuration(150).start()
-            }
             if (nav != null) {
                 val lp = nav.layoutParams as? ViewGroup.MarginLayoutParams
                 val shift = nav.height + (lp?.bottomMargin ?: 0) + 8.toPx
@@ -1211,7 +1327,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     .setDuration(150).start()
             }
         } else {
-            fab?.animate()?.translationY(0f)?.setDuration(150)?.start()
             nav?.animate()?.translationY(0f)?.setDuration(150)?.start()
         }
     }
@@ -1356,13 +1471,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
         binding.apply {
             //homeChangeApiLoading.setOnClickListener(apiChangeClickListener)
             //homeChangeApiLoading.setOnClickListener(apiChangeClickListener)
-            homeApiFab.setOnClickListener(apiChangeClickListener)
-            homeApiFab.setOnLongClickListener {
-                if (currentApiName == noneApi.name) return@setOnLongClickListener false
-                homeViewModel.loadAndCancel(currentApiName, forceReload = true, fromUI = true)
-                showToast(R.string.action_reload, Toast.LENGTH_SHORT)
-                true
-            }
+            // Phase 8.84: the floating provider pill (home_api_fab) is
+            // gone — switching lives on the top-bar pill in the head
+            // (HeaderViewHolder) and homeChangeApi below. Its FAB-only
+            // reload-on-long-press went with it.
             homeChangeApi.setOnClickListener(apiChangeClickListener)
             homeSwitchAccount.setOnClickListener {
                 activity?.showAccountSelectLinear()
@@ -1481,8 +1593,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 homeAutoRotateHandler.postDelayed(homeAutoRotateRunnable, 60_000L)
             }
 
-            homeApiFab.isVisible = isLayout(PHONE)
-            anchorHomeApiFab()
 
             homePreviewReloadProvider.setOnClickListener { view ->
                 view.hapticTick()
@@ -1569,16 +1679,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             homeMasterRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (isLayout(PHONE)) {
-                        // Fab is only relevant to Phone
-                        // Phase 8.5C: the provider switcher (homeApiFab) no
-                        // longer shrink()es. The RecyclerView also reports
-                        // dy > 0 while it first populates, so a shrink could
-                        // land before the FAB's extended size was ever
-                        // measured — leaving the switcher undrawn at the top
-                        // of the feed until a scroll-up happened to extend()
-                        // it (see PHASE85C_CHANGES.md). As the primary
-                        // provider control it now stays extended; the Random
-                        // FAB keeps the original shrink/extend behaviour.
+                        // Fab is only relevant to Phone. Phase 8.84:
+                        // only the Random FAB remains floating (the
+                        // provider switcher is the top-bar pill now);
+                        // it keeps its shrink/extend on scroll.
                         if (dy > 0) { //check for scroll down
                             homeRandom.shrink()
                         } else if (dy < -5) {
@@ -1647,7 +1751,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             currentApiName = apiName
             val displayApiName = context?.getDisplayName(apiName) ?: apiName
             binding.apply {
-                homeApiFab.text = displayApiName
                 homeChangeApi.text = displayApiName
                 homePreviewReloadProvider.isGone = (apiName == noneApi.name)
                 homePreviewSearchButton.isGone = (apiName == noneApi.name)
@@ -1710,22 +1813,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                         homeLoadingShimmer.stopShimmer()
                         homeSwipeRefresh.isRefreshing = false
 
-                        // Phase 8.5C: whenever content is on screen the
-                        // provider switcher must be too — re-assert its
-                        // visibility and re-anchor it above the real nav
-                        // view on every successful load, so no earlier
-                        // state can leave it missing (see PHASE85C_CHANGES.md).
-                        homeApiFab.isVisible = isLayout(PHONE)
-                        anchorHomeApiFab()
-                        // Phase 8.73: re-assert the switcher label from
-                        // the actually-loaded provider on every load —
-                        // after switching back to the default it could
-                        // keep showing the previous provider's name.
+                        // Phase 8.73: re-assert the switcher label
+                        // (homeChangeApi; 8.84: the head's top-bar pill
+                        // labels itself from the same apiName stream)
+                        // from the actually-loaded provider on every
+                        // load — after switching back to the default it
+                        // could keep showing the previous provider's name.
                         val loadedApiName = homeViewModel.apiName.value
                         val loadedDisplay =
                             context?.getDisplayName(loadedApiName)
                                 ?: loadedApiName
-                        homeApiFab.text = loadedDisplay
                         homeChangeApi.text = loadedDisplay
 
                         //home_loaded?.isVisible = true

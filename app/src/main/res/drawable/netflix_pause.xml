@@ -1,22 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
+    android:tint="?attr/white"
     android:viewportWidth="24"
-    android:viewportHeight="24"
-    android:tint="?attr/white">
-    <!-- Phase 8.14a: pause redrawn as two solid pill bars (thick round-cap
-         strokes) instead of the thin 1.5 outline bars, matching the weight
-         of modern players and the new skip arrows. -->
+    android:viewportHeight="24">
     <path
-        android:pathData="M8.3,6.4 L8.3,17.6"
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineCap="round" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M15 4h2a1.0 1.0 0 0 1 1.0 1.0v14a1.0 1.0 0 0 1 -1.0 1.0h-2a1.0 1.0 0 0 1 -1.0 -1.0v-14a1.0 1.0 0 0 1 1.0 -1.0Z"/>
     <path
-        android:pathData="M15.7,6.4 L15.7,17.6"
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineCap="round" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M7 4h2a1.0 1.0 0 0 1 1.0 1.0v14a1.0 1.0 0 0 1 -1.0 1.0h-2a1.0 1.0 0 0 1 -1.0 -1.0v-14a1.0 1.0 0 0 1 1.0 -1.0Z"/>
 </vector>

@@ -103,6 +103,7 @@ import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.localLi
 import com.lagradost.cloudstream3.syncproviders.SyncAPI
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.SyncWatchType
+import com.lagradost.cloudstream3.ui.FloatingNavView
 import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.account.AccountHelper.showAccountSelectLinear
 import com.lagradost.cloudstream3.ui.download.DOWNLOAD_NAVIGATE_TO
@@ -560,7 +561,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         binding?.apply {
             navRailView.isVisible = isNavVisible && isLandscape()
-            navView.isVisible = isNavVisible && !isLandscape()
+            // Phase 8.99d: on the phone layout nav_view is the INVISIBLE
+            // state holder and the FloatingNavView is the visible bar,
+            // driven by the same isNavVisible result. The TV layout shares
+            // this binding and keeps the original nav_view behaviour.
+            val floatingNav = floatingNavView
+            if (floatingNav != null) {
+                navView.isVisible = false
+                floatingNav.isVisible = isNavVisible && !isLandscape()
+            } else {
+                navView.isVisible = isNavVisible && !isLandscape()
+            }
             navHostFragment.apply {
                 val marginPx = resources.getDimensionPixelSize(R.dimen.nav_rail_view_width)
                 layoutParams =
@@ -887,6 +898,41 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
      * onNavDestinationSelected), ACTION_UP is not consumed and the normal
      * click proceeds exactly as before.
      */
+    /** Phase 8.20 reselection side effect, shared by the stock bars and
+     *  (8.99d) the floating bar: re-tapping the Feed tab scrolls the feed
+     *  back to the top. */
+    private fun onNavItemReselected(itemId: Int) {
+        if (itemId == R.id.navigation_feed) {
+            val host = supportFragmentManager
+                .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+            (host?.childFragmentManager?.fragments
+                ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
+                ?.scrollToTop()
+        }
+    }
+
+    /** Phase 8.99d: wire the floating bottom bar to the existing nav
+     *  plumbing. Requests are pushed into the BottomNavigationView (the
+     *  selection/state holder) and the true selection is read back
+     *  afterwards — the same read-back semantics setupNavScrub relies
+     *  on: if the debounced listener rejects a selection (returns
+     *  without changing it), the bar keeps showing the old tab. */
+    private fun setupFloatingNav(navController: NavController) {
+        val floatingNav = floatingNavView ?: return
+        val navView = binding?.navView ?: return
+        floatingNav.onNavigateRequest = { itemId ->
+            navView.selectedItemId = itemId
+            floatingNav.syncSelection(navView.selectedItemId, animate = true)
+        }
+        floatingNav.onReselected = { itemId -> onNavItemReselected(itemId) }
+        floatingNav.setupWithNavController(navController)
+        floatingNav.syncSelection(navView.selectedItemId, animate = false)
+        // The destination listener that drives updateNavBar was registered
+        // before this view existed; run it once so the bar's initial
+        // visibility matches the start destination.
+        navController.currentDestination?.let { updateNavBar(it) }
+    }
+
     private fun setupNavScrub(navView: BottomNavigationView) {
         // Item views are created when the menu is inflated; post{} makes
         // sure they exist before we walk them.
@@ -1083,6 +1129,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
     }
 
     var binding: ActivityMainBinding? = null
+
+    // Phase 8.99d: the floating bottom bar (phone layout only, created in
+    // code during binding inflation; null on TV and if creation failed).
+    private var floatingNavView: FloatingNavView? = null
 
     object TvFocus {
         data class FocusTarget(
@@ -1503,6 +1553,38 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             } else {
                 val newLocalBinding = ActivityMainBinding.inflate(layoutInflater, null, false)
                 setContentView(newLocalBinding.root)
+                // Phase 8.99d: the floating bottom bar lives on the phone
+                // layout only. It is created in code (not XML) so no view
+                // binding field is generated for it — this activity also
+                // binds ActivityMainBinding onto the TV root, and the TV
+                // layout stays untouched. The stock BottomNavigationView
+                // remains in the phone layout (INVISIBLE) as the
+                // selection/state holder; see FloatingNavView.
+                try {
+                    val contentLayout =
+                        newLocalBinding.root.getChildAt(0) as? ViewGroup
+                    if (contentLayout != null) {
+                        val floatingNav = FloatingNavView(this)
+                        floatingNav.id = R.id.floating_nav_view
+                        floatingNav.isVisible = false
+                        val layoutParams =
+                            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ).apply {
+                                bottomToBottom =
+                                    androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                startToStart =
+                                    androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                endToEnd =
+                                    androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                            }
+                        contentLayout.addView(floatingNav, layoutParams)
+                        floatingNavView = floatingNav
+                    }
+                } catch (t: Throwable) {
+                    logError(t)
+                }
                 newLocalBinding
             }
         } catch (t: Throwable) {
@@ -1513,7 +1595,17 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         binding?.apply {
             fixSystemBarsPadding(
                 navView,
-                heightResId = R.dimen.nav_view_height,
+                // Phase 8.95: on API 30+ this height is RE-derived
+                // from the dimen (base + bottom inset), so the
+                // phone bar must be fed its 80dp phone dimen —
+                // feeding the shared 70dp one would silently
+                // shrink the polished bar back on modern phones.
+                // TV keeps the shared dimen, untouched.
+                heightResId = if (isLayout(TV)) {
+                    R.dimen.nav_view_height
+                } else {
+                    R.dimen.nav_view_height_phone
+                },
                 padTop = false,
                 overlayCutout = false
             )
@@ -1874,6 +1966,8 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                     binding?.apply {
                         navRailView.menu.findItem(R.id.navigation_library)?.setIcon(icon)
                         navView.menu.findItem(R.id.navigation_library)?.setIcon(icon)
+                        // Phase 8.99d: keep the floating bar's library icon in sync.
+                        floatingNavView?.setItemIcon(R.id.navigation_library, icon)
                     }
                 }
             }
@@ -1898,6 +1992,11 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             // it only registers when a TMDB key and a scraper exist.
             runCatching {
                 com.lagradost.cloudstream3.nuvio.NuvioProviders.sync(this@MainActivity)
+            }
+            // Same isolation for the SkyStream plugin providers (8.78):
+            // one MainAPI per installed+enabled plugin (or sub-provider).
+            runCatching {
+                com.lagradost.cloudstream3.sky.SkyProviders.sync(this@MainActivity)
             }
         }
 
@@ -1963,13 +2062,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
             // Phase 8.20: re-tapping the Feed tab scrolls the feed to top.
             setOnItemReselectedListener { item ->
-                if (item.itemId == R.id.navigation_feed) {
-                    val host = supportFragmentManager
-                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
-                    (host?.childFragmentManager?.fragments
-                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
-                        ?.scrollToTop()
-                }
+                onNavItemReselected(item.itemId)
             }
 
         }
@@ -2005,13 +2098,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
             // Phase 8.20: same re-tap behaviour as the bottom bar.
             setOnItemReselectedListener { item ->
-                if (item.itemId == R.id.navigation_feed) {
-                    val host = supportFragmentManager
-                        .findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
-                    (host?.childFragmentManager?.fragments
-                        ?.firstOrNull { it is FeedScrollTop } as? FeedScrollTop)
-                        ?.scrollToTop()
-                }
+                onNavItemReselected(item.itemId)
             }
 
 
@@ -2106,7 +2193,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }
 
         // Navigation button long click functionality to scroll to top
-        for (view in listOf(binding?.navView, binding?.navRailView)) {
+        // (8.99d: the floating bar's item roots carry the same ids, so it
+        // joins the same loop on the phone layout)
+        for (view in listOf(binding?.navView, binding?.navRailView, floatingNavView)) {
             view?.findViewById<View?>(R.id.navigation_home)?.setOnLongClickListener {
                 val recycler = binding?.root?.findViewById<RecyclerView?>(R.id.home_master_recycler)
                 recycler?.smoothScrollToPosition(0)
@@ -2150,6 +2239,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 return@setOnLongClickListener recycler != null
             }
         }
+
+        // Phase 8.99d: wire the floating bar (phone only; no-op on TV).
+        setupFloatingNav(navController)
 
         loadCache()
         updateHasTrailers()

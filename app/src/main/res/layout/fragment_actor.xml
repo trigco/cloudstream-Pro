@@ -121,6 +121,49 @@
                     tools:text="Biography extract loaded from Wikipedia."
                     tools:visibility="visible" />
 
+                <!-- Phase 8.93: filmography (TVmaze + Wikidata,
+                     see ActorFilmography). Header + spinner show
+                     while fetching; the grid or the muted empty
+                     line appears when the fetch lands. -->
+                <TextView
+                    android:id="@+id/actor_filmo_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:text="@string/actor_filmography"
+                    android:textColor="?attr/textColor"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <ProgressBar
+                    android:id="@+id/actor_filmo_progress"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="16dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/actor_filmo_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/actor_filmography_none"
+                    android:textColor="?attr/grayTextColor"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/actor_filmo_grid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/actor_search_button"
                     style="@style/WhiteButton"

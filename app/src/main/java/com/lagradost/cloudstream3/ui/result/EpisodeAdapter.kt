@@ -28,6 +28,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.html
 import com.lagradost.cloudstream3.utils.Coroutines.main
+import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.toPx
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
@@ -226,6 +227,21 @@ class EpisodeAdapter(
                         isVisible = durationSec > 0 && (isWatched || displayPos > 0L)
                     }
 
+                    // Phase 8.99e (his rule): the centre thumbnail badge
+                    // is a state icon — PAUSE for the episode the
+                    // player most recently had loaded, PLAY for every
+                    // other episode. The upcoming (hourglass) badge
+                    // wins over it for unaired episodes.
+                    val isUpcomingEp = item.airDate != null && unixTimeMS < item.airDate
+                    episodeStateIcon.isVisible = !isUpcomingEp
+                    episodeStateIcon.setImageResource(
+                        if (item.id == DataStoreHelper.lastPlayedContentId) {
+                            R.drawable.ic_baseline_pause_24
+                        } else {
+                            R.drawable.ic_baseline_play_arrow_24
+                        }
+                    )
+
                     val posterVisible = !item.poster.isNullOrBlank()
                     if (posterVisible) {
                         val isUpcoming = item.airDate != null && unixTimeMS < item.airDate
@@ -237,6 +253,7 @@ class EpisodeAdapter(
                                     main {
                                         // Make sure it is on the main thread
                                         episodeUpcomingIcon.isVisible = true
+                                        episodeStateIcon.isVisible = false
                                     }
 
                                     null // We only care about the runnable
@@ -431,7 +448,17 @@ class EpisodeAdapter(
                             episodePlayIcon.setImageResource(R.drawable.ic_baseline_check_24)
                             episodeProgress.isVisible = false
                         } else {
-                            episodePlayIcon.setImageResource(R.drawable.play_button_transparent)
+                            // Phase 8.99e (his rule): PAUSE for the
+                            // episode the player most recently had
+                            // loaded, PLAY otherwise (watched keeps
+                            // the check above).
+                            episodePlayIcon.setImageResource(
+                                if (item.id == DataStoreHelper.lastPlayedContentId) {
+                                    R.drawable.ic_baseline_pause_24
+                                } else {
+                                    R.drawable.play_button_transparent
+                                }
+                            )
                             episodeProgress.apply {
                                 max = durationSec
                                 progress = progressSec

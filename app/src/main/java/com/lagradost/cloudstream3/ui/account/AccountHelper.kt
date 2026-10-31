@@ -180,6 +180,10 @@ object AccountHelper {
             val sheetBinding = BottomInputDialogBinding.inflate(LayoutInflater.from(context))
             bottomSheetDialog.setContentView(sheetBinding.root)
             bottomSheetDialog.show()
+            // Phase 8.89: standard sheet close button.
+            sheetBinding.closeBtt.setOnClickListener {
+                bottomSheetDialog.dismissSafe()
+            }
 
             // Phase 8.11: preset avatar picker, built in code because the
             // shared bottom_input_dialog layout also backs the nginx text
@@ -254,8 +258,10 @@ object AccountHelper {
                 isHorizontalScrollBarEnabled = false
                 addView(presetRow)
             }
-            // Between the sheet title and the URL field.
-            (sheetBinding.root as? ViewGroup)?.addView(presetScroll, 1)
+            // Between the sheet title and the URL field. Phase 8.89:
+            // the input sheet's root gained a drag handle + title row
+            // above the field, so the preset row now goes at index 2.
+            (sheetBinding.root as? ViewGroup)?.addView(presetScroll, 2)
 
             sheetBinding.apply {
                 text1.text = context.getString(R.string.edit_profile_image_title)
@@ -451,6 +457,11 @@ object AccountHelper {
         val builder = BottomSheetDialog(activity)
         builder.setContentView(binding.root)
         builder.show()
+
+        // Phase 8.89: standard sheet close button.
+        binding.closeBtt.setOnClickListener {
+            builder.dismissSafe()
+        }
 
         binding.manageAccountsButton.setOnClickListener {
             activity.navigate(

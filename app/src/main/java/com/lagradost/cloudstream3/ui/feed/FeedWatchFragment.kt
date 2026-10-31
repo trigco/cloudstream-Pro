@@ -2,14 +2,19 @@ package com.lagradost.cloudstream3.ui.feed
 
 import android.animation.ValueAnimator
 import com.lagradost.cloudstream3.TvType
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.OrientationEventListener
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -20,6 +25,7 @@ import androidx.media3.common.C.TRACK_TYPE_VIDEO
 import androidx.media3.common.C.TRACK_TYPE_TEXT
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
@@ -55,6 +61,8 @@ import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.hapticTick
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Phase 8.18–8.20 — the Feed watch page (YouTube-style, portrait).
@@ -72,6 +80,36 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     private var seeking = false
     private var tickCount = 0
     private var lastShownUrl: String? = null
+
+    /** Phase 8.92: the last brightness the swipe gesture set —
+     *  remembered so a trip to the batch page and back resumes
+     *  adjusting from the user's level instead of the 0.5
+     *  default. Phase 8.99b: the 8.99 video-only experiment
+     *  (scrim + media3 Brightness effect) is REVERTED by his
+     *  order — the level again drives the window's
+     *  screenBrightness attribute exactly as in 8.92/8.97.
+     *  Phase 8.99c: the window model had NO effect on his
+     *  device at all — the gesture now drives the SYSTEM
+     *  brightness exactly like the main player (see the
+     *  brightness section below); this field remains the
+     *  page's own record of the gesture level (HUD continuity
+     *  and the window fallback's resume value). */
+    private var savedFeedBrightness: Float? = null
+
+    /** Phase 8.99c (job B): true while the gesture drives the
+     *  SYSTEM brightness (Settings.System) — the main player's
+     *  primary path. Flips false for the rest of this page
+     *  instance's life the first time a system call throws
+     *  (the modify-system-settings permission is missing) and
+     *  the window attribute takes over: PlayerGestureHelper's
+     *  exception-driven fail-over, mirrored. */
+    private var useFeedSystemBrightness = true
+
+    /** Phase 8.99c (job B): the system level read when this
+     *  page was entered. A record only — the exit contract
+     *  mirrors the main player, whose release() never hands
+     *  the level back, so nothing is restored from it. */
+    private var entrySystemBrightness: Float? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -116,7 +154,19 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
             }
             binding?.feedWatchUpnext?.scrollToPosition(0)
         },
-        onHide = { entry -> confirmHide(entry) }
+        onHide = { entry -> confirmHide(entry) },
+        // Phase 8.99b (job C): this adapter never kicked title
+        // resolution — unlike the Feed grid's — so an id-titled
+        // Up-next card could only ever show a title the grid
+        // had already resolved. It kicks like every other
+        // surface now.
+        onTitleNeeded = { entry ->
+            context?.let {
+                TitleResolver.resolve(
+                    it, entry.apiName, entry.response.url, entry.response.name
+                )
+            }
+        }
     )
 
     /** Phase 8.22: long-press a card → offer to hide it for good. */
@@ -138,7 +188,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
     // Phase 8.74: when a raw "Id …" title resolves in the background,
     // refresh the header so the real title replaces the blank.
-    private val watchTitleListener: (String, String) -> Unit = { url, _ ->
+    // Phase 8.99b (job C): a landed title also reaches the Up-next
+    // cards showing that item — previously only the CURRENT item's
+    // header refreshed, so a title landing while this screen was
+    // up never appeared on its cards here.
+    private val watchTitleListener: (String, String) -> Unit = { url, title ->
+        upNextAdapter.setTitleOverride(url, title)
         if (url == FeedPlayer.currentUrl) updateHeader()
     }
 
@@ -222,6 +277,25 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         }
     }
 
+    // Phase 8.99e (his order: "ratio area lock"): the collapsing
+    // player is GONE. Three shrink mechanisms (8.98 layout height,
+    // 8.99 pinned PlayerView + clip box, 8.99b TextureView stage,
+    // 8.99c uniform scale + follower translation) all still
+    // deformed the picture on his device, and the scale version
+    // left a black gap under the player. The player area is now
+    // locked at its natural XML 16:9 forever: nothing in this
+    // fragment writes the player box's size, scale or translation,
+    // and the title / Up-next region below scrolls in its own
+    // layout region exactly as the layout separates them.
+
+    // Phase 8.98: the watch page's own trailer banner (the
+    // Info sheet's slot, shared via FeedInfoSheet) — bound
+    // from FeedPlayer.currentPage exactly like the sheet
+    // binds it, torn down whenever the item changes.
+    private var trailerViews: FeedInfoSheet.TrailerSlotViews? = null
+    private var trailerPlayer: ExoPlayer? = null
+    private var trailerBoundUrl: String? = null
+
     private var lastPlayerStatus: FeedPlayer.Status = FeedPlayer.Status.IDLE
 
     private val iconListener = object : Player.Listener {
@@ -245,6 +319,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         override fun onPlaybackStateChanged(state: Int) {
             updateBuffering()
         }
+
+        // Phase 8.99b: the 8.99 onPlayerError hook (dropping the
+        // brightness boost effect on error) is gone with the
+        // rest of the video-effects machinery — playback errors
+        // are FeedPlayer's own business (it fails over), as
+        // they were before 8.99.
     }
 
     override fun fixLayout(view: View) {
@@ -263,9 +343,46 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.addListener(stateListener)
         TitleResolver.addListener(watchTitleListener)
 
-        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 2)
+        // Phase 8.99c (job B): record the system brightness
+        // this page was entered at (a plain read — reads need
+        // no permission and must not flip the system-path
+        // flag). Record only: the exit contract mirrors the
+        // main player, which never hands the level back.
+        if (entrySystemBrightness == null) {
+            entrySystemBrightness = try {
+                Settings.System.getInt(
+                    requireContext().contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS
+                ) / 255f
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        // Phase 8.90: Up next is a 3-column grid like the Feed
+        // itself (his order) — the feed card was already sized
+        // for three-across in 8.85, so titles/meta stay readable.
+        binding.feedWatchUpnext.layoutManager = GridLayoutManager(context, 3)
         binding.feedWatchUpnext.adapter = upNextAdapter
         setupTitleAutoHide(binding)
+
+        // Phase 8.98: trailer banner (Job 4) — the Info
+        // sheet's 16:9 slot, placed in the title box between
+        // the action pills and the "For You" header (the title
+        // box's last child). It stays gone until the loaded
+        // page ships a trailer (see syncTrailer).
+        val trailerSlotViews = FeedInfoSheet.buildTrailerSlot(requireContext())
+        trailerViews = trailerSlotViews
+        binding.feedWatchTitleBox.let { titleBox ->
+            trailerSlotViews.slot.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (12 * resources.displayMetrics.density).toInt() }
+            titleBox.addView(
+                trailerSlotViews.slot,
+                (titleBox.childCount - 1).coerceAtLeast(0)
+            )
+        }
 
         val url = arguments?.getString("url") ?: return
         val apiName = arguments?.getString("apiName") ?: return
@@ -292,20 +409,42 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 binding.feedWatchToTop.isVisible = first >= 8
             }
         })
-        // Storyline: hidden by default; the "More" label beside
-        // the title expands it ("Less" collapses). Expanding
-        // changes the title box height, so the collapse
-        // animation's reference height is re-measured.
+        // Phase 8.93: the Info link opens the rich details sheet
+        // (FeedInfoSheet: description, cast, trailer) — it no
+        // longer expands the plot inline under the title.
+        // Phase 8.97: it is a text link now ("Info ›"), not a
+        // pill button (his order — see fragment_feed_watch.xml).
+        binding.feedWatchMore.isVisible = true
         binding.feedWatchMore.setOnClickListener { view ->
             view.hapticTick()
-            val open = !binding.feedWatchStorylineText.isVisible
-            binding.feedWatchStorylineText.isVisible = open
-            binding.feedWatchMore.setText(if (open) R.string.feed_less else R.string.feed_info)
-            val box = binding.feedWatchTitleBox
-            val params = box.layoutParams
-            params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-            box.layoutParams = params
-            box.post { titleFullHeight = box.height }
+            val act = activity ?: return@setOnClickListener
+            val watchUrl = FeedPlayer.currentUrl
+                ?: arguments?.getString("url") ?: return@setOnClickListener
+            val watchApi = FeedPlayer.currentApiName
+                ?: arguments?.getString("apiName") ?: return@setOnClickListener
+            val watchName = FeedPlayer.currentName
+                ?: arguments?.getString("name") ?: watchUrl
+            val watchPoster = FeedPlayer.currentPoster
+                ?: arguments?.getString("posterUrl")
+            FeedInfoSheet.show(
+                act, watchUrl, watchApi, watchName, watchPoster,
+                onPlay = {
+                    if (FeedPlayer.currentUrl == watchUrl) {
+                        // Already this item: just resume it.
+                        FeedPlayer.exo?.playWhenReady = true
+                    } else {
+                        context?.let {
+                            FeedPlayer.play(
+                                it, watchUrl, watchApi, watchName, watchPoster
+                            )
+                        }
+                    }
+                },
+                onOpenDetails = {
+                    FeedPool.entries.firstOrNull { it.response.url == watchUrl }
+                        ?.let { entry -> act.loadSearchResult(entry.response) }
+                }
+            )
         }
         binding.feedWatchToTop.setOnClickListener { view ->
             view.hapticTick()
@@ -317,6 +456,15 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
 
         // Single tap toggles controls; double tap skips ∓10 s; a long
         // downward drag minimises into the Feed's mini player.
+        // Phase 8.92: vertical swipes adjust brightness / volume,
+        // main-player style — see the gesture helpers below.
+        // Phase 8.92b (his safe-area order): the swipe zones are
+        // set by the touch-DOWN x — left 30% = brightness, right
+        // 30% = volume, and the middle 40% is a SAFE area: no
+        // brightness/volume there, and the pull-down minimise
+        // now starts from that middle zone at any height (the
+        // 8.92 top-strip rule is gone). Side zones never
+        // minimise.
         val gestureDetector = GestureDetector(
             requireContext(),
             object : GestureDetector.SimpleOnGestureListener() {
@@ -336,20 +484,79 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             }
         )
+        var downX = 0f
         var downY = 0f
         var dragHandled = false
-        binding.feedWatchPlayer.setOnTouchListener { _, event ->
+        var adjustClaimed = false
+        var adjustBrightness = false
+        // Phase 8.92b: the gesture zone, fixed at touch-down:
+        // 0 = left 30% (brightness), 1 = middle 40% (safe),
+        // 2 = right 30% (volume).
+        var downZone = 1
+        var startBrightness = 0.5f
+        var startVolume = 0f
+        binding.feedWatchPlayer.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
                     downY = event.y
                     dragHandled = false
+                    adjustClaimed = false
+                    downZone = when {
+                        view.width <= 0 -> 1
+                        downX < view.width * 0.30f -> 0
+                        downX >= view.width * 0.70f -> 2
+                        else -> 1
+                    }
+                    startBrightness = currentFeedBrightness()
+                    startVolume = currentVolumeFraction()
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    if (!dragHandled && event.y - downY > 160f && FeedPlayer.isPlaying) {
+                    val dx = event.x - downX
+                    val dyDown = event.y - downY
+                    if (!dragHandled && !adjustClaimed &&
+                        dyDown > 160f && downZone == 1 && FeedPlayer.isPlaying
+                    ) {
                         dragHandled = true
                         minimizeToFeed()
+                    } else if (!dragHandled) {
+                        // The main player's claim rule
+                        // (PlayerGestureHelper): a mostly-vertical
+                        // move past 2% of the height claims the
+                        // gesture — but only in the side zones;
+                        // the safe middle never adjusts.
+                        if (!adjustClaimed && downZone != 1 &&
+                            abs(dyDown) > view.height * 0.02f &&
+                            abs(dyDown) > abs(dx)
+                        ) {
+                            adjustClaimed = true
+                            adjustBrightness = downZone == 0
+                        }
+                        if (adjustClaimed && view.height > 0) {
+                            // Main-player multiplier (2.0): the
+                            // full 0–100% range is half the view
+                            // height of travel, applied from the
+                            // value snapshotted at touch-down.
+                            val start = if (adjustBrightness) {
+                                startBrightness
+                            } else {
+                                startVolume
+                            }
+                            val next = (start +
+                                (-dyDown) * 2.0f / view.height)
+                                .coerceIn(0f, 1f)
+                            if (adjustBrightness) {
+                                applyFeedBrightness(next)
+                            } else {
+                                applyFeedVolume(next)
+                            }
+                        }
                     }
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    adjustClaimed = false
                 }
             }
             gestureDetector.onTouchEvent(event)
@@ -497,6 +704,17 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         handler.post(progressRunnable)
         orientationListener?.enable()
+        // Phase 8.97: onPause handed the window brightness
+        // back (see below) — take the gesture's level again
+        // now that this screen is the resumed, visible one.
+        // Phase 8.99c: that round trip exists only in the
+        // window-FALLBACK mode. In system mode there is
+        // nothing to re-apply — the level the gesture set IS
+        // the system level and it never left (the main
+        // player's contract, mirrored).
+        if (!useFeedSystemBrightness) {
+            savedFeedBrightness?.let { setWindowBrightness(it) }
+        }
         if (handedOff) {
             handedOff = false
             context?.let { FeedPlayer.replayCurrent(it) }
@@ -507,10 +725,36 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.savePosition()
         handler.removeCallbacks(progressRunnable)
         orientationListener?.disable()
+        // Phase 8.97: the brightness override must not
+        // outlive this screen's visibility. Until now the
+        // ONLY restore point was onDestroyView — but this
+        // fragment shares MainActivity's window with the
+        // whole app, and any pause that leaves the fragment
+        // alive (the activity covered/backgrounded, e.g. a
+        // call or a system activity) left the gesture's
+        // level sitting on that shared window, so the whole
+        // display — not just this screen — ran at the
+        // video's brightness (his 12:12 report). The level
+        // itself is kept in savedFeedBrightness and onResume
+        // re-applies it, so a pause/resume round trip is
+        // invisible to the viewer.
+        // Phase 8.99c: this restore serves the window-FALLBACK
+        // mode only. In system mode no window override was
+        // ever set, so the call below is a no-op — and the
+        // system level is deliberately NOT handed back: the
+        // main player's release() never restores it either
+        // (screen-level means the level stays set).
+        restoreWindowBrightness()
         super.onPause()
     }
 
     override fun onDestroyView() {
+        // Phase 8.98: the trailer's inline player dies with
+        // the view (the sheet releases its own on dismiss).
+        trailerPlayer?.release()
+        trailerPlayer = null
+        trailerViews = null
+        trailerBoundUrl = null
         FeedPlayer.removeListener(stateListener)
         TitleResolver.removeListener(watchTitleListener)
         FeedPlayer.exo?.removeListener(iconListener)
@@ -527,6 +771,16 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         } else if (!handedOff && !FeedPlayer.minimized) {
             FeedPlayer.stop()
         }
+        // Phase 8.92: hand the window's brightness back — the
+        // swipe gesture's override belongs to this screen only
+        // and must not leak into the rest of the app.
+        // Phase 8.97: onPause already restored it (the override
+        // now lives only while this screen is resumed); this
+        // stays as the final backstop for teardown paths.
+        // Phase 8.99c: window-FALLBACK backstop only — in
+        // system mode there is no override to hand back and
+        // the system level stays set by design (see onPause).
+        restoreWindowBrightness()
         // After a handoff the main player owns the orientation; only
         // restore it when this page is really being left behind.
         if (!handedOff) {
@@ -602,6 +856,64 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         // branch above hides the spinner on every state callback,
         // including the churn that precedes a rebuffer.
         updateBuffering()
+        syncTrailer()
+    }
+
+    /**
+     * Phase 8.98: bind the trailer banner from the player's
+     * loaded page — the same data path the Info sheet uses
+     * (FeedPlayer.currentPage for the current url). The banner
+     * appears only when the page ships a trailer; tapping it
+     * swaps in the inline player in the same slot via the
+     * sheet's own playTrailer (which pauses the feed video
+     * first). A new item tears the old trailer down.
+     */
+    private fun syncTrailer() {
+        val views = trailerViews ?: return
+        val url = FeedPlayer.currentUrl
+        val page = FeedPlayer.currentPage?.takeIf { it.url == url }
+        if (page == null) {
+            // Page not loaded (yet) for this item; if the item
+            // changed under a bound trailer, tear it down now.
+            if (trailerBoundUrl != null && trailerBoundUrl != url) {
+                resetTrailer()
+            }
+            return
+        }
+        if (trailerBoundUrl == url) return
+        resetTrailer()
+        trailerBoundUrl = url
+        val trailer = page.trailers.firstOrNull() ?: return
+        val bannerArt = page.backgroundPosterUrl
+            ?: page.posterUrl ?: FeedPlayer.currentPoster
+        if (!bannerArt.isNullOrBlank()) {
+            views.image.loadImage(bannerArt, page.posterHeaders)
+        }
+        views.slot.isVisible = true
+        views.banner.setOnClickListener {
+            val ctx = context ?: return@setOnClickListener
+            FeedInfoSheet.playTrailer(
+                ctx, views.slot, views.banner, trailer,
+                viewLifecycleOwner.lifecycleScope
+            ) { player ->
+                trailerPlayer = player
+            }
+        }
+    }
+
+    /** Release the trailer player (if any) and restore the
+     *  slot to its banner-only, hidden state. */
+    private fun resetTrailer() {
+        trailerPlayer?.release()
+        trailerPlayer = null
+        trailerBoundUrl = null
+        val views = trailerViews ?: return
+        for (i in views.slot.childCount - 1 downTo 0) {
+            val child = views.slot.getChildAt(i)
+            if (child !== views.banner) views.slot.removeViewAt(i)
+        }
+        views.banner.isVisible = true
+        views.slot.isGone = true
     }
 
     private fun updateBuffering() {
@@ -690,13 +1002,12 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
                 }
             )
         }
-        // Storyline (plot) of the loaded page, collapsed by
-        // default; the "More" label only appears with a plot.
-        val plot = FeedPlayer.currentPage?.plot?.takeIf { it.isNotBlank() }
-        binding.feedWatchMore.isVisible = plot != null
+        // Phase 8.93: the Info link stays available whenever the
+        // watch screen is up — the sheet loads whatever the
+        // player has not loaded yet, so it no longer waits for a
+        // plot to exist.
+        binding.feedWatchMore.isVisible = true
         binding.feedWatchMore.setText(R.string.feed_info)
-        binding.feedWatchStorylineText.isVisible = false
-        if (plot != null) binding.feedWatchStorylineText.text = plot
         // Phase 8.42: the collapse animation's full height was
         // measured once per view -- a new item whose title/meta
         // needs a different height kept the old (smaller) one
@@ -833,6 +1144,260 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         FeedPlayer.savePosition()
         binding?.feedWatchPlayer?.hapticTick()
         findNavController().popBackStack()
+    }
+
+    // ---------- Phase 8.92: brightness / volume swipe gestures ----------
+
+    // Phase 8.99c (job B — his order: full SCREEN-LEVEL
+    // brightness): the gesture now drives the brightness the
+    // way the MAIN PLAYER does, because the main player's
+    // brightness works on his phone while the 8.92–8.99b
+    // window-only model (restored in 8.99b on his "আগের
+    // সিস্টেম টাই আনো" order) had NO effect on his device at
+    // all. The mechanism is mirrored from PlayerGestureHelper
+    // (read first-hand for this change; the helper itself is
+    // not reused — it is bound to the main player's
+    // PlayerView, its lock / extra-brightness machinery and
+    // its rails):
+    //  - read: Settings.System.SCREEN_BRIGHTNESS / 255;
+    //  - write: SCREEN_BRIGHTNESS_MODE_MANUAL first, then
+    //    SCREEN_BRIGHTNESS on the same 0..255 scale;
+    //  - permission: there is no canWrite /
+    //    ACTION_MANAGE_WRITE_SETTINGS flow anywhere in this
+    //    app (grep-verified) — the helper's handling IS the
+    //    exception-driven fail-over: the first system call
+    //    that throws (permission missing) retires the system
+    //    path for this page instance and the window attribute
+    //    takes over, with the helper's 0.004 floor;
+    //  - exit contract: the helper's release() never restores
+    //    the system level — what the gesture set STAYS set
+    //    (that is what screen-level means) and the next
+    //    touch-down re-reads the live level. Mirrored here:
+    //    no system restore on pause/destroy. The WINDOW
+    //    fallback keeps the 8.97 discipline (override handed
+    //    back in onPause/onDestroyView, re-applied in
+    //    onResume) because that override lives on the app's
+    //    shared window; in system mode those calls are
+    //    no-ops.
+    //  One deliberate, flagged deviation: the helper's write
+    //  is literally min(1, fraction x 255) — capped at 1 of
+    //  255, which contradicts its own read (x / 255). The
+    //  feed writes the full 0..255 value the read side
+    //  expects; the path, the manual-mode handling, the
+    //  fallback order and the floors are otherwise the
+    //  helper's own.
+
+    /** The gesture's starting brightness, mirroring
+     *  PlayerGestureHelper.getBrightness: the SYSTEM level
+     *  while the system path is live; a failed read retires
+     *  the path and re-reads on the fallback — the window
+     *  attribute when one is set, else the level this page
+     *  last used, else mid. */
+    private fun currentFeedBrightness(): Float {
+        if (useFeedSystemBrightness) {
+            try {
+                return Settings.System.getInt(
+                    activity?.contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS
+                ) / 255f
+            } catch (_: Exception) {
+                // The helper's lazy permission check: because
+                // true system brightness requires permission,
+                // the throw IS the check.
+                useFeedSystemBrightness = false
+                return currentFeedBrightness()
+            }
+        }
+        val attr = activity?.window?.attributes?.screenBrightness ?: -1f
+        return when {
+            attr >= 0f -> attr
+            savedFeedBrightness != null -> savedFeedBrightness!!
+            else -> 0.5f
+        }
+    }
+
+    /** Write a brightness level, mirroring
+     *  PlayerGestureHelper.setBrightness: manual mode first,
+     *  then the system value; any failure retires the system
+     *  path and the same value is written to the window
+     *  fallback instead — the gesture never fails silently. */
+    private fun setFeedBrightness(fraction: Float) {
+        if (useFeedSystemBrightness) {
+            try {
+                val resolver = activity?.contentResolver ?: return
+                Settings.System.putInt(
+                    resolver,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                )
+                Settings.System.putInt(
+                    resolver,
+                    Settings.System.SCREEN_BRIGHTNESS,
+                    (fraction.coerceIn(0f, 1f) * 255).toInt()
+                )
+                return
+            } catch (_: Exception) {
+                useFeedSystemBrightness = false
+                // fall through to the window write below
+            }
+        }
+        setWindowBrightness(fraction)
+    }
+
+    /** The window-attribute write — since 8.99c only the
+     *  fallback for a missing system permission (the main
+     *  player's fallback, its 0.004 floor included: a value
+     *  too close to 0 makes some devices substitute their
+     *  own brightness, per the helper's own note). While
+     *  this override is in play its lifetime is this screen's
+     *  RESUMED lifetime (the 8.97 discipline): set by the
+     *  gesture, re-applied by onResume, handed back in
+     *  onPause and again in onDestroyView. */
+    private fun setWindowBrightness(fraction: Float) {
+        val act = activity ?: return
+        val lp = act.window.attributes
+        lp.screenBrightness = fraction.coerceIn(0.004f, 1f)
+        act.window.attributes = lp
+    }
+
+    /** Hand the window's brightness back to the system/app
+     *  default (BRIGHTNESS_OVERRIDE_NONE). No-op when no
+     *  override is in place. */
+    private fun restoreWindowBrightness() {
+        activity?.window?.let { win ->
+            val lp = win.attributes
+            val none = android.view.WindowManager.LayoutParams
+                .BRIGHTNESS_OVERRIDE_NONE
+            if (lp.screenBrightness != none) {
+                lp.screenBrightness = none
+                win.attributes = lp
+            }
+        }
+    }
+
+    private fun applyFeedBrightness(fraction: Float) {
+        setFeedBrightness(fraction)
+        savedFeedBrightness = fraction
+        showGestureIndicator(brightness = true, fraction = fraction)
+    }
+
+    private fun audioManager(): AudioManager? =
+        activity?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    private fun currentVolumeFraction(): Float {
+        val am = audioManager() ?: return 0f
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 0f
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            .toFloat() / max
+    }
+
+    private fun applyFeedVolume(fraction: Float) {
+        val am = audioManager() ?: return
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val step = (fraction * max).roundToInt().coerceIn(0, max)
+        // Flag 0: no system volume UI — the gesture indicator
+        // below is the feedback (same as the main player).
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, step, 0)
+        showGestureIndicator(brightness = false, fraction = fraction)
+    }
+
+    private val gestureHideRunnable = Runnable {
+        val binding = binding ?: return@Runnable
+        // Phase 8.97: the main player's rails fade out (300 ms)
+        // rather than hard-cutting — mirror that.
+        for (holder in listOf(
+            binding.feedGestureLeft, binding.feedGestureRight
+        )) {
+            if (holder.isVisible) {
+                holder.animate().cancel()
+                holder.animate().alpha(0f).setDuration(300)
+                    .withEndAction {
+                        holder.isVisible = false
+                        holder.alpha = 1f
+                    }
+                    .start()
+            }
+        }
+    }
+
+    /** Phase 8.97: the main player's brightness icons, by
+     *  level (PlayerGestureHelper.brightnessIcons) — the feed
+     *  used to hard-code the middle sun for every level. */
+    private val brightnessIcons = listOf(
+        R.drawable.sun_1, R.drawable.sun_2, R.drawable.sun_3,
+        R.drawable.sun_4, R.drawable.sun_5, R.drawable.sun_6,
+        R.drawable.sun_7
+    )
+
+    /**
+     * The on-video gesture feedback: the MAIN PLAYER's slim
+     * side rail (his order — the 8.92 centred dark box with
+     * its thick bar is gone). Phase 8.98: the rail stands on
+     * the side OPPOSITE the gesture zone (brightness is
+     * adjusted from the left zone, its rail renders on the
+     * right edge — the gesturing hand used to cover it):
+     * icon + percentage over a 5dp vertical level bar drawn
+     * with the main player's own progress_drawable_vertical
+     * at its 100_000 max (progress clamped to the same
+     * 2_000 floor PlayerGestureHelper uses). The other rail
+     * hides immediately; the shown rail fades out 1.5 s
+     * after the gesture settles, like the main player's.
+     * (The holder ids keep their 8.97 names — feedGestureLeft
+     * is the brightness holder; only its screen side moved,
+     * in fragment_feed_watch.xml.)
+     */
+    private fun showGestureIndicator(brightness: Boolean, fraction: Float) {
+        val binding = binding ?: return
+        val holder = if (brightness) {
+            binding.feedGestureLeft
+        } else {
+            binding.feedGestureRight
+        }
+        val other = if (brightness) {
+            binding.feedGestureRight
+        } else {
+            binding.feedGestureLeft
+        }
+        val icon = if (brightness) {
+            binding.feedGestureLeftIcon
+        } else {
+            binding.feedGestureRightIcon
+        }
+        val text = if (brightness) {
+            binding.feedGestureLeftText
+        } else {
+            binding.feedGestureRightText
+        }
+        val bar = if (brightness) {
+            binding.feedGestureLeftBar
+        } else {
+            binding.feedGestureRightBar
+        }
+        icon.setImageResource(
+            if (brightness) {
+                val idx = (fraction * brightnessIcons.lastIndex)
+                    .roundToInt()
+                    .coerceIn(0, brightnessIcons.lastIndex)
+                brightnessIcons[idx]
+            } else when {
+                fraction <= 0.01f -> R.drawable.ic_baseline_volume_mute_24
+                fraction < 0.5f -> R.drawable.ic_baseline_volume_down_24
+                else -> R.drawable.ic_baseline_volume_up_24
+            }
+        )
+        val percent = (fraction * 100).roundToInt()
+        text.text = "$percent%"
+        bar.progress = (fraction * 100_000).toInt()
+            .coerceIn(2_000, 100_000)
+        other.animate().cancel()
+        other.isVisible = false
+        other.alpha = 1f
+        holder.animate().cancel()
+        holder.alpha = 1f
+        holder.isVisible = true
+        handler.removeCallbacks(gestureHideRunnable)
+        handler.postDelayed(gestureHideRunnable, 1_500L)
     }
 
     // ---------- pickers ----------

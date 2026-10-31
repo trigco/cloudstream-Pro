@@ -9,6 +9,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
@@ -18,6 +19,9 @@ import androidx.core.view.marginBottom
 import androidx.core.view.marginTop
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayoutMediator
 import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.MainActivity.Companion.afterRepositoryLoadedEvent
 import com.lagradost.cloudstream3.R
@@ -53,6 +57,15 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
     private val extensionViewModel: ExtensionsViewModel by activityViewModels()
     private val pluginViewModel: PluginsViewModel by activityViewModels()
 
+    // 8.81: the Repositories and Installed lists live inside the
+    // ViewPager2 now; the pager creates their views, so the fragment
+    // keeps nullable refs plus the latest data for (re)submission.
+    private var repoRecycler: RecyclerView? = null
+    private var installedRecycler: RecyclerView? = null
+    private var installedEmptyView: TextView? = null
+    private var latestRepos: List<RepositoryData> = emptyList()
+    private var latestPlugins: List<PluginViewData> = emptyList()
+
     private fun View.setLayoutWidth(weight: Int) {
         val param = LinearLayout.LayoutParams(
             0,
@@ -75,6 +88,129 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
     private fun reloadRepositories(success: Boolean = true) {
         extensionViewModel.loadStats()
         extensionViewModel.loadRepositories()
+    }
+
+    /**
+     * 8.81: Repositories tab page setup. This is the pre-8.81
+     * repoRecyclerView wiring, unchanged — it just runs on the
+     * pager's page view instead of a binding field.
+     */
+    private fun setupRepoPage(list: RecyclerView) {
+        repoRecycler = list
+        // BaseFragment.binding is nullable outside onBindingCreated.
+        val fragmentBinding = binding ?: return
+        list.apply {
+            setLinearListLayout(
+                isHorizontal = false,
+                nextUp = R.id.settings_toolbar, // FOCUS_SELF, // back has no id so we cant :pensive:
+                nextDown = R.id.plugin_storage_appbar,
+                nextRight = FOCUS_SELF,
+                nextLeft = R.id.nav_rail_view
+            )
+
+            if (!isLayout(TV))
+                fragmentBinding.addRepoButton.let { button ->
+                    button.post {
+                        setPadding(
+                            paddingLeft,
+                            paddingTop,
+                            paddingRight,
+                            button.measuredHeight + button.marginTop + button.marginBottom
+                        )
+                    }
+                }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                    val dy = scrollY - oldScrollY
+                    if (dy > 0) { // check for scroll down
+                        fragmentBinding.addRepoButton.shrink() // hide
+                    } else if (dy < -5) {
+                        fragmentBinding.addRepoButton.extend() // show
+                    }
+                }
+            }
+            adapter = RepoAdapter(false, {
+                findNavController().navigate(
+                    R.id.navigation_settings_extensions_to_navigation_settings_plugins,
+                    PluginsFragment.newInstance(it)
+                )
+            }, { repo ->
+                // Prompt user before deleting repo
+                main {
+                    val uiContext = context ?: fragmentBinding.root.context
+                    val builder = AlertDialog.Builder(uiContext, R.style.AlertDialogCustom)
+                    val dialogClickListener =
+                        DialogInterface.OnClickListener { _, which ->
+                            when (which) {
+                                DialogInterface.BUTTON_POSITIVE -> {
+                                    ioSafe {
+                                        RepositoryManager.removeRepository(
+                                            uiContext.applicationContext,
+                                            repo
+                                        )
+                                        extensionViewModel.loadStats()
+                                        extensionViewModel.loadRepositories()
+                                    }
+                                }
+
+                                DialogInterface.BUTTON_NEGATIVE -> {}
+                            }
+                        }
+
+                    builder.setTitle(R.string.delete_repository)
+                        .setMessage(uiContext.getString(R.string.delete_repository_plugins))
+                        .setPositiveButton(R.string.delete, dialogClickListener)
+                        .setNegativeButton(R.string.cancel, dialogClickListener)
+                        .show().setDefaultFocus()
+                }
+            })
+        }
+        (list.adapter as? RepoAdapter)?.submitList(latestRepos)
+        list.isVisible = latestRepos.isNotEmpty()
+    }
+
+    /**
+     * 8.81: Installed tab page setup — all downloaded plugins across
+     * repositories, using the same PluginAdapter rows and the same
+     * handlePluginAction flow (download/delete, details sheet,
+     * settings gear) as the search results list.
+     */
+    private fun setupInstalledPage(root: View) {
+        val list = root.findViewById<RecyclerView>(R.id.installed_recycler_view)
+        installedRecycler = list
+        installedEmptyView = root.findViewById(R.id.installed_empty_view)
+        list.apply {
+            setLinearListLayout(
+                isHorizontal = false,
+                nextDown = FOCUS_SELF,
+                nextRight = FOCUS_SELF,
+            )
+            setRecycledViewPool(PluginAdapter.sharedPool)
+            adapter =
+                PluginAdapter(true) {
+                    val urls = extensionViewModel.repositories.value?.toList() ?: emptyList()
+                    pluginViewModel.handlePluginAction(activity, urls, it, false)
+                }
+        }
+        submitInstalledPlugins()
+    }
+
+    private fun submitInstalledPlugins() {
+        val list = installedRecycler ?: return
+        val pluginAdapter = list.adapter as? PluginAdapter ?: return
+        // Grouped by repository (the rows show the repository name),
+        // alphabetical inside each repository.
+        val installed = latestPlugins
+            .filter { it.isDownloaded }
+            .sortedWith(
+                compareBy(
+                    { it.pluginWrapper.repositoryData.name.lowercase() },
+                    { it.pluginWrapper.plugin.name.lowercase() },
+                )
+            )
+        pluginAdapter.submitList(installed)
+        installedEmptyView?.isVisible = installed.isEmpty()
     }
 
     override fun fixLayout(view: View) {
@@ -102,7 +238,9 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
                 lp.bottomMargin = pillZone
                 binding.pluginStorageAppbar.layoutParams = lp
             }
-            for (list in listOf(binding.repoRecyclerView, binding.pluginRecyclerView)) {
+            // 8.81: the pager (which hosts both tab lists) takes the
+            // repo list's place in this lift; geometry is unchanged.
+            for (list in listOf(binding.extensionsPager, binding.pluginRecyclerView)) {
                 (list.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                     lp.bottomMargin += pillZone
                     list.layoutParams = lp
@@ -111,78 +249,59 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
             binding.addRepoButton.translationY = (-168).toPx.toFloat()
         }
 
-        binding.repoRecyclerView.apply {
-            setLinearListLayout(
-                isHorizontal = false,
-                nextUp = R.id.settings_toolbar, // FOCUS_SELF, // back has no id so we cant :pensive:
-                nextDown = R.id.plugin_storage_appbar,
-                nextRight = FOCUS_SELF,
-                nextLeft = R.id.nav_rail_view
-            )
+        // 8.81: two tabs — Installed (page 0) and Repositories
+        // (page 1, selected by default: the view this screen has
+        // always opened on). Page views are created by the pager;
+        // each page's setup runs in setupInstalledPage/setupRepoPage.
+        binding.extensionsPager.offscreenPageLimit = 1
+        binding.extensionsPager.adapter =
+            object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                override fun getItemCount(): Int = 2
 
-            if (!isLayout(TV))
-                binding.addRepoButton.let { button ->
-                    button.post {
-                        setPadding(
-                            paddingLeft,
-                            paddingTop,
-                            paddingRight,
-                            button.measuredHeight + button.marginTop + button.marginBottom
-                        )
+                override fun getItemViewType(position: Int): Int = position
+
+                override fun onCreateViewHolder(
+                    parent: ViewGroup,
+                    viewType: Int,
+                ): RecyclerView.ViewHolder {
+                    val layoutRes = if (viewType == 0) {
+                        R.layout.extensions_tab_installed
+                    } else {
+                        R.layout.extensions_tab_repos
                     }
+                    val page = LayoutInflater.from(parent.context)
+                        .inflate(layoutRes, parent, false)
+                    page.layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                    return object : RecyclerView.ViewHolder(page) {}
                 }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
-                    val dy = scrollY - oldScrollY
-                    if (dy > 0) { // check for scroll down
-                        binding.addRepoButton.shrink() // hide
-                    } else if (dy < -5) {
-                        binding.addRepoButton.extend() // show
+                override fun onBindViewHolder(
+                    holder: RecyclerView.ViewHolder,
+                    position: Int,
+                ) {
+                    if (position == 0) {
+                        setupInstalledPage(holder.itemView)
+                    } else {
+                        setupRepoPage(holder.itemView as RecyclerView)
                     }
                 }
             }
-            adapter = RepoAdapter(false, {
-                findNavController().navigate(
-                    R.id.navigation_settings_extensions_to_navigation_settings_plugins,
-                    PluginsFragment.newInstance(it)
-                )
-            }, { repo ->
-                // Prompt user before deleting repo
-                main {
-                    val uiContext = context ?: binding.root.context
-                    val builder = AlertDialog.Builder(uiContext)
-                    val dialogClickListener =
-                        DialogInterface.OnClickListener { _, which ->
-                            when (which) {
-                                DialogInterface.BUTTON_POSITIVE -> {
-                                    ioSafe {
-                                        RepositoryManager.removeRepository(
-                                            uiContext.applicationContext,
-                                            repo
-                                        )
-                                        extensionViewModel.loadStats()
-                                        extensionViewModel.loadRepositories()
-                                    }
-                                }
-
-                                DialogInterface.BUTTON_NEGATIVE -> {}
-                            }
-                        }
-
-                    builder.setTitle(R.string.delete_repository)
-                        .setMessage(uiContext.getString(R.string.delete_repository_plugins))
-                        .setPositiveButton(R.string.delete, dialogClickListener)
-                        .setNegativeButton(R.string.cancel, dialogClickListener)
-                        .show().setDefaultFocus()
-                }
-            })
-        }
+        TabLayoutMediator(binding.extensionsTabs, binding.extensionsPager) { tab, position ->
+            tab.setText(
+                if (position == 0) R.string.extensions_tab_installed
+                else R.string.extensions_tab_repositories
+            )
+        }.attach()
+        binding.extensionsPager.setCurrentItem(1, false)
 
         observe(extensionViewModel.repositories) { repos ->
-            binding.repoRecyclerView.isVisible = repos.isNotEmpty()
+            latestRepos = repos.toList()
+            repoRecycler?.isVisible = repos.isNotEmpty()
             binding.blankRepoScreen.isVisible = repos.isEmpty()
-            (binding.repoRecyclerView.adapter as? RepoAdapter)?.submitList(repos.toList())
+            (repoRecycler?.adapter as? RepoAdapter)?.submitList(repos.toList())
             pluginViewModel.updatePluginList(binding.root.context, repos.toList())
         }
 
@@ -233,7 +352,9 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
         }
 
         observe(pluginViewModel.filteredPlugins) { (scrollToTop, list) ->
+            latestPlugins = list
             (binding.pluginRecyclerView.adapter as? PluginAdapter)?.submitList(list)
+            submitInstalledPlugins()
             if (scrollToTop) {
                 binding.pluginRecyclerView.scrollToPosition(0)
             }
@@ -246,14 +367,15 @@ class ExtensionsFragment : BaseFragment<FragmentExtensionsBinding>(
             searchItem?.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
                 override fun onMenuItemActionCollapse(p0: MenuItem): Boolean {
                     binding.pluginRecyclerView.isVisible = false
-                    binding.repoRecyclerView.isVisible = true
+                    // 8.81: the pager stands in for the repo list here.
+                    binding.extensionsPager.isVisible = true
                     return true
 
                 }
 
                 override fun onMenuItemActionExpand(p0: MenuItem): Boolean {
                     binding.pluginRecyclerView.isVisible = true
-                    binding.repoRecyclerView.isVisible = false
+                    binding.extensionsPager.isVisible = false
                     return true
                 }
             })

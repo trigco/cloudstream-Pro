@@ -1,56 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Phase 8.89: standard sheet chrome — the picker gains the
+     shared drag handle; the list + bottom chip/button overlay keep
+     their original frame (now weighted below the handle). This
+     sheet has no title, so no title row / close button. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <ListView
-        android:id="@+id/listview1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_rowWeight="1"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="60dp"
-        android:clipToPadding="false"
-        android:minHeight="0dp"
-        android:nestedScrollingEnabled="true"
-        android:nextFocusLeft="@id/apply_btt"
-        android:nextFocusRight="@id/cancel_btt"
-        android:requiresFadingEdge="vertical"
-        tools:listitem="@layout/sort_bottom_single_provider_choice" />
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_feed_drag_handle" />
 
-    <LinearLayout
-        android:orientation="vertical"
-        android:layout_gravity="bottom"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp">
-        <include layout="@layout/tvtypes_chips_scroll" android:id="@+id/tvtypes_chips_scroll" />
-        <LinearLayout
-            android:id="@+id/apply_btt_holder"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/listview1"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginTop="-60dp"
+            android:layout_height="wrap_content"
+            android:layout_rowWeight="1"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="60dp"
+            android:clipToPadding="false"
+            android:minHeight="0dp"
+            android:nestedScrollingEnabled="true"
+            android:nextFocusLeft="@id/apply_btt"
+            android:nextFocusRight="@id/cancel_btt"
+            android:requiresFadingEdge="vertical"
+            tools:listitem="@layout/sort_bottom_single_provider_choice" />
+
+        <LinearLayout
+            android:orientation="vertical"
             android:layout_gravity="bottom"
-            android:gravity="bottom|end"
-            android:orientation="horizontal"
-            android:visibility="gone">
+            android:layout_width="match_parent"
+            android:layout_height="60dp">
+            <include layout="@layout/tvtypes_chips_scroll" android:id="@+id/tvtypes_chips_scroll" />
+            <LinearLayout
+                android:id="@+id/apply_btt_holder"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:layout_marginTop="-60dp"
+                android:layout_gravity="bottom"
+                android:gravity="bottom|end"
+                android:orientation="horizontal"
+                android:visibility="gone">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/apply_btt"
-                style="@style/WhiteButton"
-                android:layout_width="wrap_content"
-                android:layout_gravity="center_vertical|end"
-                android:text="@string/sort_apply" />
+                <!-- Phase 8.89: Apply = standard red pill. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/apply_btt"
+                    style="@style/WhiteButton"
+                    android:layout_width="wrap_content"
+                    android:layout_gravity="center_vertical|end"
+                    android:text="@string/sort_apply"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/colorPrimaryRed"
+                    app:iconTint="@android:color/white"
+                    app:strokeColor="@android:color/transparent" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancel_btt"
-                style="@style/BlackButton"
-                android:layout_width="wrap_content"
-                android:layout_gravity="center_vertical|end"
-                android:text="@string/sort_cancel" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/cancel_btt"
+                    style="@style/BlackButton"
+                    android:layout_width="wrap_content"
+                    android:layout_gravity="center_vertical|end"
+                    android:text="@string/sort_cancel" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
 
-</FrameLayout>
+    </FrameLayout>
+</LinearLayout>

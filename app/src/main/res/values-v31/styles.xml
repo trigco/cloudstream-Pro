@@ -15,16 +15,16 @@
     <style name="Theme.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
         <item name="android:windowMinWidthMajor">@dimen/abc_dialog_min_width_major</item>
         <item name="android:windowMinWidthMinor">@dimen/abc_dialog_min_width_minor</item>
-        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <!-- Phase 8.89: floating-card background, mirroring values/. -->
+        <item name="android:windowBackground">@drawable/dialog_card_background</item>
         <item name="textAllCaps">false</item>
         <item name="android:textColorPrimary">?attr/grayTextColor</item>
 
-        <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
-        <!-- Phase 8.11-E2: see values/styles.xml — negative/neutral get the
-             outlined pill (OutlinedButton.Dialog) instead of the invisible
-             BlackButton.Dialog fill. -->
-        <item name="buttonBarNegativeButtonStyle">@style/OutlinedButton.Dialog</item>
-        <item name="buttonBarNeutralButtonStyle">@style/OutlinedButton.Dialog</item>
+        <!-- Phase 8.89: red pill positive / plain-text negative,
+             mirroring values/styles.xml. -->
+        <item name="buttonBarPositiveButtonStyle">@style/RedButton.Dialog</item>
+        <item name="buttonBarNegativeButtonStyle">@style/PlainTextButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/PlainTextButton.Dialog</item>
 
         <item name="android:windowBlurBehindEnabled">true</item>
         <item name="android:windowBlurBehindRadius">24dp</item>
@@ -47,7 +47,8 @@
          on Android 12+, same recipe as the dialog themes above. -->
     <style name="DialogOverlayPlayer" parent="DialogFullscreenPlayer">
         <item name="android:windowIsFloating">true</item>
-        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <!-- Phase 8.89: card background, mirroring values/styles.xml. -->
+        <item name="android:windowBackground">@drawable/dialog_card_background</item>
         <item name="android:windowBlurBehindEnabled">true</item>
         <item name="android:windowBlurBehindRadius">24dp</item>
     </style>

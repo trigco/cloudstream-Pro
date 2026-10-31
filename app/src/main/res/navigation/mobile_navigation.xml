@@ -271,6 +271,15 @@
         app:popExitAnim="@anim/feel_slide_out_right"
         tools:layout="@layout/fragment_nuvio_plugins" />
     <fragment
+        android:id="@+id/navigation_settings_sky"
+        android:name="com.lagradost.cloudstream3.ui.settings.sky.SkyPluginsFragment"
+        android:label="@string/sky_plugins_title"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right"
+        tools:layout="@layout/fragment_sky_plugins" />
+    <fragment
         android:id="@+id/navigation_settings_plugins"
         android:name="com.lagradost.cloudstream3.ui.settings.extensions.PluginsFragment"
         android:label="@string/title_settings"
@@ -368,6 +377,20 @@
             app:exitAnim="@anim/exit_anim"
             app:popEnterAnim="@anim/enter_anim"
             app:popExitAnim="@anim/exit_anim" />
+        <action
+            android:id="@+id/action_navigation_feed_to_navigation_feed_search"
+            app:destination="@id/navigation_feed_search"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
+        <action
+            android:id="@+id/action_navigation_feed_to_navigation_feed_category"
+            app:destination="@id/navigation_feed_category"
+            app:enterAnim="@anim/enter_anim"
+            app:exitAnim="@anim/exit_anim"
+            app:popEnterAnim="@anim/enter_anim"
+            app:popExitAnim="@anim/exit_anim" />
     </fragment>
 
     <fragment
@@ -411,6 +434,57 @@
         tools:layout="@layout/fragment_search">
         <argument
             android:name="search_query"
+            android:defaultValue=""
+            app:argType="string" />
+    </fragment>
+
+    <!-- Phase 8.94 (Job 3): the Search page pushed over the Feed
+         by its header search button — a separate page, NOT a
+         bottom-nav tab switch (the nav bar hides while it is
+         open, same treatment as navigation_feed_watch; the Feed
+         stays the selected tab underneath and Back pops straight
+         back to it).
+         Phase 8.96 (Job 1): the destination now hosts the
+         FEED-scoped search page (FeedSearchFragment) — the 8.94
+         version reused the main SearchFragment's global search,
+         and his correction (2026-10-30 11:15, "feed search feed
+         এ কাজ করবে") settled that Feed search works on the Feed
+         itself: pool first, feed-native grid, watch screen. The
+         main Search tab destination above is untouched, and the
+         SEARCH_QUERY argument path (filmography taps) still
+         targets that destination only. Phone only in practice:
+         nothing on TV navigates here. -->
+    <fragment
+        android:id="@+id/navigation_feed_search"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedSearchFragment"
+        android:label="@string/title_search"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed_search" />
+
+    <!-- Phase 8.96 (Job 3): the full category page behind a Feed
+         row's "View All" — the row's complete (uncapped) list
+         from FeedCategorySession in the Feed's card grid, plus
+         one extra fetched homepage page for provider rows. Not
+         a bottom-nav destination: the nav bar hides while it is
+         open and Back returns to the Feed. -->
+    <fragment
+        android:id="@+id/navigation_feed_category"
+        android:name="com.lagradost.cloudstream3.ui.feed.FeedCategoryFragment"
+        android:label="@string/title_feed"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim"
+        tools:layout="@layout/fragment_feed_category">
+        <argument
+            android:name="tag"
+            android:defaultValue=""
+            app:argType="string" />
+        <argument
+            android:name="title"
             android:defaultValue=""
             app:argType="string" />
     </fragment>
@@ -516,6 +590,13 @@
     <action
         android:id="@+id/action_navigation_global_to_navigation_settings_nuvio"
         app:destination="@id/navigation_settings_nuvio"
+        app:enterAnim="@anim/feel_slide_in_right"
+        app:exitAnim="@anim/feel_slide_out_left"
+        app:popEnterAnim="@anim/feel_slide_in_left"
+        app:popExitAnim="@anim/feel_slide_out_right" />
+    <action
+        android:id="@+id/action_navigation_global_to_navigation_settings_sky"
+        app:destination="@id/navigation_settings_sky"
         app:enterAnim="@anim/feel_slide_in_right"
         app:exitAnim="@anim/feel_slide_out_left"
         app:popEnterAnim="@anim/feel_slide_in_left"
@@ -846,5 +927,15 @@
     <action
         android:id="@+id/global_to_navigation_home_custom_lists"
         app:destination="@id/navigation_home_custom_lists" />
+
+    <fragment
+        android:id="@+id/navigation_feed_categories"
+        android:name="com.lagradost.cloudstream3.ui.settings.FeedCategorySettingsFragment"
+        android:label="@string/feed_categories_title"
+        tools:layout="@layout/fragment_feed_categories" />
+
+    <action
+        android:id="@+id/global_to_navigation_feed_categories"
+        app:destination="@id/navigation_feed_categories" />
 
 </navigation>

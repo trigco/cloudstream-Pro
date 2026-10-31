@@ -269,6 +269,7 @@ dependencies {
     // Extensions & Other Libs
     implementation(libs.jsoup) // HTML Parser
     implementation(libs.quickjs) // QuickJS for the Nuvio plugin host (8.64)
+    implementation(libs.viewpager2) // Two-tab extension pages (8.81)
     implementation(libs.ksoup) // HTML Parser
     implementation(libs.rhino) // Run JavaScript
     implementation(libs.safefile) // To Prevent the URI File Fu*kery

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.89: radio indicator for AlertDialog single-choice lists
+     (wired as listChoiceIndicatorSingle in AlertDialogCustom). Reuses the
+     8.83 provider-switcher radio vectors so dialog radio rows match the
+     switcher sheet: red filled radio when checked, grey ring otherwise.
+     Note (project finding, Phase 8.11-E1): CheckedTextView draws its
+     checkMark only while the row is checked, so in practice the filled
+     red radio marks the selected row — the same selected-row treatment
+     the app's selection sheets already use. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_switcher_radio_checked" android:state_checked="true" />
+    <item android:drawable="@drawable/ic_switcher_radio_unchecked" />
+</selector>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.97: the "For You" section header as a list item
+     directly above the card grid (see FeedForYouHeaderAdapter).
+     Until 8.96 this block lived at the bottom of the floating
+     page header, detached from its grid — the header floated
+     over the top of the list while the grid cards sat below
+     every category row, leaving a blank band under the title
+     (his report). Same treatment as before: 16sp bold title +
+     the 34x3dp red underline. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginTop="14dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="6dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:text="@string/feed_for_you"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="34dp"
+        android:layout_height="3dp"
+        android:layout_marginTop="4dp"
+        android:background="@color/colorPrimaryRed" />
+</LinearLayout>

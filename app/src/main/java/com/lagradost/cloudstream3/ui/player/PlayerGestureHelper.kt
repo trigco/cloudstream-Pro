@@ -675,13 +675,15 @@ class PlayerGestureHelper(private val playerView: PlayerView) {
     }
 
     /**
-     * Resets zoom to fit mode if any zoom is currently active.
+     * Resets zoom to the default mode if any zoom is currently active.
      * Calls [PlayerView.resize] to update the ExoPlayer resize mode.
      */
     fun resetZoomToDefault() {
         if (zoomMatrix != null) {
             clearZoomState()
-            playerView.resize(PlayerResize.Fit, false)
+            // Phase 8.99e: the reset target follows the default resize
+            // mode, which is now Zoom (Fit left the cycle on his order).
+            playerView.resize(PlayerResize.Zoom, false)
         }
     }
 

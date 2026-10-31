@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.ui.search
 
 import android.app.Activity
+import android.graphics.Color
 import android.content.Intent
 import android.content.DialogInterface
 import android.speech.RecognizerIntent
@@ -11,13 +12,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import android.view.Gravity
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.ListView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.preference.PreferenceManager
@@ -28,6 +33,8 @@ import androidx.core.view.doOnLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
 import com.lagradost.cloudstream3.AllLanguagesName
 import com.lagradost.cloudstream3.AnimeSearchResponse
@@ -50,6 +57,7 @@ import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.BaseAdapter
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.SectionEntranceAnimator
+import com.lagradost.cloudstream3.ui.feed.FeedPool
 import com.lagradost.cloudstream3.ui.home.HomeFragment
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.bindChips
 import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.currentSpan
@@ -120,6 +128,46 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
      * only on the hidden -> shown flip, never per keystroke. */
     private var suggestionsPanelWasShown = false
 
+    // ---------- Phase 8.87: content-type tabs + smart landing ----------
+
+    /**
+     * The content-type tabs over the results (All | Movies | Series |
+     * Anime). TvType sets follow the app's own chip convention
+     * (HomeFragment.getPairList: Anime = Anime + OVA + AnimeMovie);
+     * AsianDrama folds into Series here — the reference's 4-tab bar
+     * has no separate Asian tab.
+     */
+    private enum class SearchTypeTab(val types: Set<TvType>?) {
+        ALL(null),
+        MOVIES(setOf(TvType.Movie)),
+        SERIES(setOf(TvType.TvSeries, TvType.AsianDrama)),
+        ANIME(setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA))
+    }
+
+    private var selectedTypeTab = SearchTypeTab.ALL
+
+    /** Last raw payloads from the view model. A tab switch
+     *  re-filters and re-renders from these copies — no provider is
+     *  re-queried. */
+    private var lastSearchMap: Map<String, ExpandableSearchList> = emptyMap()
+    private var lastGridList: List<SearchResponse> = emptyList()
+    private var lastHistory: List<SearchHistoryItem> = emptyList()
+
+    /** Programmatic phone-only views (the TV layout shares this
+     *  fragment + binding and keeps its existing landing, so the
+     *  new views are built in code, not XML). */
+    private var typeTabViews = mutableListOf<TextView>()
+    private var landingView: View? = null
+    private var trendingChips: ChipGroup? = null
+    private var clearHistoryView: TextView? = null
+    private var landingHasContent = false
+
+    private fun SearchResponse.matchesTypeTab(): Boolean {
+        val types = selectedTypeTab.types ?: return true
+        val itemType = type ?: return false
+        return itemType in types
+    }
+
     private val speechRecognizerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -157,6 +205,9 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
     override fun onResume() {
         super.onResume()
         afterPluginsLoadedEvent += ::reloadRepos
+        // Phase 8.87: the feed pool may have been built since this
+        // page was last shown — refresh the trending chips' titles.
+        refreshTrendingChips()
     }
 
     override fun onStop() {
@@ -217,6 +268,323 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         // having to reopen the sheet.
         selectedApis = DataStoreHelper.searchPreferenceProviders.toMutableSet()
         selectedSearchTypes = DataStoreHelper.searchPreferenceTags.toMutableList()
+    }
+
+    // ---------- Phase 8.87: tabs + landing helpers ----------
+
+    private fun selectTypeTab(tab: SearchTypeTab) {
+        if (selectedTypeTab == tab) return
+        selectedTypeTab = tab
+        styleTypeTabs()
+        // Re-render the results already on screen with the new
+        // filter — the search itself is NOT re-run.
+        submitMasterResults()
+        submitGridResults()
+    }
+
+    private fun styleTypeTabs() {
+        typeTabViews.forEachIndexed { index, view ->
+            val selected = SearchTypeTab.entries[index] == selectedTypeTab
+            if (selected) {
+                view.setBackgroundResource(R.drawable.feed_chip_selected)
+                view.setTextColor(
+                    ContextCompat.getColor(view.context, android.R.color.black)
+                )
+            } else {
+                view.setBackgroundResource(R.drawable.feed_search_bg)
+                view.setTextColor(
+                    ContextCompat.getColor(view.context, android.R.color.white)
+                )
+            }
+        }
+    }
+
+    /**
+     * Builds the provider sections for the master results list from
+     * the last raw currentSearch payload. This was the
+     * currentSearch observer's body; extracted so a content-type
+     * tab switch re-renders the same data with the tab filter
+     * applied instead of re-running the search.
+     */
+    private fun submitMasterResults() {
+        val binding = binding ?: return
+        val pinnedOrder = DataStoreHelper.pinnedProviders.reversedArray()
+
+        val sortedList = lastSearchMap.toList().sortedWith(compareBy { (providerName, _) ->
+            val index = pinnedOrder.indexOf(providerName)
+            if (index == -1) Int.MAX_VALUE else index
+        })
+
+        (binding.searchMasterRecycler.adapter as? ParentItemAdapter)?.apply {
+            val newItems = sortedList.mapNotNull { (providerName, providerData) ->
+                val dataList = providerData.list
+                val dataListFiltered =
+                    context?.filterSearchResultByFilmQuality(dataList) ?: dataList
+
+                // Phase 8.9: providers finish one by one, and a
+                // provider whose search came back with zero
+                // (visible) results used to stay behind as an
+                // empty grey section bar. Only build a section
+                // once it has results; when a later update
+                // empties it, the submitted list drops it again.
+                // Search only — the home screen builds its own
+                // items in HomeFragment and is untouched.
+                // Phase 8.87: the content-type tab filters items
+                // inside the section first — a section the tab
+                // empties drops out by the same rule.
+                val tabFiltered = dataListFiltered.filter { it.matchesTypeTab() }
+                if (tabFiltered.isEmpty()) return@mapNotNull null
+
+                val homePageList = HomePageList(
+                    providerName,
+                    tabFiltered
+                )
+
+                HomeViewModel.ExpandableHomepageList(
+                    homePageList,
+                    providerData.currentPage,
+                    providerData.hasNext
+                )
+            }
+
+            submitList(newItems)
+        }
+    }
+
+    /**
+     * Renders the flat (non-advanced) results grid from the last
+     * raw searchResponse payload with the content-type tab applied.
+     * Unlike the pre-8.87 observer this also submits an empty list —
+     * a tab with no matches must clear the grid, not leave the
+     * previous tab's results standing.
+     */
+    private fun submitGridResults() {
+        val filtered = lastGridList.filter { it.matchesTypeTab() }
+        (binding?.searchAutofitResults?.adapter as? SearchAdapter)?.submitList(filtered)
+    }
+
+    /**
+     * Phase 8.87 (phone only): builds the content-type tabs row and
+     * the smart landing (trending chip cloud) and inserts them into
+     * the page's vertical stack under the search bar. Built in code
+     * because the TV layout shares this fragment and its binding —
+     * TV keeps its existing history-list landing untouched.
+     */
+    private fun setupSmartLanding(binding: FragmentSearchBinding) {
+        val ctx = binding.root.context
+        val parent = binding.searchTopBar.parent as? ViewGroup ?: return
+        val insertAt = parent.indexOfChild(binding.searchTopBar) + 1
+
+        // Content-type tabs: All | Movies | Series | Anime, visible
+        // on the landing and over results alike.
+        val tabsRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = ViewGroup.MarginLayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                leftMargin = 12.toPx
+                rightMargin = 12.toPx
+            }
+        }
+        SearchTypeTab.entries.forEachIndexed { index, tab ->
+            val chip = TextView(ctx).apply {
+                text = getString(
+                    when (tab) {
+                        SearchTypeTab.ALL -> R.string.all
+                        SearchTypeTab.MOVIES -> R.string.movies
+                        SearchTypeTab.SERIES -> R.string.tv_series
+                        SearchTypeTab.ANIME -> R.string.anime
+                    }
+                )
+                textSize = 13.5f
+                gravity = Gravity.CENTER
+                setPadding(10.toPx, 9.toPx, 10.toPx, 9.toPx)
+                layoutParams = LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                ).apply {
+                    if (index > 0) leftMargin = 8.toPx
+                }
+                setOnClickListener { selectTypeTab(tab) }
+            }
+            typeTabViews += chip
+            tabsRow.addView(chip)
+        }
+        parent.addView(tabsRow, insertAt)
+        styleTypeTabs()
+
+        // The landing: flame + "Trending searches" heading over a
+        // wrapping chip cloud (chips are (re)built by
+        // refreshTrendingChips).
+        val landing = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(16.toPx, 14.toPx, 16.toPx, 24.toPx)
+        }
+        val heading = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_whatshot_24)
+            imageTintList =
+                ContextCompat.getColorStateList(ctx, R.color.colorPrimaryRed)
+            layoutParams = LinearLayout.LayoutParams(20.toPx, 20.toPx)
+        })
+        heading.addView(TextView(ctx).apply {
+            text = getString(R.string.search_trending)
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.create(
+                "sans-serif-medium", android.graphics.Typeface.BOLD
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = 8.toPx }
+        })
+        landing.addView(heading)
+        val chips = ChipGroup(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 12.toPx }
+            chipSpacingHorizontal = 8.toPx
+            chipSpacingVertical = 8.toPx
+        }
+        trendingChips = chips
+        landing.addView(chips)
+        // Clear-all history survives the landing swap (it was the
+        // old history footer's button): a quiet text row under the
+        // chips, shown only while recents exist, running the same
+        // confirmation flow.
+        val clearHistory = TextView(ctx).apply {
+            text = getString(R.string.clear_history)
+            textSize = 13f
+            setTextColor(Color.rgb(158, 158, 158))
+            setPadding(0, 16.toPx, 0, 0)
+            isVisible = false
+            setOnClickListener { showClearHistoryConfirm() }
+        }
+        clearHistoryView = clearHistory
+        landing.addView(clearHistory)
+        val scroll = ScrollView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            addView(landing)
+            isVisible = false
+        }
+        landingView = scroll
+        parent.addView(scroll, insertAt + 1)
+
+        // The phone landing replaces the old full-screen history
+        // list as the pre-query presentation. The list view itself
+        // stays (it is the TV landing, and the history storage +
+        // updateHistory flow are untouched — they feed the chips).
+        binding.searchHistoryRecycler.isVisible = false
+        refreshTrendingChips()
+    }
+
+    /**
+     * Phase 8.87: rebuilds the landing's trending chips — the
+     * user's own recent searches first (from the untouched history
+     * store, newest first), then deduplicated titles from the feed
+     * pool's top entries (pool order is the popularity proxy: the
+     * feed build interleaves providers evenly and weaves liked
+     * types/providers forward). Capped at 12 chips total. Recent
+     * chips keep their remove affordance via the chip close icon.
+     * When both sources are empty the landing hides entirely.
+     */
+    private fun refreshTrendingChips() {
+        val group = trendingChips ?: return
+        val ctx = context ?: return
+        group.removeAllViews()
+        val seen = mutableSetOf<String>()
+        val items = mutableListOf<Pair<String, String?>>()
+        for (item in lastHistory) {
+            val text = item.searchText.trim()
+            if (text.isEmpty() || !seen.add(text.lowercase())) continue
+            items += text to item.key
+            if (items.size >= 12) break
+        }
+        if (items.size < 12) {
+            for (entry in FeedPool.entries) {
+                val title = SearchResultBuilder.cleanPosterTitle(entry.response.name)
+                    .trim()
+                if (title.isEmpty() || TitleResolver.isIdLike(title)) continue
+                if (!seen.add(title.lowercase())) continue
+                items += title to null
+                if (items.size >= 12) break
+            }
+        }
+        for ((chipText, historyKey) in items) {
+            group.addView(Chip(ctx).apply {
+                text = chipText
+                isCheckable = false
+                isClickable = true
+                chipBackgroundColor = ContextCompat.getColorStateList(
+                    ctx, R.color.extButtonBackground
+                )
+                setTextColor(Color.WHITE)
+                chipStrokeWidth = 0f
+                if (historyKey != null) {
+                    isCloseIconVisible = true
+                    setOnCloseIconClickListener {
+                        removeKey("$currentAccount/$SEARCH_HISTORY_KEY", historyKey)
+                        searchViewModel.updateHistory()
+                    }
+                }
+                setOnClickListener {
+                    binding?.mainSearch?.setQuery(chipText, true)
+                }
+            })
+        }
+        landingHasContent = items.isNotEmpty()
+        clearHistoryView?.isVisible = lastHistory.isNotEmpty()
+        updateLandingVisibility()
+    }
+
+    /** The landing shows exactly when the old history list did —
+     *  an empty query — and only when it has chips to show. */
+    private fun updateLandingVisibility() {
+        val showHistory = binding?.mainSearch?.query?.toString().isNullOrBlank()
+        landingView?.isVisible = showHistory && landingHasContent
+    }
+
+    /**
+     * The clear-all-history confirmation. Pre-8.87 this lived in
+     * the history footer's click callback; extracted so the phone
+     * landing's "Clear history" row runs the exact same flow.
+     */
+    private fun showClearHistoryConfirm() {
+        activity?.let { ctx ->
+            val builder: AlertDialog.Builder = AlertDialog.Builder(ctx)
+            val dialogClickListener =
+                DialogInterface.OnClickListener { _, which ->
+                    when (which) {
+                        DialogInterface.BUTTON_POSITIVE -> {
+                            removeKeys("$currentAccount/$SEARCH_HISTORY_KEY")
+                            searchViewModel.updateHistory()
+                        }
+
+                        DialogInterface.BUTTON_NEGATIVE -> {
+                        }
+                    }
+                }
+
+            try {
+                builder.setTitle(R.string.clear_history).setMessage(
+                    ctx.getString(R.string.delete_message).format(
+                        ctx.getString(R.string.history)
+                    )
+                )
+                    .setPositiveButton(R.string.sort_clear, dialogClickListener)
+                    .setNegativeButton(R.string.cancel, dialogClickListener)
+                    .show().setDefaultFocus()
+            } catch (e: Exception) {
+                logError(e)
+            }
+        }
     }
 
     override fun fixLayout(view: View) {
@@ -468,11 +836,18 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     }
                 }
                 binding.apply {
-                    searchHistoryRecycler.isVisible = showHistory
+                    // Phase 8.87: on the phone the pre-query landing
+                    // is the trending chip cloud now; the history
+                    // list remains the landing only on TV.
+                    searchHistoryRecycler.isVisible = showHistory && !isLayout(PHONE)
                     searchMasterRecycler.isVisible = !showHistory && isAdvancedSearch
                     searchAutofitResults.isVisible = !showHistory && !isAdvancedSearch
                     // Hide suggestions when showing history or showing search results
                     searchSuggestionsRecycler.isVisible = !showHistory && isSearchSuggestionsEnabled
+                }
+                if (isLayout(PHONE)) {
+                    if (showHistory) refreshTrendingChips()
+                    updateLandingVisibility()
                 }
 
                 return true
@@ -482,14 +857,11 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         observe(searchViewModel.searchResponse) {
             when (it) {
                 is Resource.Success -> {
-                    it.value.let { data ->
-                        val list = data.list
-                        if (list.isNotEmpty()) {
-                            (binding.searchAutofitResults.adapter as? SearchAdapter)?.submitList(
-                                list
-                            )
-                        }
-                    }
+                    // Phase 8.87: keep the raw list — the grid render
+                    // applies the content-type tab, and a tab switch
+                    // re-renders from this copy without a new search.
+                    lastGridList = it.value.list
+                    submitGridResults()
                     searchExitIcon?.alpha = 1f
                     binding.searchLoadingBar.alpha = 0f
                 }
@@ -513,44 +885,11 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 // https://stackoverflow.com/questions/6866238/concurrent-modification-exception-adding-to-an-arraylist
                 listLock.lock()
 
-                val pinnedOrder = DataStoreHelper.pinnedProviders.reversedArray()
-
-                val sortedList = list.toList().sortedWith(compareBy { (providerName, _) ->
-                    val index = pinnedOrder.indexOf(providerName)
-                    if (index == -1) Int.MAX_VALUE else index
-                })
-
-                (binding.searchMasterRecycler.adapter as? ParentItemAdapter)?.apply {
-                    val newItems = sortedList.mapNotNull { (providerName, providerData) ->
-                        val dataList = providerData.list
-                        val dataListFiltered =
-                            context?.filterSearchResultByFilmQuality(dataList) ?: dataList
-
-                        // Phase 8.9: providers finish one by one, and a
-                        // provider whose search came back with zero
-                        // (visible) results used to stay behind as an
-                        // empty grey section bar. Only build a section
-                        // once it has results; when a later update
-                        // empties it, the submitted list drops it again.
-                        // Search only — the home screen builds its own
-                        // items in HomeFragment and is untouched.
-                        if (dataListFiltered.isEmpty()) return@mapNotNull null
-
-                        val homePageList = HomePageList(
-                            providerName,
-                            dataListFiltered
-                        )
-
-                        HomeViewModel.ExpandableHomepageList(
-                            homePageList,
-                            providerData.currentPage,
-                            providerData.hasNext
-                        )
-                    }
-
-                    submitList(newItems)
-                    //notifyDataSetChanged()
-                }
+                // Phase 8.87: keep the raw per-provider map and let
+                // submitMasterResults build the sections (it applies
+                // the film-quality filter and the content-type tab).
+                lastSearchMap = list
+                submitMasterResults()
             } catch (e: Exception) {
                 logError(e)
             } finally {
@@ -605,34 +944,7 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
                 SEARCH_HISTORY_CLEAR -> {
                     // Show confirmation dialog (from footer button)
-                    activity?.let { ctx ->
-                        val builder: AlertDialog.Builder = AlertDialog.Builder(ctx)
-                        val dialogClickListener =
-                            DialogInterface.OnClickListener { _, which ->
-                                when (which) {
-                                    DialogInterface.BUTTON_POSITIVE -> {
-                                        removeKeys("$currentAccount/$SEARCH_HISTORY_KEY")
-                                        searchViewModel.updateHistory()
-                                    }
-
-                                    DialogInterface.BUTTON_NEGATIVE -> {
-                                    }
-                                }
-                            }
-
-                        try {
-                            builder.setTitle(R.string.clear_history).setMessage(
-                                ctx.getString(R.string.delete_message).format(
-                                    ctx.getString(R.string.history)
-                                )
-                            )
-                                .setPositiveButton(R.string.sort_clear, dialogClickListener)
-                                .setNegativeButton(R.string.cancel, dialogClickListener)
-                                .show().setDefaultFocus()
-                        } catch (e: Exception) {
-                            logError(e)
-                        }
-                    }
+                    showClearHistoryConfirm()
                 }
 
                 else -> {
@@ -703,11 +1015,15 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         }
 
         observe(searchViewModel.currentHistory) { list ->
+            // Phase 8.87: the same history data also feeds the
+            // phone landing's trending chips (recents first).
+            lastHistory = list
             (binding.searchHistoryRecycler.adapter as? SearchHistoryAdaptor?)?.submitList(list)
              // Scroll to top to show newest items (list is sorted by newest first)
             if (list.isNotEmpty()) {
                 binding.searchHistoryRecycler.scrollToPosition(0)
             }
+            if (isLayout(PHONE)) refreshTrendingChips()
         }
 
         // Observe search suggestions
@@ -747,6 +1063,12 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     activity?.detachBackPressedCallback("SearchFragment")
                 }
             }
+        }
+
+        // Phase 8.87: the phone gets the content-type tabs + the
+        // smart landing (trending chips); TV keeps its landing.
+        if (isLayout(PHONE)) {
+            setupSmartLanding(binding)
         }
 
         searchViewModel.updateHistory()

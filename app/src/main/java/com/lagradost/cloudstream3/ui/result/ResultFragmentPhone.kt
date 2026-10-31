@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,7 @@ import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
@@ -99,6 +101,7 @@ import com.lagradost.cloudstream3.utils.UIHelper.popupMenuNoIconsAndNoStringRes
 import com.lagradost.cloudstream3.utils.UIHelper.setListViewHeightBasedOnItems
 import com.lagradost.cloudstream3.utils.UIHelper.setNavigationBarColorCompat
 import com.lagradost.cloudstream3.utils.UIHelper.toPx
+import com.lagradost.cloudstream3.utils.UiText
 import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement.getBasePath
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.VideoDownloadManager
@@ -454,6 +457,28 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
     }
 
     var loadingDialog: Dialog? = null
+
+    /**
+     * Phase 8.98: best pre-load type hint for the details
+     * skeleton variant. The LoadResponse (and with it the real
+     * type) has not arrived while the skeleton shows, so the
+     * hint comes from data the app already has for this url:
+     * the Feed pool entry (its SearchResponse carries the
+     * type), else the type TitleResolver cached from an
+     * earlier open. Unknown → NOT a movie, i.e. the series
+     * variant with its episode section shows — the upstream
+     * skeleton's always-episodes behaviour.
+     */
+    private fun isMovieSkeletonHint(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val type =
+            com.lagradost.cloudstream3.ui.feed.FeedPool.entries
+                .firstOrNull { it.response.url == url }?.response?.type
+                ?: com.lagradost.cloudstream3.ui.search.TitleResolver
+                    .cachedType(context, url)
+        return type == com.lagradost.cloudstream3.TvType.Movie ||
+            type == com.lagradost.cloudstream3.TvType.AnimeMovie
+    }
     var popupDialog: Dialog? = null
 
     /**
@@ -468,6 +493,66 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
     var selectSeason: String? = null
     var selectEpisodeRange: String? = null
+
+    // Phase 8.86: the entrance animation (backdrop zoom + section
+    // stagger) runs once per view creation, on the first page success.
+    private var entrancePlayed = false
+
+    // Phase 8.86: season chip state, fed by the same viewModel flows
+    // (seasonSelections + selectedSeasonIndex) the old season dialog
+    // button used.
+    private var seasonChipData: List<Pair<UiText?, Int>> = emptyList()
+    private var seasonChipSelected: Int = -1
+
+    /**
+     * Phase 8.86: (re)builds the season chips. Tapping a chip calls
+     * [ResultViewModel2.changeSeason] — the exact selection logic the
+     * old season dialog drove. The row only shows with 2+ seasons,
+     * mirroring the rule that hid the old button on single-season shows.
+     */
+    private fun rebuildSeasonChips() {
+        val binding = resultBinding ?: return
+        val group = binding.resultSeasonChips
+        group.removeAllViews()
+        val data = seasonChipData
+        binding.resultSeasonChipsScroll.isVisible = data.size > 1
+        if (data.size <= 1) return
+        val ctx = group.context
+        val checkedBg = ContextCompat.getColor(ctx, R.color.boxItemBackground)
+        val stroke = ContextCompat.getColorStateList(ctx, R.color.bg_details_chip_stroke)
+        val gray = ctx.colorFromAttribute(R.attr.grayTextColor)
+        data.forEachIndexed { index, (text, season) ->
+            val chip = Chip(ctx).apply {
+                this.text = text?.asStringNull(ctx) ?: ""
+                isCheckable = true
+                isChecked = index == seasonChipSelected
+                chipBackgroundColor = ColorStateList(
+                    arrayOf(
+                        intArrayOf(android.R.attr.state_checked),
+                        intArrayOf()
+                    ),
+                    intArrayOf(checkedBg, Color.TRANSPARENT)
+                )
+                chipStrokeColor = stroke
+                chipStrokeWidth = 1.toPx.toFloat()
+                setTextColor(
+                    ColorStateList(
+                        arrayOf(
+                            intArrayOf(android.R.attr.state_checked),
+                            intArrayOf()
+                        ),
+                        intArrayOf(Color.WHITE, gray)
+                    )
+                )
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    36.toPx
+                )
+                setOnClickListener { viewModel.changeSeason(season) }
+            }
+            group.addView(chip)
+        }
+    }
 
     private fun setUrl(url: String?) {
         if (url == null) {
@@ -679,6 +764,19 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 }
             }
 
+            // Phase 8.86: season chips, driven by the same flows as the
+            // old season dialog button (which is force-hidden in the
+            // selectedSeason observer further down).
+            observe(viewModel.seasonSelections) { selections ->
+                seasonChipData = selections
+                rebuildSeasonChips()
+            }
+
+            observe(viewModel.selectedSeasonIndex) { index ->
+                seasonChipSelected = index
+                rebuildSeasonChips()
+            }
+
             resultScroll.setOnScrollChangeListener(NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                 val dy = scrollY - oldScrollY
                 // Phase 8B: scrolling the page collapses the top bar actions.
@@ -708,6 +806,13 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             // Phase 8B: MORE toggles the collapsed action row.
             resultMore.setOnClickListener {
                 setTopBarActionsExpanded(!topBarActionsExpanded)
+            }
+
+            // Phase 8.86: the top-bar bookmark circle proxies the bookmark
+            // FAB — its click listener (set by the watchStatus observer)
+            // opens the same watch-status dialog.
+            resultBookmarkTop.setOnClickListener {
+                resultBookmarkFab.performClick()
             }
 
             activity?.attachBackPressedCallback(this@ResultFragmentPhone.toString()) {
@@ -926,6 +1031,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 // no failure?
                 resultEpisodeLoading.isVisible = episodes is Resource.Loading
                 resultEpisodes.isVisible = episodes is Resource.Success
+                // Phase 8.86: the Episodes header (title + count + sort +
+                // batch download) exists only while episodes are shown.
+                resultEpisodesHeader.isVisible = episodes is Resource.Success
                 resultBatchDownloadButton.isVisible =
                     episodes is Resource.Success && episodes.value.isNotEmpty()
 
@@ -1095,14 +1203,28 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     )
 
                     var isExpanded = false
+                    // Phase 8.86: clamp is now 3 lines (was 5) and the
+                    // Read more / Read less toggle under the text shares
+                    // the toggle with tapping the text itself.
+                    fun updateDescriptionExpanded() {
+                        resultDescription.maxLines = if (isExpanded) {
+                            Integer.MAX_VALUE
+                        } else 3
+                        resultDescriptionToggle.setText(
+                            if (isExpanded) R.string.result_read_less
+                            else R.string.result_read_more
+                        )
+                    }
                     resultDescription.apply {
                         setTextHtml(d.plotText)
                         setOnClickListener {
                             isExpanded = !isExpanded
-                            maxLines = if (isExpanded) {
-                                Integer.MAX_VALUE
-                            } else 5
+                            updateDescriptionExpanded()
                         }
+                    }
+                    resultDescriptionToggle.setOnClickListener {
+                        isExpanded = !isExpanded
+                        updateDescriptionExpanded()
                     }
 
                     populateChips(resultTag, d.tags)
@@ -1125,6 +1247,17 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
                     resultComingSoon.isVisible = d.comingSoon
                     resultDataHolder.isGone = d.comingSoon
+                    // Phase 8.86: the play cluster lives outside
+                    // result_data_holder now — same coming-soon rule.
+                    resultPlayArea.isGone = d.comingSoon
+                    // Phase 8.86: poster status badge. Coming-soon is the
+                    // only honest status signal in ResultData (there is
+                    // no recently-added / new-season field), so the badge
+                    // shows for that and stays hidden otherwise.
+                    resultPosterBadge.isVisible = d.comingSoon
+                    if (d.comingSoon) {
+                        resultPosterBadge.setText(R.string.coming_soon)
+                    }
 
                     val prefs =
                         androidx.preference.PreferenceManager.getDefaultSharedPreferences(root.context)
@@ -1134,6 +1267,8 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     )
 
                     resultCastItems.isGone = !showCast || d.actors.isNullOrEmpty()
+                    // Phase 8.86: the Cast heading follows the row.
+                    resultCastHeader.isGone = resultCastItems.isGone
                     (resultCastItems.adapter as? ActorAdaptor)?.submitList(if (showCast) d.actors else emptyList())
 
                     if (d.contentRatingText == null) {
@@ -1179,6 +1314,41 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                             isVisible = true
                             extend()
                         }
+                        // Phase 8.86: top-bar bookmark circle appears with
+                        // the page, mirroring the FAB.
+                        resultBookmarkTop.isVisible = true
+                    }
+
+                    // Phase 8.86: one-shot entrance — the backdrop zooms
+                    // gently out (1.08 -> 1.0) while the content sections
+                    // fade/slide up with a light stagger. Transforms and
+                    // alpha only, so it stays cheap on API 23 hardware.
+                    if (!entrancePlayed) {
+                        entrancePlayed = true
+                        resultPosterBackground.apply {
+                            scaleX = 1.08f
+                            scaleY = 1.08f
+                            animate().scaleX(1f).scaleY(1f)
+                                .setDuration(600L)
+                                .setInterpolator(DecelerateInterpolator())
+                                .start()
+                        }
+                        listOf(
+                            resultHeaderRow,
+                            resultPlayArea,
+                            resultSynopsisBlock,
+                            resultTag,
+                            resultCastItems,
+                            resultDataHolder
+                        ).forEachIndexed { index, view ->
+                            view.alpha = 0f
+                            view.translationY = 14.toPx.toFloat()
+                            view.animate().alpha(1f).translationY(0f)
+                                .setStartDelay(70L * index)
+                                .setDuration(300L)
+                                .setInterpolator(DecelerateInterpolator())
+                                .start()
+                        }
                     }
                 }
 
@@ -1191,6 +1361,14 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                 resultFinishLoading.isVisible = data is Resource.Success
 
                 resultLoading.isVisible = data is Resource.Loading
+                // Phase 8.98: the skeleton's episode section
+                // (season chips + episode rows) belongs to the
+                // series variant only — hide it when the
+                // pre-load hint says this page is a movie.
+                if (data is Resource.Loading) {
+                    resultLoadingEpisodes.isVisible =
+                        !isMovieSkeletonHint(storedData.url)
+                }
 
                 resultLoadingError.isVisible = data is Resource.Failure
                 resultErrorText.isVisible = data is Resource.Failure
@@ -1400,6 +1578,11 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
 
         observe(viewModel.watchStatus) { watchType ->
+            // Phase 8.86: mirror the bookmark state on the top-bar circle.
+            binding.resultBookmarkTop.setImageResource(
+                if (watchType == WatchType.NONE) R.drawable.ic_baseline_bookmark_border_24
+                else R.drawable.ic_baseline_bookmark_24
+            )
             binding.resultBookmarkFab.apply {
                 setText(watchType.stringRes)
                 if (watchType == WatchType.NONE) {
@@ -1464,6 +1647,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         observeNullable(viewModel.selectedSeason) { text ->
             resultBinding?.apply {
                 resultSeasonButton.setText(text)
+                // Phase 8.86: the season chips replace this button on
+                // phone, so it never comes back after setText shows it.
+                resultSeasonButton.isGone = true
 
                 selectSeason =
                     text?.asStringNull(resultSeasonButton.context)

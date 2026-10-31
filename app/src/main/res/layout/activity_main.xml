@@ -30,23 +30,61 @@
             <include layout="@layout/rail_footer"/>
 
         </com.google.android.material.navigationrail.NavigationRailView>
-        <!-- android:layout_height="65dp"
-                              app:labelVisibilityMode="unlabeled"
-
-                  -->
+        <!-- Phase 8.94: the floating pill nav is GONE (his
+             verdict: "sucks", and community comments called it
+             the worst nav). The bar is a FLAT full-width bottom
+             bar: flush to the screen edges and bottom, no
+             margins, no rounded pill, no elevation, every item
+             labelled. Background is bg_nav_bar (near-black +
+             hairline top divider); the active item gets a
+             small red indicator pill behind its icon
+             (NavActiveIndicator) while icon + label stay
+             white/grey via item_select_color. Same view id,
+             same menu, same destinations — presentation only.
+             Bar height is unchanged (@dimen/nav_view_height,
+             70dp); only the pill's 18dp bottom margin went
+             away, so the nav zone shrank 88dp -> 70dp and the
+             main-tab screens' bottom paddings dropped by the
+             same 18dp (fragment_home/library/downloads/search,
+             main_settings, fragment_feed).
+             Phase 8.95 (nav polish v2): phone bar height is now
+             @dimen/nav_view_height_phone = 80dp, the Material 3
+             standard for icon+label mode — at 70dp the labels
+             were clipped at the bottom on device. The nav zone
+             is 80dp and the main-tab screens' compensations went
+             UP by the same 10dp (their air gaps are unchanged).
+             The indicator pill is now the dark-grey tonal
+             @color/extButtonBackground (NavActiveIndicator) —
+             red stays Play-only. On API 30+ the bar additionally
+             grows by the system-bar bottom inset and pads its
+             content above it (fixSystemBarsPadding in
+             MainActivity, fed the same phone dimen), so the
+             labels can never slide under the gesture area; the
+             TV layout keeps the 70dp dimen and is untouched.
+             Phase 8.99d: this view is INVISIBLE on the phone layout
+             from now on — it remains the selection/state holder (the
+             NavController wiring, checked-state bookkeeping and the
+             cast holder's bottom anchor all keep working off its
+             unchanged 80dp box), while the visible bar is the
+             code-created FloatingNavView overlay (floating pill,
+             expanding grey blob + label on the active item). The TV
+             layout file is untouched and still shows its own
+             nav_view. -->
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/nav_view"
-            android:layout_height="@dimen/nav_view_height"
+            android:layout_height="@dimen/nav_view_height_phone"
             android:layout_width="0dp"
-            app:labelVisibilityMode="unlabeled"
-            android:background="@drawable/bg_nav_floating"
-            android:layout_marginStart="20dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="18dp"
-            android:elevation="12dp"
+            android:visibility="invisible"
+            app:labelVisibilityMode="labeled"
+            android:background="@drawable/bg_nav_bar"
+            android:elevation="0dp"
 
+            app:itemIconSize="24dp"
+            app:itemActiveIndicatorStyle="@style/NavActiveIndicator"
             app:itemIconTint="@color/item_select_color"
             app:itemTextColor="@color/item_select_color"
+            app:itemTextAppearanceActive="@style/NavLabelActive"
+            app:itemTextAppearanceInactive="@style/NavLabelInactive"
 
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
@@ -54,12 +92,12 @@
             app:menu="@menu/bottom_nav_menu" />
 
         <!-- Phase 7.5 FIX-5: the NavHost extends to the parent's bottom so
-             fragment content flows UNDERNEATH the floating bottom nav instead
+             fragment content flows UNDERNEATH the bottom nav instead
              of stopping above it (the old chain navHost -> cast holder ->
              nav_view reserved a layout slab for the bar, which read as an
              opaque black band attached to the pill). The cast holder keeps
              its bottom chained to the top of nav_view, so the mini controller
-             keeps its exact on-screen position above the pill. Main tab
+             keeps its exact on-screen position above the bar. Main tab
              screens compensate with bottom padding on their scrolling lists
              (see fragment_home/library/downloads/search, main_settings). -->
         <androidx.fragment.app.FragmentContainerView

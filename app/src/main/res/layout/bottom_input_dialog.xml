@@ -1,31 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:nextFocusDown="@id/nginx_text_input"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/text1"
+    <!-- Phase 8.89: standard sheet chrome (Feed Filters reference) —
+         drag handle + title row with the circular close button.
+         NOTE: AccountHelper's avatar sheet inserts its preset row
+         into this root at index 2 (below the title row). -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_feed_drag_handle" />
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_rowWeight="1"
-        android:layout_marginTop="20dp"
         android:layout_marginBottom="10dp"
-        android:paddingStart="?android:attr/listPreferredItemPaddingStart"
-        android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
-        android:textColor="?attr/textColor"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        tools:text="Test" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
+
+        <TextView
+            android:id="@+id/text1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_rowWeight="1"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="?attr/textColor"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            tools:text="Test" />
+
+        <ImageButton
+            android:id="@+id/close_btt"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_feed_circle_button"
+            android:contentDescription="@string/switcher_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_baseline_close_24"
+            app:tint="?attr/textColor" />
+    </LinearLayout>
 
     <EditText
         android:id="@+id/nginx_text_input"
         android:nextFocusRight="@id/cancel_btt"
         android:nextFocusLeft="@id/apply_btt"
         android:layout_marginBottom="60dp"
-        android:layout_marginHorizontal="16dp"
+        android:layout_marginHorizontal="20dp"
         android:paddingTop="10dp"
         android:requiresFadingEdge="vertical"
         android:layout_width="match_parent"
@@ -45,10 +76,15 @@
         android:layout_width="match_parent"
         android:layout_height="60dp">
 
+        <!-- Phase 8.89: Apply = standard red pill; Cancel = dark pill. -->
         <com.google.android.material.button.MaterialButton
             android:layout_width="wrap_content"
             android:layout_gravity="center_vertical|end"
             android:text="@string/sort_apply"
+            android:textColor="@android:color/white"
+            app:backgroundTint="@color/colorPrimaryRed"
+            app:iconTint="@android:color/white"
+            app:strokeColor="@android:color/transparent"
             android:id="@+id/apply_btt"
             style="@style/WhiteButton" />
 

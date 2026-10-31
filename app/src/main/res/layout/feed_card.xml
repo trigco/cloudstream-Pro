@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Phase 8.19: grid cell card — poster fills the cell (2:3), heart
-     overlaid on the poster corner, title + meta underneath. -->
+     overlaid on the poster corner, title + meta underneath.
+     Phase 8.85: the Feed grid is 3 columns like Home's — tighter
+     margins, smaller type and a 12dp radius so three-across cards
+     still read cleanly on a small phone. -->
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/feed_card_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
+    android:layout_margin="4dp"
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="?attr/primaryGrayBackground"
-    app:cardCornerRadius="14dp"
+    app:cardCornerRadius="12dp"
     app:cardElevation="0dp">
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -30,12 +33,12 @@
 
         <ImageButton
             android:id="@+id/feed_card_like"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_margin="8dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_margin="6dp"
             android:background="@drawable/feed_center_button_bg"
             android:contentDescription="@string/feed_like"
-            android:padding="8dp"
+            android:padding="6dp"
             android:src="@drawable/ic_baseline_favorite_border_24"
             app:layout_constraintBottom_toBottomOf="@id/feed_card_poster"
             app:layout_constraintEnd_toEndOf="@id/feed_card_poster"
@@ -45,14 +48,14 @@
             android:id="@+id/feed_card_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="10dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="8dp"
             android:ellipsize="end"
             android:gravity="top|start"
             android:maxLines="2"
             android:textColor="?attr/textColor"
-            android:textSize="13sp"
+            android:textSize="11.5sp"
             android:textStyle="bold"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -62,14 +65,14 @@
             android:id="@+id/feed_card_meta"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:layout_marginTop="2dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="?attr/grayTextColor"
-            android:textSize="11sp"
+            android:textSize="9.5sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/feed_card_title" />

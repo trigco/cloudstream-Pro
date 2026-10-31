@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 8.18-8.23: the Feed tab - a floating collapsible header
-     (search bar + genre chips) over a category-free 2-column grid of
-     every provider's content, skeleton shimmer while loading, and the
-     mini player floating over the bottom. The header overlays the
-     grid and hides by sliding up, so hiding it never forces the grid
-     to relayout mid-scroll (Phase 8.23 scroll-jitter fix). -->
+<!-- Phase 8.85: the Feed page, Explore-style (SkyStream reference):
+     a top bar (page title + circular filter/search buttons) joins
+     the genre chips in the floating header; the grid below is
+     3 columns like Home's. The header overlays the grid and
+     hides by sliding up (Phase 8.23).
+     Phase 8.92: the hero is REMOVED entirely (his verdict —
+     unstable, odd shadow); the grid's ConcatAdapter is now
+     category rows + cards.
+     Phase 8.96: the ConcatAdapter is skeleton rows (while the
+     chrome pass runs) + category rows + cards, and the header
+     search button pushes the FEED-scoped search page
+     (navigation_feed_search, FeedSearchFragment).
+     Phase 8.97: the ConcatAdapter gains a "For You" header
+     item between the category rows and the cards — the header
+     left the floating bar (title + chips only now) so it can
+     never float over a blank band again. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -20,6 +30,11 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
+            <!-- Phase 8.99e: bottom padding is exactly the floating
+                 bar's footprint — 14dp lift + 62dp pill = the pill's
+                 top edge 76dp above the screen bottom (API 27; the
+                 80dp from the flat-bar era left a dead black band
+                 under the last row). -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/feed_recycler"
                 android:layout_width="match_parent"
@@ -28,7 +43,7 @@
                 android:paddingStart="6dp"
                 android:paddingTop="6dp"
                 android:paddingEnd="6dp"
-                android:paddingBottom="88dp" />
+                android:paddingBottom="76dp" />
 
             <com.facebook.shimmer.ShimmerFrameLayout
                 android:id="@+id/feed_skeleton"
@@ -44,10 +59,51 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
+                    <!-- Phase 8.96: the loading skeleton mirrors
+                         the final page's structure — category
+                         rows first (same mirror layout the
+                         in-list skeleton rows use), then the
+                         For You poster grid.
+                         Phase 8.97: a title bar now stands over
+                         the poster grid, mirroring the in-list
+                         For You header item the grid gained
+                         (feed_for_you_header.xml: 16sp line +
+                         34x3dp red underline, same margins). -->
+                    <include layout="@layout/feed_category_row_skeleton" />
+
+                    <include layout="@layout/feed_category_row_skeleton" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="6dp"
+                        android:orientation="vertical">
+
+                        <View
+                            android:layout_width="72dp"
+                            android:layout_height="20dp"
+                            android:background="@drawable/feed_skeleton_bar" />
+
+                        <View
+                            android:layout_width="34dp"
+                            android:layout_height="3dp"
+                            android:layout_marginTop="4dp"
+                            android:background="@color/colorPrimaryRed" />
+                    </LinearLayout>
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal">
+
+                        <include
+                            layout="@layout/feed_skeleton_item"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_margin="6dp"
+                            android:layout_weight="1" />
 
                         <include
                             layout="@layout/feed_skeleton_item"
@@ -76,20 +132,6 @@
                             android:layout_height="wrap_content"
                             android:layout_margin="6dp"
                             android:layout_weight="1" />
-
-                        <include
-                            layout="@layout/feed_skeleton_item"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_margin="6dp"
-                            android:layout_weight="1" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
 
                         <include
                             layout="@layout/feed_skeleton_item"
@@ -170,6 +212,10 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <!-- Phase 8.92: no hero lives here anymore — it was removed
+         from the Feed entirely (his verdict). The grid's first
+         list items are the category rows. -->
+
     <LinearLayout
         android:id="@+id/feed_header"
         android:layout_width="match_parent"
@@ -178,70 +224,144 @@
         android:elevation="6dp"
         android:orientation="vertical">
 
+        <!-- Phase 8.85: Explore-style top bar — page title at the
+             left, circular filter + search buttons at the right. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="12dp"
-            android:background="@drawable/feed_search_bg"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginEnd="16dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="14dp"
-            android:paddingEnd="6dp">
+            android:orientation="horizontal">
 
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:contentDescription="@null"
-                android:src="@drawable/search_icon" />
-
-            <EditText
-                android:id="@+id/feed_search_input"
+            <TextView
+                android:id="@+id/feed_title_text"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:background="@null"
-                android:hint="@string/feed_search_hint"
-                android:imeOptions="actionSearch"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
-                android:textColor="?attr/white"
-                android:textColorHint="?attr/grayTextColor"
-                android:textSize="14sp" />
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/feed_title"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:textStyle="bold" />
 
             <ImageButton
-                android:id="@+id/feed_search_clear"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/feed_retry"
-                android:padding="9dp"
-                android:src="@drawable/ic_baseline_close_24"
-                android:visibility="gone" />
+                android:id="@+id/feed_filter_button"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/bg_feed_circle_button"
+                android:contentDescription="@string/feed_filter_open"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:src="@drawable/ic_baseline_tune_24"
+                app:tint="@color/white" />
+
+            <ImageButton
+                android:id="@+id/feed_search_button"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_feed_circle_button"
+                android:contentDescription="@string/search"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:src="@drawable/search_icon"
+                app:tint="@color/white" />
 
         </LinearLayout>
 
-        <HorizontalScrollView
+        <!-- Phase 8.94 (Job 3): the 8.92 in-feed search row is
+             removed — the header's search button now pushes the
+             standalone Search page (navigation_feed_search) over
+             the Feed. Settled behaviour, his final word
+             2026-10-30: not a tab switch, not an expanding row. -->
+
+        <!-- Phase 8.96: the chips live in a FrameLayout so the
+             chips SKELETON can overlay them while the chrome
+             pass runs. The real chips view stays in the layout
+             (INVISIBLE, not gone, while the skeleton shows), so
+             the floating header's measured height — and with it
+             the grid's top padding — never changes across the
+             skeleton → real swap. -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="10dp"
-            android:scrollbars="none">
+            android:layout_height="wrap_content">
 
-            <LinearLayout
-                android:id="@+id/feed_chips"
-                android:layout_width="wrap_content"
+            <HorizontalScrollView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal" />
+                android:layout_marginTop="10dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:scrollbars="none">
 
-        </HorizontalScrollView>
+                <LinearLayout
+                    android:id="@+id/feed_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+            </HorizontalScrollView>
+
+            <com.facebook.shimmer.ShimmerFrameLayout
+                android:id="@+id/feed_chips_skeleton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="54dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="86dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="70dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="98dp"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                    <View
+                        android:layout_width="62dp"
+                        android:layout_height="34dp"
+                        android:background="@drawable/feed_skeleton_pill" />
+
+                </LinearLayout>
+
+            </com.facebook.shimmer.ShimmerFrameLayout>
+
+        </FrameLayout>
+
+        <!-- Phase 8.97: the "For You" header no longer lives
+             in this floating header. It is a list item directly
+             above the card grid now (feed_for_you_header.xml,
+             FeedForYouHeaderAdapter): down here it floated over
+             the top of the list — category rows in the loaded
+             state — while its own grid sat at the list's end,
+             and the space under it read as a blank band over
+             content that was not its own (his 12:01 report).
+             The floating header is title bar + chips only. -->
 
     </LinearLayout>
 

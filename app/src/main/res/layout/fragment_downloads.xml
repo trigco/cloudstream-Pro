@@ -316,12 +316,18 @@
              item's rest position (clearance above the queue bar) identical.
              Phase 8C: +12dp more (200dp) tracking the queue bar's lift from
              88dp to 100dp bottom margin; rest clearance above the bar is
-             unchanged (50dp). -->
+             unchanged (50dp).
+             Phase 8.94: flat nav bar (zone 88dp -> 70dp) — the queue
+             bar's bottom margin drops 100dp -> 82dp and this padding
+             drops 200dp -> 182dp; rest clearance is unchanged.
+             Phase 8.95: phone bar is 80dp (zone 70dp -> 80dp) — the
+             queue bar's margin rises 82dp -> 92dp and this padding
+             rises 182dp -> 192dp; rest clearance is unchanged. -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/download_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingBottom="200dp"
+            android:paddingBottom="192dp"
             android:clipToPadding="false"
             android:descendantFocusability="afterDescendants"
             android:nextFocusUp="@id/download_stream_button_tv"
@@ -344,7 +350,7 @@
             android:layout_gravity="bottom"
             android:layout_marginStart="16dp"
             android:layout_marginEnd="16dp"
-            android:layout_marginBottom="100dp"
+            android:layout_marginBottom="92dp"
             android:background="@drawable/bg_settings_group"
             android:orientation="vertical">
 

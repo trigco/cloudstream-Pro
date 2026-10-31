@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
@@ -59,12 +60,21 @@ import com.lagradost.cloudstream3.utils.AppContextUtils.html
 import com.lagradost.cloudstream3.utils.AppContextUtils.setDefaultFocus
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import com.lagradost.cloudstream3.utils.getImageFromDrawable
+import coil3.SingletonImageLoader
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showBottomDialog
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showOptionSelectStringRes
 import com.lagradost.cloudstream3.utils.UIHelper.fixPaddingStatusbarMargin
 import com.lagradost.cloudstream3.utils.UIHelper.fixPaddingStatusbarView
 import com.lagradost.cloudstream3.utils.UIHelper.populateChips
 import androidx.core.graphics.toColorInt
+import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.getDisplayName
+import com.lagradost.cloudstream3.ui.home.HomeFragment.Companion.selectHomepage
 import com.lagradost.cloudstream3.ui.setRecycledViewPool
 
 class HomeParentItemAdapterPreview(
@@ -323,6 +333,14 @@ class HomeParentItemAdapterPreview(
         private val heroSkeleton: com.facebook.shimmer.ShimmerFrameLayout? =
             itemView.findViewById(R.id.home_hero_skeleton)
 
+        // Phase 8.85: settled-poster backdrop under the hero pager
+        // (both head layouts carry it) — the crossfade's pages both
+        // go semi-transparent mid-transition, and without this the
+        // black frame flashed through. Updated from onSelect, which
+        // runs exactly when a page settles.
+        private val heroBackdrop: ImageView? =
+            itemView.findViewById(R.id.home_hero_backdrop)
+
         // private val previewHeader: FrameLayout = itemView.findViewById(R.id.home_preview)
         private val resumeHolder: View = itemView.findViewById(R.id.home_watch_holder)
         private val resumeRecyclerView: RecyclerView =
@@ -334,6 +352,18 @@ class HomeParentItemAdapterPreview(
         private val headProfilePic: ImageView? = itemView.findViewById(R.id.home_head_profile_pic)
         private val headProfilePicCard: View? =
             itemView.findViewById(R.id.home_head_profile_padding)
+
+        // Phase 8.84: top-bar provider pills (phone head only; null
+        // on the TV head). They replace the removed floating funnel
+        // pill: name follows viewModel.apiName, tap opens the same
+        // selectHomepage sheet HomeFragment's FAB used to open.
+        private val providerPill: View? = itemView.findViewById(R.id.home_provider_pill)
+        private val providerPillText: TextView? =
+            itemView.findViewById(R.id.home_provider_pill_text)
+        private val providerPillAlt: View? =
+            itemView.findViewById(R.id.home_provider_pill_alt)
+        private val providerPillTextAlt: TextView? =
+            itemView.findViewById(R.id.home_provider_pill_text_alt)
 
         private val alternateHeadProfilePic: ImageView? =
             itemView.findViewById(R.id.alternate_home_head_profile_pic)
@@ -348,6 +378,7 @@ class HomeParentItemAdapterPreview(
         private val homeNonePadding: View = itemView.findViewById(R.id.home_none_padding)
 
         fun onSelect(item: LoadResponse, position: Int) {
+            updateHeroBackdrop(item, position)
             (binding as? FragmentHomeHeadTvBinding)?.apply {
                 homePreviewDescription.isGone = item.plot.isNullOrBlank()
                 homePreviewDescription.text = item.plot?.html() ?: ""
@@ -504,6 +535,38 @@ class HomeParentItemAdapterPreview(
             }
         }
 
+        /**
+         * Phase 8.85: keep the under-pager backdrop on the settled
+         * item (same poster choice as HomeScrollAdapter:
+         * backgroundPosterUrl first) and pre-warm the NEXT item's
+         * poster in the Coil cache, so the next crossfade starts
+         * from an already-loaded image.
+         */
+        private fun updateHeroBackdrop(item: LoadResponse, position: Int) {
+            val backdrop = heroBackdrop ?: return
+            backdrop.loadImage(
+                item.backgroundPosterUrl ?: item.posterUrl,
+                item.posterHeaders
+            ) {
+                crossfade(false)
+                error {
+                    getImageFromDrawable(
+                        backdrop.context, R.drawable.poster_placeholder
+                    )
+                }
+            }
+            val next = previewAdapter.getItemOrNull(position + 1) ?: return
+            val nextUrl = next.backgroundPosterUrl ?: next.posterUrl ?: return
+            val request = ImageRequest.Builder(backdrop.context)
+                .data(nextUrl)
+                .httpHeaders(NetworkHeaders.Builder().also { hb ->
+                    hb["User-Agent"] = USER_AGENT
+                    next.posterHeaders?.forEach { (key, value) -> hb[key] = value }
+                }.build())
+                .build()
+            SingletonImageLoader.get(backdrop.context).enqueue(request)
+        }
+
         private val previewCallback: ViewPager2.OnPageChangeCallback =
             object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
@@ -601,6 +664,28 @@ class HomeParentItemAdapterPreview(
 
             headProfilePicCard?.setOnClickListener {
                 activity?.showAccountSelectLinear()
+            }
+
+            // Phase 8.84: provider pills — identical selection
+            // semantics to HomeFragment's old floating-pill listener
+            // (custom lists activate custom mode; picking a provider
+            // exits it and reloads).
+            val providerPillClick = View.OnClickListener { view ->
+                view.context.selectHomepage(
+                    viewModel.apiName.value,
+                    onCustomSelect = { list ->
+                        viewModel.activateCustomList(list)
+                    }
+                ) { api ->
+                    viewModel.exitCustomMode()
+                    viewModel.loadAndCancel(api, forceReload = true, fromUI = true)
+                }
+            }
+            providerPill?.setOnClickListener(providerPillClick)
+            providerPillAlt?.setOnClickListener(providerPillClick)
+            itemView.context.getDisplayName(viewModel.apiName.value)?.let { display ->
+                providerPillText?.text = display
+                providerPillTextAlt?.text = display
             }
 
             fun showAccountEditBox(context: Context): Boolean {
@@ -851,6 +936,13 @@ class HomeParentItemAdapterPreview(
             previewViewpager.apply {
                 observe(viewModel.preview) {
                     updatePreview(it)
+                }
+                // Phase 8.84: keep the top-bar provider pills' labels
+                // on the actually-selected provider.
+                observe(viewModel.apiName) { name ->
+                    val display = itemView.context.getDisplayName(name) ?: name
+                    providerPillText?.text = display
+                    providerPillTextAlt?.text = display
                 }
                 /*if (binding is FragmentHomeHeadTvBinding) {
                     observe(viewModel.apiName) { name ->

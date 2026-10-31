@@ -546,20 +546,21 @@
     <style name="Theme.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
         <item name="android:windowMinWidthMajor">@dimen/abc_dialog_min_width_major</item>
         <item name="android:windowMinWidthMinor">@dimen/abc_dialog_min_width_minor</item>
-        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <!-- Phase 8.89: floating-card window background (24dp corners,
+             card fill) replaces the 20dp pure-black dialog surface. -->
+        <item name="android:windowBackground">@drawable/dialog_card_background</item>
         <item name="textAllCaps">false</item>
         <item name="android:textColorPrimary">?attr/grayTextColor</item>
 
-        <item name="buttonBarPositiveButtonStyle">@style/WhiteButton.Dialog</item>
-        <!-- Phase 8.11-E2: negative/neutral were BlackButton.Dialog, whose
-             fill (?attr/iconGrayBackground, #1F1F1F) is nearly identical to
-             the dialog surface (pure black) and whose strokeColor is a
-             MaterialButton-only attr an AppCompatButton never draws (and
-             no strokeWidth was set anyway) — Cancel/Delete rendered as
-             bare text next to the filled Apply pill. OutlinedButton.Dialog
-             gives them a real outlined pill via android:background. -->
-        <item name="buttonBarNegativeButtonStyle">@style/OutlinedButton.Dialog</item>
-        <item name="buttonBarNeutralButtonStyle">@style/OutlinedButton.Dialog</item>
+        <!-- Phase 8.89 dialog standard: POSITIVE = red filled pill (the
+             sheet standard's primary action), NEGATIVE/NEUTRAL = plain
+             text button. Supersedes the Phase 8.11-E2 white-pill /
+             outlined-pill pairing; WhiteButton.Dialog and
+             OutlinedButton.Dialog themselves are unchanged and still
+             used outside the dialog button bar. -->
+        <item name="buttonBarPositiveButtonStyle">@style/RedButton.Dialog</item>
+        <item name="buttonBarNegativeButtonStyle">@style/PlainTextButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/PlainTextButton.Dialog</item>
     </style>
 
     <style name="TabNoCaps" parent="TextAppearance.Design.Tab">
@@ -637,7 +638,13 @@
 
         <item name="android:windowMinWidthMajor">@dimen/abc_dialog_min_width_major</item>
         <item name="android:windowMinWidthMinor">@dimen/abc_dialog_min_width_minor</item>
-        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <!-- Phase 8.89: same floating-card background as Theme.AlertDialog
+             (this style sets its own windowBackground item, so it is
+             updated alongside), plus the switcher-style radio indicator
+             for setSingleChoiceItems lists. Buttons are inherited from
+             Theme.AlertDialog (red pill positive / plain-text negative). -->
+        <item name="android:windowBackground">@drawable/dialog_card_background</item>
+        <item name="android:listChoiceIndicatorSingle">@drawable/radio_dialog_selector</item>
     </style>
 
     <style name="AlertDialogCustomTransparent" parent="Theme.AppCompat.Dialog.Alert">
@@ -672,12 +679,17 @@
          Window size is set in code (applyPlayerOverlaySize). -->
     <style name="DialogOverlayPlayer" parent="DialogFullscreenPlayer">
         <item name="android:windowIsFloating">true</item>
-        <item name="android:windowBackground">@drawable/dialog__window_background</item>
+        <!-- Phase 8.89: in-player overlay dialogs join the card standard. -->
+        <item name="android:windowBackground">@drawable/dialog_card_background</item>
     </style>
 
     <style name="DialogHalfFullscreen" parent="AlertDialogCustom">
         <item name="android:windowEnterAnimation">@anim/enter_anim</item>
         <item name="android:windowExitAnimation">@anim/exit_anim</item>
+        <!-- Phase 8.89: this style hosts the (TV) long-press preview
+             surface, not a card dialog — keep the previous pure-black
+             20dp window background instead of inheriting the new card. -->
+        <item name="android:windowBackground">@drawable/dialog__window_background</item>
 
         <item name="android:windowMinWidthMajor">45%</item> <!-- 65% -->
         <item name="android:windowMinWidthMinor">95%</item> <!-- 95% -->
@@ -813,6 +825,37 @@
         <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
     </style>
 
+    <!-- Phase 8.89: dialog-standard buttons (companion to SheetChrome).
+         RedButton.Dialog is the AlertDialog POSITIVE button: the same red
+         filled pill language as the Feed Filters sheet's DONE button
+         (colorPrimaryRed fill, white text/icon, transparent stroke),
+         with the .Dialog inset treatment the other dialog button styles
+         use. Wired as buttonBarPositiveButtonStyle in Theme.AlertDialog
+         (values/ + values-v31 copy); AlertDialogCustom inherits it.
+         PlainTextButton.Dialog is the NEGATIVE/NEUTRAL button: a plain
+         borderless text button (the SkyStream reference's Cancel),
+         replacing OutlinedButton.Dialog in that role — OutlinedButton
+         itself is untouched and still used elsewhere. -->
+    <style name="RedButton" parent="NiceButton">
+        <item name="strokeColor">@android:color/transparent</item>
+        <item name="backgroundTint">@color/colorPrimaryRed</item>
+        <item name="iconTint">@android:color/white</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="rippleColor">?attr/primaryBlackBackground</item>
+    </style>
+
+    <style name="RedButton.Dialog" parent="RedButton">
+        <item name="android:foreground">@drawable/outline_drawable_less_inset</item>
+        <item name="android:insetTop">@dimen/dialog_buttons_inset</item>
+        <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
+    </style>
+
+    <style name="PlainTextButton.Dialog" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">?attr/textColor</item>
+        <item name="android:insetTop">@dimen/dialog_buttons_inset</item>
+        <item name="android:insetBottom">@dimen/dialog_buttons_inset</item>
+    </style>
+
     <!-- Phase 8.11-E2: outlined pill for AlertDialog negative/neutral
          buttons (wired in Theme.AlertDialog above and its values-v31 copy;
          AlertDialogCustom inherits it). Parented on NiceButton directly,
@@ -901,6 +944,35 @@
 
         <item name="expandedActiveIndicatorPaddingTop">0dp</item>
         <item name="expandedActiveIndicatorPaddingBottom">0dp</item>
+    </style>
+
+    <!-- Phase 8.94: the flat bottom bar's active indicator —
+         a small pill behind the ACTIVE item's icon. Icon and
+         label themselves stay white when active / grey when
+         not (@color/item_select_color).
+         Phase 8.95 (nav polish v2): the pill is now the
+         dark-grey tonal chip colour (@color/extButtonBackground,
+         #262626) with the white icon on top — the Material 3 /
+         YouTube-style tonal indicator. On device the red pill
+         read as a wide grey-red smear and fought the bar; the
+         tonal pill reads crisp, and red stays strictly
+         Play-only as per the app's accent rule. -->
+    <style name="NavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/extButtonBackground</item>
+    </style>
+
+    <!-- Phase 8.96 (Job 4): bottom-nav label sizes. The Material
+         default 12sp truncated "Downloads" to "Downlo…" at six
+         items on his narrow screen: 360dp / 6 = 60dp per item,
+         and 9 glyphs at 12sp need ~56dp before item padding.
+         11sp needs ~51dp, which fits the 60dp slot; "Settings"
+         (8 glyphs, ~46dp) fits with more room. -->
+    <style name="NavLabelActive" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="NavLabelInactive" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textSize">11sp</item>
     </style>
 
     <style name="BlackButton" parent="NiceButton">

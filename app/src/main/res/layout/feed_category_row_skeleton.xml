@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.96: the category-row SKELETON — a structural mirror
+     of feed_category_row.xml + feed_row_item.xml, so the swap
+     to the real row does not move anything vertically: same
+     root margin (12dp) and bottom padding (2dp), same header
+     paddings (16/10/16/6), a title bar where the 16sp title
+     sits (20dp line) with the 34x3dp red underline block under
+     it, a pill where "View All" sits (29dp, its text+padding
+     height), and a poster strip padded 10dp holding 104dp-wide
+     cells whose posters are exactly the real 104x156dp, with
+     title/meta bars at the real text line heights (15dp/12dp,
+     margins 5dp/1dp). Included under a ShimmerFrameLayout by
+     feed_chrome_skeleton_row.xml (list rows) and by the Feed's
+     full-screen loading skeleton in fragment_feed.xml. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+    android:orientation="vertical"
+    android:paddingBottom="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <View
+                android:layout_width="132dp"
+                android:layout_height="20dp"
+                android:background="@drawable/feed_skeleton_bar" />
+
+            <View
+                android:layout_width="34dp"
+                android:layout_height="3dp"
+                android:layout_marginTop="4dp"
+                android:background="@color/colorPrimaryRed" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="76dp"
+            android:layout_height="29dp"
+            android:background="@drawable/feed_skeleton_pill" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="10dp">
+
+        <LinearLayout
+            android:layout_width="104dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="156dp"
+                app:cardBackgroundColor="?attr/primaryGrayBackground"
+                app:cardCornerRadius="@dimen/home_poster_radius"
+                app:cardElevation="0dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/feed_skeleton_bar" />
+            </androidx.cardview.widget.CardView>
+
+            <View
+                android:layout_width="84dp"
+                android:layout_height="15dp"
+                android:layout_marginTop="5dp"
+                android:background="@drawable/feed_skeleton_bar" />
+
+            <View
+                android:layout_width="60dp"
+                android:layout_height="12dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/feed_skeleton_bar" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="104dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="156dp"
+                app:cardBackgroundColor="?attr/primaryGrayBackground"
+                app:cardCornerRadius="@dimen/home_poster_radius"
+                app:cardElevation="0dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/feed_skeleton_bar" />
+            </androidx.cardview.widget.CardView>
+
+            <View
+                android:layout_width="84dp"
+                android:layout_height="15dp"
+                android:layout_marginTop="5dp"
+                android:background="@drawable/feed_skeleton_bar" />
+
+            <View
+                android:layout_width="60dp"
+                android:layout_height="12dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/feed_skeleton_bar" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="104dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="156dp"
+                app:cardBackgroundColor="?attr/primaryGrayBackground"
+                app:cardCornerRadius="@dimen/home_poster_radius"
+                app:cardElevation="0dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/feed_skeleton_bar" />
+            </androidx.cardview.widget.CardView>
+
+            <View
+                android:layout_width="84dp"
+                android:layout_height="15dp"
+                android:layout_marginTop="5dp"
+                android:background="@drawable/feed_skeleton_bar" />
+
+            <View
+                android:layout_width="60dp"
+                android:layout_height="12dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/feed_skeleton_bar" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="104dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="156dp"
+                app:cardBackgroundColor="?attr/primaryGrayBackground"
+                app:cardCornerRadius="@dimen/home_poster_radius"
+                app:cardElevation="0dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/feed_skeleton_bar" />
+            </androidx.cardview.widget.CardView>
+
+            <View
+                android:layout_width="84dp"
+                android:layout_height="15dp"
+                android:layout_marginTop="5dp"
+                android:background="@drawable/feed_skeleton_bar" />
+
+            <View
+                android:layout_width="60dp"
+                android:layout_height="12dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/feed_skeleton_bar" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

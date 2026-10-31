@@ -16,6 +16,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.ui.BaseBottomSheetDialogFragment
 import com.lagradost.cloudstream3.ui.BaseFragment
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
+import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
@@ -56,6 +57,14 @@ class PluginDetailsFragment(val data: PluginViewData) : BaseBottomSheetDialogFra
     override fun onBindingCreated(binding: FragmentPluginDetailsBinding) {
         val metadata = data.pluginWrapper.plugin
         binding.apply {
+            // Phase 8.98: the sheet standard's ✕ close button —
+            // phone only (8.89 left this TV-shared layout
+            // handle-only; the button starts gone in XML and
+            // TV never reveals it).
+            if (isLayout(PHONE or EMULATOR)) {
+                pluginDetailsCloseBtt.isVisible = true
+                pluginDetailsCloseBtt.setOnClickListener { dismiss() }
+            }
             pluginIcon.loadImage(metadata.iconUrl?.replace("%size%", "$iconSize")
                 ?.replace("%exact_size%", "$iconSizeExact")) {
                 error { getImageFromDrawable(context ?: return@error null , R.drawable.ic_baseline_extension_24) }

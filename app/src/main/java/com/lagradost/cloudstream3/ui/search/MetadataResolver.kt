@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.Locale
@@ -70,6 +71,96 @@ object MetadataResolver {
 
     fun removeListener(listener: (String, String) -> Unit) {
         synchronized(listeners) { listeners.remove(listener) }
+    }
+
+    // ---------- Phase 8.88: item metadata (genres / original
+    // language / origin country) for real Feed categories. This
+    // extends the SAME pipeline — same scope, same semaphore,
+    // same title cleaning, same prefs file. Records live under
+    // "meta:" + the rating cache key in the same prefs, so
+    // caches written by older builds simply lack them until an
+    // item re-resolves; the rating value itself is untouched.
+    // The TMDB/OMDb lookups below harvest the fields from the
+    // very search responses they already fetch (genre_ids,
+    // original_language, origin_country / Genre, Language,
+    // Country) — no extra round-trip on the rating path. Items
+    // the rating path skips (provider score present, rating
+    // already cached, or no key at all) are covered by
+    // [resolveMeta], which adds the keyless sources TVmaze
+    // (TV) and AniList (anime) behind the same limiter. ----------
+
+    data class Meta(
+        val genres: List<String>,
+        val language: String?,
+        val country: String?,
+        val anime: Boolean = false
+    )
+
+    private val metaMemory = ConcurrentHashMap<String, Meta>()
+    private val metaInFlight = mutableSetOf<String>()
+    private val metaMisses = mutableSetOf<String>()
+    private val metaListeners = mutableListOf<(String) -> Unit>()
+
+    fun addMetaListener(listener: (String) -> Unit) {
+        synchronized(metaListeners) { metaListeners.add(listener) }
+    }
+
+    fun removeMetaListener(listener: (String) -> Unit) {
+        synchronized(metaListeners) { metaListeners.remove(listener) }
+    }
+
+    private fun metaToJson(meta: Meta): String {
+        val json = JSONObject()
+        json.put("g", meta.genres.joinToString("|"))
+        meta.language?.let { json.put("l", it) }
+        meta.country?.let { json.put("c", it) }
+        if (meta.anime) json.put("a", 1)
+        return json.toString()
+    }
+
+    private fun metaFromJson(raw: String): Meta? = try {
+        val json = JSONObject(raw)
+        Meta(
+            genres = json.optString("g").split("|")
+                .filter { it.isNotBlank() },
+            language = json.optString("l").ifBlank { null },
+            country = json.optString("c").ifBlank { null },
+            anime = json.optInt("a", 0) == 1
+        )
+    } catch (e: Exception) {
+        null
+    }
+
+    fun metaCached(context: Context?, rawTitle: String, year: Int?): Meta? {
+        val key = cacheKey(SearchResultBuilder.cleanPosterTitle(rawTitle), year)
+        metaMemory[key]?.let { return it }
+        if (context == null) return null
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("meta:$key", null)
+        val meta = stored?.let { metaFromJson(it) }
+        if (meta != null) metaMemory[key] = meta
+        return meta
+    }
+
+    /** The cached metadata for a search response, if resolved. */
+    fun metaCachedFor(context: Context?, response: SearchResponse): Meta? =
+        metaCached(context, response.name, yearOf(response))
+
+    private suspend fun storeMeta(context: Context, key: String, meta: Meta) {
+        if (meta.genres.isEmpty() && meta.language == null &&
+            meta.country == null
+        ) {
+            return
+        }
+        if (metaMemory.putIfAbsent(key, meta) != null) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString("meta:$key", metaToJson(meta)).apply()
+        val snapshot = synchronized(metaListeners) { metaListeners.toList() }
+        if (snapshot.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                snapshot.forEach { it(key) }
+            }
+        }
     }
 
     fun hasAnyKey(context: Context): Boolean {
@@ -137,7 +228,10 @@ object MetadataResolver {
         scope.launch {
             try {
                 semaphore.withPermit {
-                    val rating = lookup(appContext, title, year, tv)
+                    val (rating, meta) = lookup(appContext, title, year, tv)
+                    if (meta != null) {
+                        storeMeta(appContext, key, meta)
+                    }
                     if (rating != null) {
                         memory[key] = rating
                         appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -158,8 +252,11 @@ object MetadataResolver {
         }
     }
 
-    private suspend fun lookup(context: Context, title: String, year: Int?, tv: Boolean): String? {
+    private suspend fun lookup(
+        context: Context, title: String, year: Int?, tv: Boolean
+    ): Pair<String?, Meta?> {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        var meta: Meta? = null
         val tmdbKey = prefs.getString(TMDB_KEY_PREF, null)?.trim().orEmpty()
         if (tmdbKey.isNotEmpty()) {
             // Phase 8.71: providers regularly mislabel the kind (an
@@ -167,14 +264,20 @@ object MetadataResolver {
             // requested kind misses, try the other one before giving
             // up. His report: key set, yet many providers showed no
             // rating at all.
-            tmdb(tmdbKey, title, year, tv)?.let { return it }
-            tmdb(tmdbKey, title, year, !tv)?.let { return it }
+            val first = tmdb(tmdbKey, title, year, tv)
+            meta = first.second
+            if (first.first != null) return first.first to meta
+            val second = tmdb(tmdbKey, title, year, !tv)
+            if (meta == null) meta = second.second
+            if (second.first != null) return second.first to meta
         }
         val omdbKey = prefs.getString(OMDB_KEY_PREF, null)?.trim().orEmpty()
         if (omdbKey.isNotEmpty()) {
-            omdb(omdbKey, title, year)?.let { return it }
+            val omdbResult = omdb(omdbKey, title, year)
+            if (meta == null) meta = omdbResult.second
+            if (omdbResult.first != null) return omdbResult.first to meta
         }
-        return null
+        return null to meta
     }
 
     /**
@@ -245,16 +348,20 @@ object MetadataResolver {
         return a == b || a.contains(b) || b.contains(a)
     }
 
-    private suspend fun tmdb(apiKey: String, title: String, year: Int?, tv: Boolean): String? {
+    private suspend fun tmdb(
+        apiKey: String, title: String, year: Int?, tv: Boolean
+    ): Pair<String?, Meta?> {
         // Strict pass first: year-filtered search, year must agree.
-        tmdbOnce(apiKey, title, year, tv, enforceYear = true)?.let { return it }
+        val strict = tmdbOnce(apiKey, title, year, tv, enforceYear = true)
+        if (strict.first != null) return strict
         // Phase 8.71: a wrong provider year makes TMDB's own year
         // filter return zero results - retry unfiltered and accept
         // the best title match regardless of year.
         if (year != null) {
-            tmdbOnce(apiKey, title, null, tv, enforceYear = false)?.let { return it }
+            val loose = tmdbOnce(apiKey, title, null, tv, enforceYear = false)
+            return loose.first to (loose.second ?: strict.second)
         }
-        return null
+        return strict
     }
 
     private suspend fun tmdbOnce(
@@ -263,7 +370,7 @@ object MetadataResolver {
         year: Int?,
         tv: Boolean,
         enforceYear: Boolean
-    ): String? {
+    ): Pair<String?, Meta?> {
         val kind = if (tv) "tv" else "movie"
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = when {
@@ -277,8 +384,13 @@ object MetadataResolver {
             "https://api.themoviedb.org/3/search/$kind" +
                 "?$authParam" + "query=$query$yearParam",
             bearer
-        ) ?: return null
-        val results = json.optJSONArray("results") ?: return null
+        ) ?: return null to null
+        val results = json.optJSONArray("results") ?: return null to null
+        // Phase 8.88: the metadata of the first candidate that
+        // passes the title + year gates is harvested from this
+        // same response — the vote gate below only judges the
+        // rating, genre/language/country need no votes.
+        var harvested: Meta? = null
         for (i in 0 until minOf(results.length(), 5)) {
             val item = results.optJSONObject(i) ?: continue
             val candidate = item.optString(
@@ -293,33 +405,336 @@ object MetadataResolver {
             if (enforceYear && year != null && candidateYear != null &&
                 kotlin.math.abs(candidateYear - year) > 1
             ) continue
+            if (harvested == null) harvested = metaFromTmdbItem(item, tv)
             val votes = item.optInt("vote_count", 0)
             val average = item.optDouble("vote_average", 0.0)
             if (votes < 10 || average <= 0.0) continue
-            return String.format(Locale.US, "%.1f", average)
+            return String.format(Locale.US, "%.1f", average) to harvested
         }
-        return null
+        return null to harvested
     }
 
-    private suspend fun omdb(apiKey: String, title: String, year: Int?): String? {
-        omdbOnce(apiKey, title, year)?.let { return it }
+    /** Phase 8.88: genres / language / country off one TMDB
+     *  search result. genre_ids map through the standard TMDB
+     *  genre tables for the kind. */
+    private fun metaFromTmdbItem(item: JSONObject, tv: Boolean): Meta {
+        val table = if (tv) TMDB_TV_GENRES else TMDB_MOVIE_GENRES
+        val ids = item.optJSONArray("genre_ids")
+        val genres = mutableListOf<String>()
+        if (ids != null) {
+            for (i in 0 until ids.length()) {
+                table[ids.optInt(i)]?.let { genres += it }
+            }
+        }
+        val countries = item.optJSONArray("origin_country")
+        val country = if (countries != null && countries.length() > 0) {
+            countries.optString(0).ifBlank { null }
+        } else {
+            null
+        }
+        return Meta(
+            genres = genres,
+            language = item.optString("original_language")
+                .ifBlank { null }?.lowercase(Locale.US),
+            country = country?.uppercase(Locale.US)
+        )
+    }
+
+    private suspend fun omdb(
+        apiKey: String, title: String, year: Int?
+    ): Pair<String?, Meta?> {
+        val first = omdbOnce(apiKey, title, year)
+        if (first.first != null) return first
         // Phase 8.71: same wrong-year trap as TMDB - retry yearless.
-        if (year != null) omdbOnce(apiKey, title, null)?.let { return it }
-        return null
+        if (year != null) {
+            val loose = omdbOnce(apiKey, title, null)
+            return loose.first to (loose.second ?: first.second)
+        }
+        return first
     }
 
-    private suspend fun omdbOnce(apiKey: String, title: String, year: Int?): String? {
+    private suspend fun omdbOnce(
+        apiKey: String, title: String, year: Int?
+    ): Pair<String?, Meta?> {
         val query = URLEncoder.encode(title, "UTF-8")
         val yearParam = if (year != null) "&y=$year" else ""
         val json = getJson(
             "https://www.omdbapi.com/?apikey=$apiKey&t=$query$yearParam",
             null
-        ) ?: return null
-        if (json.optString("Response") != "True") return null
+        ) ?: return null to null
+        if (json.optString("Response") != "True") return null to null
         val candidate = json.optString("Title")
-        if (!titlesMatch(candidate, title)) return null
+        if (!titlesMatch(candidate, title)) return null to null
+        // Phase 8.88: the same payload carries Genre / Language /
+        // Country — harvest them alongside the rating.
+        val meta = metaFromOmdb(json)
         val rating = json.optString("imdbRating")
-        if (rating.isBlank() || rating == "N/A") return null
-        return rating
+        if (rating.isBlank() || rating == "N/A") return null to meta
+        return rating to meta
     }
+
+    /** Phase 8.88: OMDb speaks in full names ("Korean",
+     *  "South Korea", "Action, Drama") — map to the ISO codes
+     *  and genre list the category layer works with. */
+    private fun metaFromOmdb(json: JSONObject): Meta {
+        fun first(csv: String): String? =
+            csv.split(",").firstOrNull()?.trim()
+                ?.takeIf { it.isNotBlank() && it != "N/A" }
+        val genres = json.optString("Genre").split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it != "N/A" }
+        return Meta(
+            genres = genres,
+            language = first(json.optString("Language"))
+                ?.let { languageIso(it) },
+            country = first(json.optString("Country"))
+                ?.let { countryIso(it) }
+        )
+    }
+
+    // ---------- Phase 8.88: metadata-only resolution ----------
+
+    /**
+     * Resolve genres / language / country for an item the rating
+     * path may never touch (provider score present, rating
+     * already cached, or no API key configured — TVmaze and
+     * AniList need none). Same guards, same semaphore, same
+     * persistent cache as ratings; misses are session-only, like
+     * rating misses. The feed calls this in the background and
+     * re-renders its categories when [addMetaListener] fires.
+     */
+    fun resolveMeta(context: Context, response: SearchResponse) {
+        val title = SearchResultBuilder.cleanPosterTitle(response.name)
+        if (title.isBlank() || TitleResolver.isIdLike(title)) return
+        val year = yearOf(response)
+        if (metaCached(context, response.name, year) != null) return
+        val key = cacheKey(title, year)
+        synchronized(metaMisses) { if (key in metaMisses) return }
+        synchronized(metaInFlight) { if (!metaInFlight.add(key)) return }
+        val appContext = context.applicationContext
+        val tv = isTv(response)
+        val type = response.type ?: TvType.Others
+        scope.launch {
+            try {
+                semaphore.withPermit {
+                    val meta = lookupMeta(appContext, title, year, tv, type)
+                    if (meta != null) {
+                        storeMeta(appContext, key, meta)
+                    } else {
+                        synchronized(metaMisses) { metaMisses.add(key) }
+                    }
+                }
+            } catch (e: Exception) {
+                synchronized(metaMisses) { metaMisses.add(key) }
+            } finally {
+                synchronized(metaInFlight) { metaInFlight.remove(key) }
+            }
+        }
+    }
+
+    /** Source order: TMDB (key) → TVmaze (TV, keyless) →
+     *  AniList (anime, keyless) → OMDb (existing key path only).
+     *  The TMDB step reuses the rating pipeline's own search —
+     *  [tmdb] harvests the metadata from its results — so an
+     *  item costs the same search call either way. */
+    private suspend fun lookupMeta(
+        context: Context, title: String, year: Int?, tv: Boolean, type: TvType
+    ): Meta? {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val tmdbKey = prefs.getString(TMDB_KEY_PREF, null)?.trim().orEmpty()
+        if (tmdbKey.isNotEmpty()) {
+            tmdb(tmdbKey, title, year, tv).second?.let { return it }
+            tmdb(tmdbKey, title, year, !tv).second?.let { return it }
+        }
+        if (tv) {
+            tvmaze(title)?.let { return it }
+        }
+        if (type == TvType.Anime || type == TvType.OVA) {
+            anilist(title)?.let { return it }
+        }
+        val omdbKey = prefs.getString(OMDB_KEY_PREF, null)?.trim().orEmpty()
+        if (omdbKey.isNotEmpty()) {
+            omdb(omdbKey, title, year).second?.let { return it }
+        }
+        return null
+    }
+
+    /** TVmaze (no key): genres are plain names, language is a
+     *  full name, the country is already an ISO code on the
+     *  network / web channel. First title match wins, exactly
+     *  the discipline the TMDB pass uses; no match, no data. */
+    private suspend fun tvmaze(title: String): Meta? {
+        val query = URLEncoder.encode(title, "UTF-8")
+        val response = try {
+            app.get("https://api.tvmaze.com/search/shows?q=$query")
+        } catch (e: Exception) {
+            return null
+        }
+        if (response.code !in 200..299) return null
+        val results = try {
+            JSONArray(response.text)
+        } catch (e: Exception) {
+            return null
+        }
+        for (i in 0 until minOf(results.length(), 5)) {
+            val show = results.optJSONObject(i)?.optJSONObject("show")
+                ?: continue
+            if (!titlesMatch(show.optString("name"), title)) continue
+            val genreArray = show.optJSONArray("genres")
+            val genres = mutableListOf<String>()
+            if (genreArray != null) {
+                for (j in 0 until genreArray.length()) {
+                    genreArray.optString(j)
+                        .takeIf { it.isNotBlank() }?.let { genres += it }
+                }
+            }
+            val country = show.optJSONObject("network")
+                ?.optJSONObject("country")?.optString("code")
+                ?.ifBlank { null }
+                ?: show.optJSONObject("webChannel")
+                    ?.optJSONObject("country")?.optString("code")
+                    ?.ifBlank { null }
+            return Meta(
+                genres = genres,
+                language = languageIso(show.optString("language")),
+                country = country?.uppercase(Locale.US),
+                anime = genres.any { it.equals("anime", true) } ||
+                    show.optString("type").equals("Animation", true)
+            )
+        }
+        return null
+    }
+
+    /** AniList (no key): GraphQL over the same form-post shape
+     *  the app's own AniList sync provider uses. Gives genres +
+     *  country of origin; the language is derived from the
+     *  country (JP → ja, CN → zh, …). */
+    private suspend fun anilist(title: String): Meta? {
+        val query = "query (\$search: String) { Page(perPage: 5) { " +
+            "media(search: \$search, type: ANIME, sort: SEARCH_MATCH) { " +
+            "title { romaji english native } genres countryOfOrigin } } }"
+        val variables = JSONObject().put("search", title).toString()
+        val response = try {
+            app.post(
+                "https://graphql.anilist.co/",
+                data = mapOf("query" to query, "variables" to variables)
+            )
+        } catch (e: Exception) {
+            return null
+        }
+        if (response.code !in 200..299) return null
+        val media = try {
+            JSONObject(response.text).optJSONObject("data")
+                ?.optJSONObject("Page")?.optJSONArray("media")
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        for (i in 0 until media.length()) {
+            val item = media.optJSONObject(i) ?: continue
+            val titles = item.optJSONObject("title")
+            val candidates = listOf(
+                titles?.optString("english").orEmpty(),
+                titles?.optString("romaji").orEmpty(),
+                titles?.optString("native").orEmpty()
+            )
+            if (candidates.none {
+                    it.isNotBlank() && titlesMatch(it, title)
+                }
+            ) {
+                continue
+            }
+            val genreArray = item.optJSONArray("genres")
+            val genres = mutableListOf<String>()
+            if (genreArray != null) {
+                for (j in 0 until genreArray.length()) {
+                    genreArray.optString(j)
+                        .takeIf { it.isNotBlank() }?.let { genres += it }
+                }
+            }
+            val country = item.optString("countryOfOrigin")
+                .ifBlank { null }?.uppercase(Locale.US)
+            return Meta(
+                genres = genres,
+                language = languageForCountry(country),
+                country = country,
+                anime = true
+            )
+        }
+        return null
+    }
+
+    private fun languageIso(name: String): String? =
+        LANGUAGE_NAME_TO_ISO[name.trim().lowercase(Locale.US)]
+
+    private fun countryIso(name: String): String? =
+        COUNTRY_NAME_TO_ISO[name.trim().lowercase(Locale.US)]
+
+    private fun languageForCountry(country: String?): String? =
+        when (country) {
+            "JP" -> "ja"
+            "CN", "TW", "HK" -> "zh"
+            "KR" -> "ko"
+            else -> null
+        }
+
+    private val TMDB_MOVIE_GENRES: Map<Int, String> = mapOf(
+        28 to "Action", 12 to "Adventure", 16 to "Animation",
+        35 to "Comedy", 80 to "Crime", 99 to "Documentary",
+        18 to "Drama", 10751 to "Family", 14 to "Fantasy",
+        36 to "History", 27 to "Horror", 10402 to "Music",
+        9648 to "Mystery", 10749 to "Romance",
+        878 to "Science Fiction", 10770 to "TV Movie",
+        53 to "Thriller", 10752 to "War", 37 to "Western"
+    )
+
+    private val TMDB_TV_GENRES: Map<Int, String> = mapOf(
+        10759 to "Action & Adventure", 16 to "Animation",
+        35 to "Comedy", 80 to "Crime", 99 to "Documentary",
+        18 to "Drama", 10751 to "Family", 10762 to "Kids",
+        9648 to "Mystery", 10763 to "News", 10764 to "Reality",
+        10765 to "Sci-Fi & Fantasy", 10766 to "Soap",
+        10767 to "Talk", 10768 to "War & Politics", 37 to "Western"
+    )
+
+    /** Full-name → ISO 639-1, for TVmaze / OMDb language fields. */
+    private val LANGUAGE_NAME_TO_ISO: Map<String, String> = mapOf(
+        "english" to "en", "korean" to "ko", "japanese" to "ja",
+        "chinese" to "zh", "mandarin" to "zh", "cantonese" to "zh",
+        "hindi" to "hi", "thai" to "th", "turkish" to "tr",
+        "spanish" to "es", "castilian" to "es", "french" to "fr",
+        "german" to "de", "italian" to "it", "portuguese" to "pt",
+        "russian" to "ru", "arabic" to "ar", "bengali" to "bn",
+        "bangla" to "bn", "tamil" to "ta", "telugu" to "te",
+        "malayalam" to "ml", "kannada" to "kn", "punjabi" to "pa",
+        "marathi" to "mr", "urdu" to "ur", "indonesian" to "id",
+        "malay" to "ms", "vietnamese" to "vi", "filipino" to "tl",
+        "tagalog" to "tl", "dutch" to "nl", "swedish" to "sv",
+        "danish" to "da", "norwegian" to "no", "finnish" to "fi",
+        "polish" to "pl", "ukrainian" to "uk", "greek" to "el",
+        "hebrew" to "he", "persian" to "fa", "hungarian" to "hu",
+        "czech" to "cs", "romanian" to "ro"
+    )
+
+    /** Full-name → ISO 3166-1, for OMDb country fields. */
+    private val COUNTRY_NAME_TO_ISO: Map<String, String> = mapOf(
+        "united states" to "US", "united states of america" to "US",
+        "usa" to "US", "united kingdom" to "GB", "uk" to "GB",
+        "south korea" to "KR", "korea" to "KR", "japan" to "JP",
+        "china" to "CN", "india" to "IN", "thailand" to "TH",
+        "turkey" to "TR", "türkiye" to "TR", "taiwan" to "TW",
+        "hong kong" to "HK", "france" to "FR", "germany" to "DE",
+        "spain" to "ES", "italy" to "IT", "canada" to "CA",
+        "australia" to "AU", "philippines" to "PH",
+        "indonesia" to "ID", "vietnam" to "VN", "russia" to "RU",
+        "brazil" to "BR", "mexico" to "MX", "netherlands" to "NL",
+        "sweden" to "SE", "denmark" to "DK", "norway" to "NO",
+        "finland" to "FI", "poland" to "PL", "ukraine" to "UA",
+        "pakistan" to "PK", "bangladesh" to "BD", "malaysia" to "MY",
+        "singapore" to "SG", "new zealand" to "NZ",
+        "ireland" to "IE", "egypt" to "EG", "nigeria" to "NG",
+        "south africa" to "ZA", "argentina" to "AR", "chile" to "CL",
+        "colombia" to "CO", "peru" to "PE", "greece" to "GR",
+        "portugal" to "PT", "belgium" to "BE", "austria" to "AT",
+        "switzerland" to "CH", "israel" to "IL", "iran" to "IR"
+    )
 }

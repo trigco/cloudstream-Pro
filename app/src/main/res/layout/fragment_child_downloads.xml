@@ -93,7 +93,7 @@
         android:paddingStart="10dp"
         android:paddingTop="10dp"
         android:paddingEnd="10dp"
-        android:paddingBottom="100dp"
+        android:paddingBottom="92dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
         tools:listitem="@layout/download_child_episode" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

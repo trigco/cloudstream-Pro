@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -30,7 +31,9 @@
             android:id="@+id/nuvio_add_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/nuvio_add_repo" />
+            android:text="@string/nuvio_add_repo"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/extButtonBackground" />
     </LinearLayout>
 
     <TextView
@@ -43,17 +46,22 @@
         android:textSize="12sp"
         android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/nuvio_empty"
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/nuvio_tabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="24dp"
-        android:text="@string/nuvio_plugins_empty"
-        android:textAppearance="?attr/textAppearanceBody2"
-        android:visibility="gone" />
+        android:background="@color/primaryBlackBackground"
+        app:tabGravity="fill"
+        app:tabIndicatorColor="@color/colorPrimaryRed"
+        app:tabIndicatorFullWidth="false"
+        app:tabIndicatorHeight="3dp"
+        app:tabMode="fixed"
+        app:tabRippleColor="@color/extRippleLight"
+        app:tabSelectedTextColor="@color/white"
+        app:tabTextColor="@color/extTabUnselected" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/nuvio_recycler"
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/nuvio_pager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />

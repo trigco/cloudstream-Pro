@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.ui.settings.stremio
 
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
@@ -20,7 +21,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.stremio.AddonRepository
 import com.lagradost.cloudstream3.stremio.StoredAddon
@@ -42,8 +46,10 @@ import kotlinx.coroutines.launch
 class StremioAddonsFragment : Fragment() {
 
     private lateinit var adapter: StremioAddonAdapter
-    private lateinit var recycler: RecyclerView
-    private lateinit var emptyView: TextView
+    // 8.81: two tabs — Installed (page 0) and Discover (page 1,
+    // selected by default, as the user praised in the reference).
+    private var installedEmpty: TextView? = null
+    private var quickInstallButton: MaterialButton? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -69,8 +75,6 @@ class StremioAddonsFragment : Fragment() {
         view.findViewById<MaterialButton>(R.id.stremio_add_button).setOnClickListener {
             showAddDialog()
         }
-        recycler = view.findViewById(R.id.stremio_recycler)
-        emptyView = view.findViewById(R.id.stremio_empty)
         adapter = StremioAddonAdapter(
             onToggle = { addon, enabled ->
                 AddonRepository.setEnabled(requireContext(), addon.manifestUrl, enabled)
@@ -79,8 +83,59 @@ class StremioAddonsFragment : Fragment() {
             },
             onRemove = { addon -> confirmRemove(addon) },
         )
-        recycler.layoutManager = LinearLayoutManager(requireContext())
-        recycler.adapter = adapter
+        val pager = view.findViewById<ViewPager2>(R.id.stremio_pager)
+        val tabs = view.findViewById<TabLayout>(R.id.stremio_tabs)
+        pager.offscreenPageLimit = 1
+        pager.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = 2
+
+            override fun getItemViewType(position: Int): Int = position
+
+            override fun onCreateViewHolder(
+                parent: ViewGroup,
+                viewType: Int,
+            ): RecyclerView.ViewHolder {
+                val layout = if (viewType == 0) {
+                    R.layout.tab_page_list
+                } else {
+                    R.layout.fragment_stremio_discover
+                }
+                val page = LayoutInflater.from(parent.context)
+                    .inflate(layout, parent, false)
+                page.layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                return object : RecyclerView.ViewHolder(page) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                if (position == 0) {
+                    val list = holder.itemView.findViewById<RecyclerView>(R.id.tab_recycler)
+                    val empty = holder.itemView.findViewById<TextView>(R.id.tab_empty)
+                    list.layoutManager = LinearLayoutManager(holder.itemView.context)
+                    list.adapter = adapter
+                    empty.setText(R.string.stremio_addons_empty)
+                    installedEmpty = empty
+                } else {
+                    holder.itemView.findViewById<MaterialButton>(
+                        R.id.stremio_discover_add_button
+                    ).setOnClickListener { showAddDialog() }
+                    quickInstallButton = holder.itemView.findViewById(
+                        R.id.stremio_quick_install_button
+                    )
+                }
+                refresh()
+            }
+        }
+        TabLayoutMediator(tabs, pager) { tab, position ->
+            tab.setText(
+                if (position == 0) R.string.stremio_tab_installed
+                else R.string.stremio_tab_discover
+            )
+        }.attach()
+        // The reference opens on Discover; the user praised that.
+        pager.setCurrentItem(1, false)
         // Reconcile registrations on open (covers Family Mode toggles
         // made since the last sync).
         StremioProviders.sync(requireContext())
@@ -91,17 +146,52 @@ class StremioAddonsFragment : Fragment() {
         if (!::adapter.isInitialized) return
         val addons = AddonRepository.getAddons(requireContext())
         adapter.submit(addons)
-        // The empty-state hint doubles as an explainer while the only
-        // row is the built-in one; the list itself always stays visible
-        // so Cinemeta can be toggled too.
-        emptyView.visibility =
-            if (addons.any { !it.builtIn }) View.GONE else View.VISIBLE
+        // 8.82: the empty text shows ONLY when the list is truly
+        // empty. The 8.81 rule (visible while only the built-in row
+        // exists) overlaid the text on top of the Cinemeta row —
+        // the overlap the user reported on this page.
+        installedEmpty?.visibility =
+            if (addons.isEmpty()) View.VISIBLE else View.GONE
+        updateQuickInstall(addons)
+    }
+
+    /** Discover tab: the Cinemeta quick-install card's state. */
+    private fun updateQuickInstall(addons: List<StoredAddon>) {
+        val button = quickInstallButton ?: return
+        val cinemeta = addons.firstOrNull {
+            it.manifestUrl == AddonRepository.CINEMETA_URL
+        }
+        when {
+            cinemeta == null -> {
+                button.setText(R.string.stremio_quick_install)
+                button.isEnabled = true
+                button.setOnClickListener {
+                    installAddon(AddonRepository.CINEMETA_URL)
+                }
+            }
+            !cinemeta.enabled -> {
+                button.setText(R.string.stremio_quick_enable)
+                button.isEnabled = true
+                button.setOnClickListener {
+                    AddonRepository.setEnabled(
+                        requireContext(), AddonRepository.CINEMETA_URL, true
+                    )
+                    StremioProviders.sync(requireContext())
+                    refresh()
+                }
+            }
+            else -> {
+                button.setText(R.string.stremio_quick_installed)
+                button.isEnabled = false
+                button.setOnClickListener(null)
+            }
+        }
     }
 
     private fun confirmRemove(addon: StoredAddon) {
         val name = addon.manifest()?.name
             ?: StremioAddonProvider.hostLabel(addon.manifestUrl)
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.AlertDialogCustom)
             .setTitle(R.string.stremio_addon_remove_title)
             .setMessage(getString(R.string.stremio_addon_remove_message, name))
             .setPositiveButton(R.string.delete) { _, _ ->
@@ -119,13 +209,17 @@ class StremioAddonsFragment : Fragment() {
             hint = getString(R.string.stremio_addon_url_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
+            // 8.82: readable on the dark dialog surface.
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(158, 158, 158))
         }
         val container = FrameLayout(context).apply {
-            val pad = (20 * resources.displayMetrics.density).toInt()
+            // 8.89: dialog content padding standard is 24dp sides.
+            val pad = (24 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
             addView(input)
         }
-        AlertDialog.Builder(context)
+        AlertDialog.Builder(context, R.style.AlertDialogCustom)
             .setTitle(R.string.stremio_add_addon)
             .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ ->

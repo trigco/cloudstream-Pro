@@ -22,58 +22,203 @@
         app:shimmer_highlight_alpha="0.3"
         tools:visibility="gone">
 
+        <!-- Phase 8.98: the loading skeleton mirrors the 8.86
+             page structure (until now it was the upstream
+             poster + lines + episode rows, which reads as
+             "only the episodes shimmer"): 280dp backdrop
+             block, the poster/title header at the page's -28dp
+             overlap, Play + Download pill placeholders, a
+             synopsis block, cast circles, and — series variant
+             only — season chips over the existing episode row
+             skeletons. The episode section is
+             result_loading_episodes; ResultFragmentPhone hides
+             it when the pre-load type hint says movie. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="@dimen/result_padding"
             android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="280dp"
+                android:background="@color/grayShimmer" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_marginBottom="@dimen/loading_margin"
-                android:orientation="horizontal">
-
-                <include layout="@layout/loading_poster" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="-28dp"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/result_padding"
+                android:paddingEnd="@dimen/result_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_marginStart="@dimen/loading_margin"
-                    android:layout_marginEnd="@dimen/loading_margin"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:orientation="horizontal">
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="92dp"
+                        android:layout_height="138dp"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="@dimen/rounded_image_radius" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <include layout="@layout/loading_line" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:layout_marginBottom="6dp"
+                            android:orientation="horizontal">
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="76dp"
+                                android:layout_height="26dp"
+                                android:background="@color/grayShimmer"
+                                app:cardCornerRadius="13dp" />
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="56dp"
+                                android:layout_height="26dp"
+                                android:layout_marginStart="8dp"
+                                android:background="@color/grayShimmer"
+                                app:cardCornerRadius="13dp" />
+                        </LinearLayout>
+
+                        <include layout="@layout/loading_line_short" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="26dp" />
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:background="@color/grayShimmer"
+                        app:cardCornerRadius="26dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
                     android:orientation="vertical">
 
-                    <include layout="@layout/loading_line" />
+                    <include layout="@layout/loading_line_short" />
 
                     <include layout="@layout/loading_line" />
 
                     <include layout="@layout/loading_line" />
 
                     <include layout="@layout/loading_line" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="vertical">
 
                     <include layout="@layout/loading_line_short" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="28dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/result_loading_episodes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="8dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="8dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+
+                        <androidx.cardview.widget.CardView
+                            android:layout_width="72dp"
+                            android:layout_height="32dp"
+                            android:background="@color/grayShimmer"
+                            app:cardCornerRadius="16dp" />
+                    </LinearLayout>
+
+                    <include layout="@layout/loading_episode" />
+
+                    <include layout="@layout/loading_episode" />
+
+                    <include layout="@layout/loading_episode" />
                 </LinearLayout>
             </LinearLayout>
-
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="20dp"
-                tools:ignore="ContentDescription" />
-
-            <include layout="@layout/loading_episode" />
-
-            <include layout="@layout/loading_episode" />
-
-            <include layout="@layout/loading_episode" />
         </LinearLayout>
     </com.facebook.shimmer.ShimmerFrameLayout>
-    <!--<ProgressBar
-            android:visibility="visible"
-            tools:visibility="gone"
-            android:id="@+id/result_loading"
-            android:layout_gravity="center"
-            android:layout_width="50dp" android:layout_height="50dp">
-    </ProgressBar>-->
+
     <LinearLayout
         android:id="@+id/result_loading_error"
 
@@ -136,209 +281,22 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="?attr/primaryBlackBackground"
                 android:orientation="vertical">
 
-                <!--
-                <com.facebook.shimmer.ShimmerFrameLayout
-                    android:id="@+id/result_trailer_loading"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:orientation="vertical"
-                    android:visibility="gone"
-                    app:shimmer_auto_start="true"
-                    app:shimmer_base_alpha="0.2"
-                    app:shimmer_duration="@integer/loading_time"
-                    app:shimmer_highlight_alpha="0.3"
-                    tools:visibility="gone">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_margin="@dimen/result_padding"
-                        android:orientation="vertical">
-
-                        <androidx.cardview.widget.CardView
-                            android:layout_width="match_parent"
-                            android:layout_height="150dp"
-                            android:background="@color/grayShimmer"
-                            android:foreground="@drawable/outline_drawable"
-                            app:cardCornerRadius="@dimen/loading_radius" />
-                    </LinearLayout>
-                </com.facebook.shimmer.ShimmerFrameLayout>
--->
-
-
-                <!--
-                <FrameLayout
-                        android:background="?attr/primaryGrayBackground"
-                        android:paddingStart="@dimen/result_padding"
-                        android:paddingEnd="@dimen/result_padding"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content">
-
-                    <ImageView
-                            android:nextFocusDown="@id/result_bookmark_button"
-                            android:nextFocusRight="@id/result_share"
-                            android:background="?android:attr/selectableItemBackgroundBorderless"
-
-                            android:id="@+id/result_back"
-                            android:clickable="true"
-                            android:focusable="true"
-
-                            android:layout_width="30dp"
-                            android:layout_height="30dp"
-                            android:layout_gravity="center_vertical|start"
-                            android:src="@drawable/ic_baseline_arrow_back_24"
-                            android:contentDescription="@string/go_back"
-                            app:tint="?attr/white" />
-
-                    <LinearLayout
-                            android:gravity="end"
-                            android:layout_width="match_parent"
-                            android:layout_height="50dp"
-                            android:id="@+id/media_route_button_holder"
-                            android:layout_gravity="center_vertical|end">
-
-                        <androidx.mediarouter.app.MediaRouteButton
-                                android:layout_gravity="end|center_vertical"
-                                android:id="@+id/media_route_button"
-                                android:layout_width="50dp"
-                                android:layout_height="50dp"
-                                android:mediaRouteTypes="user"
-                                android:visibility="gone"
-                                app:mediaRouteButtonTint="?attr/textColor" />
-
-
-                        <ImageView
-                                android:nextFocusUp="@id/result_back"
-                                android:nextFocusDown="@id/result_descript"
-                                android:nextFocusLeft="@id/result_add_sync"
-                                android:nextFocusRight="@id/result_openinbrower"
-
-                                android:id="@+id/result_share"
-                                android:layout_width="25dp"
-                                android:layout_height="25dp"
-                                android:layout_marginEnd="10dp"
-                                android:elevation="10dp"
-
-                                android:background="?android:attr/selectableItemBackgroundBorderless"
-                                android:src="@drawable/ic_outline_share_24"
-                                android:layout_gravity="end|center_vertical"
-                                android:contentDescription="@string/result_share"
-                                app:tint="?attr/textColor" />
-
-                        <ImageView
-                                android:nextFocusUp="@id/result_back"
-                                android:nextFocusDown="@id/result_descript"
-                                android:nextFocusLeft="@id/result_share"
-                                android:nextFocusRight="@id/result_search"
-
-                                android:id="@+id/result_openinbrower"
-                                android:layout_width="25dp"
-                                android:layout_height="25dp"
-                                android:layout_margin="5dp"
-                                android:elevation="10dp"
-
-                                android:background="?android:attr/selectableItemBackgroundBorderless"
-                                android:src="@drawable/ic_baseline_public_24"
-                                android:layout_gravity="end|center_vertical"
-                                android:contentDescription="@string/result_open_in_browser"
-                                app:tint="?attr/textColor" />
-
-                        <ImageView
-                                android:nextFocusUp="@id/result_back"
-                                android:nextFocusDown="@id/result_descript"
-                                android:nextFocusLeft="@id/result_openinbrower"
-                                android:nextFocusRight="@id/result_bookmark_button"
-
-                                android:id="@+id/result_search"
-                                android:layout_width="30dp"
-                                android:layout_height="30dp"
-                                android:layout_margin="5dp"
-                                android:elevation="10dp"
-
-                                android:background="?android:attr/selectableItemBackgroundBorderless"
-                                android:src="@drawable/search_icon"
-                                android:layout_gravity="end|center_vertical"
-                                android:contentDescription="@string/result_open_in_browser"
-                                app:tint="?attr/textColor" />
-                    </LinearLayout>
-                </FrameLayout>-->
-                <!-- Phase 7: backdrop as a floating rounded card (inset margins,
-                     clipped corners) instead of full-bleed edge-to-edge. The card
-                     scrolls with the page; the floating circle buttons in
-                     fragment_result_swipe.xml overlay its top corners.
-                     Phase 7.5 FIX-3: the card now sits in a plain wrapper that
-                     carries the margins and also holds the corner mask below.
-                     The mask must be a SIBLING of the card, not a child: the
-                     holder's own outline clip (clipToOutline) clips its
-                     children to the rounded outline, so a child mask could
-                     never paint the corner squares it exists to cover. The
-                     trailer's TextureView escapes that clip on older GPUs,
-                     which is why the trailer showed square corners while the
-                     static backdrop clipped fine.
-                     Phase 8.5B: the margins moved one level up into
-                     result_top_card_wrap (clipChildren=false), and the mask
-                     moved out of the frame into the wrap with -12dp margins,
-                     so its bounds extend 12dp past the card on every side.
-                     On device, backdrop pixels were escaping the holder's
-                     clip in the ~6dp zone just outside the top corners
-                     (small "ears" floating above the card) — outside the
-                     old frame-bounds mask's reach. The enlarged mask paints
-                     page colour over the whole exterior corner zone; see
-                     bg_details_corner_mask.xml for the new geometry.
-                     Phase 8.6: that geometry REGRESSED the inside edge —
-                     on device the mask painted a ~21.5dp black frame
-                     INSIDE the card's straight edges (AMOLED Jailer 2
-                     screenshot, pixel-measured: image inset 43px per
-                     side vs the Phase 8 build's 18px). Cause, measured:
-                     the -12dp margins on the match_parent mask view
-                     delivered only ~3dp of real outset on device, so
-                     the 24dp stroke reached ~21dp inside the card.
-                     Fix: the outset is no longer entrusted to negative
-                     margins on the mask. The FRAME now carries a plain
-                     POSITIVE layout_margin of 20dp inside the wrap, so
-                     the wrap (and the mask, a match_parent child of the
-                     wrap with no margins of its own) is the card rect
-                     outset by a guaranteed 20dp on every side. The
-                     wrap's own margins are the arithmetic compensation
-                     (15dp page inset − 20dp = −5dp sides, 16dp top −
-                     20dp = −4dp top, −20dp bottom), so the card lands
-                     at exactly its old position (15dp sides / 16dp top)
-                     and the wrap's flow footprint is unchanged; even if
-                     a compensation margin under-delivers, only the
-                     whole header shifts a few dp — the card/mask
-                     relationship cannot break. See
-                     bg_details_corner_mask.xml for the re-derived
-                     stroke geometry (radius 44dp / stroke 20dp: inner
-                     edge exactly on the card's 24dp arc, ZERO paint
-                     inside the card's straight edges). -->
-                <FrameLayout
-                    android:id="@+id/result_top_card_wrap"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="-5dp"
-                    android:layout_marginTop="-4dp"
-                    android:layout_marginEnd="-5dp"
-                    android:layout_marginBottom="-20dp"
-                    android:clipChildren="false"
-                    android:clipToPadding="false">
-
-                <FrameLayout
-                    android:id="@+id/result_top_card_frame"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="20dp">
-
+                <!-- Phase 8.86: full-bleed backdrop, SkyStream-style. The
+                     Phase 7-8.6 rounded-card + corner-mask construction is
+                     gone (its three wrapper/mask ids were never referenced
+                     from Kotlin): the backdrop now spans the full width at
+                     280dp and fades into the page background at its bottom
+                     edge via bg_result_fade inside the poster holder. The
+                     trailer (result_smallscreen_holder) keeps living in
+                     the same holder, above the poster holder. -->
                 <FrameLayout
                     android:id="@+id/result_top_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="200dp"
-                    android:background="@drawable/bg_details_backdrop"
-                    android:clipToOutline="true"
-                    android:elevation="6dp">
+                    android:layout_height="280dp"
+                    android:background="@color/black"
+                    android:clipToOutline="true">
 
                     <FrameLayout
                         android:id="@+id/result_smallscreen_holder"
@@ -362,11 +320,12 @@
                             android:layout_height="match_parent"
                             android:scaleType="centerCrop" />
 
+                        <!-- Bottom fade into the page background. -->
                         <View
                             android:layout_width="match_parent"
-                            android:layout_height="60dp"
+                            android:layout_height="120dp"
                             android:layout_gravity="bottom"
-                            android:background="@drawable/background_shadow" />
+                            android:background="@drawable/bg_result_fade" />
 
                         <ImageView
                             android:id="@+id/background_poster_watermark_badge"
@@ -376,7 +335,7 @@
                             android:maxHeight="64dp"
                             android:layout_gravity="bottom|start"
                             android:layout_marginStart="@dimen/result_padding"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="34dp"
                             android:paddingBottom="4dp"
                             android:adjustViewBounds="true"
                             android:scaleType="fitStart"
@@ -384,100 +343,72 @@
 
                     </FrameLayout>
                 </FrameLayout>
-                </FrameLayout>
 
-                <!-- Phase 7.5 FIX-3: corner mask. Paints the page background
-                     over the four corner squares outside the card's 24dp
-                     rounded corner so the trailer's un-clippable TextureView
-                     surface reads as rounded. Overlays the whole card but
-                     paints nothing inside the corner arc, so the backdrop,
-                     watermark and trailer intro overlay are untouched. It
-                     deliberately never consumes touches: the trailer's
-                     center play button and the poster stay interactive.
-                     Phase 8B: the mask needs elevation ABOVE the holder's
-                     6dp. ViewGroup draws siblings in Z order, so at 0dp the
-                     mask composited UNDER the holder subtree — the trailer
-                     surface painted straight over it and the corners stayed
-                     square in the trailer states (the backdrop state never
-                     noticed: the holder's own clip handled it). 8dp puts
-                     the mask back on top; outlineProvider="none" keeps it
-                     from casting a rectangular shadow of its own.
-                     Phase 8.5B: the mask now lives in result_top_card_wrap
-                     (not the frame) with -12dp margins on all sides, so its
-                     bounds extend 12dp past the card and its paint covers
-                     the exterior corner zone too — that is where the
-                     on-device "ears" sat (poster pixels escaping the
-                     holder's outline clip just outside the top corners,
-                     beyond the old frame-bounds mask). It still paints
-                     nothing inside the card's 24dp arc, so the backdrop,
-                     watermark and trailer overlay stay untouched, and it
-                     still never consumes touches.
-                     Phase 8.6: the -12dp margins are GONE — measured on
-                     device they delivered only ~3dp of outset, letting
-                     the old 24dp stroke paint ~21.5dp inside the card's
-                     straight edges (the black frame the user reported).
-                     The mask is now a plain match_parent child of the
-                     wrap; its 20dp outset from the card comes from the
-                     frame's +20dp positive margin inside the wrap, and
-                     the drawable was re-derived for that outset (radius
-                     44dp, stroke 20dp — inner edge exactly on the card's
-                     24dp arc, paint strictly outside the card's straight
-                     edges, exterior ear zone still covered). -->
-                <View
-                    android:id="@+id/result_top_corner_mask"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_details_corner_mask"
-                    android:elevation="8dp"
-                    android:outlineProvider="none"
-                    android:clickable="false"
-                    android:focusable="false"
-                    android:importantForAccessibility="no" />
-                </FrameLayout>
-
+                <!-- The -28dp top margin pulls the content column up over
+                     the backdrop's fade zone, so the poster overlaps the
+                     backdrop's bottom edge SkyStream-style. This column is
+                     transparent; the page colour comes from result_root. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:layout_marginTop="-28dp"
                     android:clipToPadding="false"
                     android:orientation="vertical"
                     android:paddingStart="@dimen/result_padding"
                     android:paddingEnd="@dimen/result_padding">
 
-
-                    <!-- Phase 7: was a horizontal row (poster beside text); now a
-                         vertical stack so the title and meta line can be centered
-                         full-width directly under the backdrop card. The poster
-                         holder stays (gone on phone) to preserve its binding. -->
+                    <!-- Phase 8.86 header: poster left (visible again on
+                         phone), title + meta chips + meta line right. -->
                     <LinearLayout
+                        android:id="@+id/result_header_row"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
-                        android:layout_marginBottom="15dp"
-                        android:orientation="vertical"
-                        android:visibility="visible">
-
+                        android:layout_marginBottom="14dp"
+                        android:orientation="horizontal">
 
                         <androidx.cardview.widget.CardView
                             android:id="@+id/result_poster_holder"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:visibility="gone"
+                            android:layout_width="92dp"
+                            android:layout_height="138dp"
                             app:cardCornerRadius="@dimen/rounded_image_radius">
 
                             <ImageView
                                 android:id="@+id/result_poster"
-                                android:layout_width="100dp"
-                                android:layout_height="140dp"
-                                android:layout_gravity="bottom"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
                                 android:contentDescription="@string/result_poster_img_des"
                                 android:foreground="@drawable/outline_drawable"
                                 android:scaleType="centerCrop"
                                 tools:src="@drawable/example_poster" />
+
+                            <!-- Status badge: only the coming-soon flag
+                                 drives it (set from ResultFragmentPhone);
+                                 no other status signal exists in the
+                                 data, so it stays gone otherwise. -->
+                            <TextView
+                                android:id="@+id/result_poster_badge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="bottom|start"
+                                android:layout_margin="5dp"
+                                android:background="@drawable/bg_result_poster_badge"
+                                android:paddingStart="6dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="6dp"
+                                android:paddingBottom="3dp"
+                                android:textColor="@color/white"
+                                android:textSize="10sp"
+                                android:textStyle="bold"
+                                android:visibility="gone"
+                                tools:text="Coming soon"
+                                tools:visibility="visible" />
                         </androidx.cardview.widget.CardView>
 
                         <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
                             android:orientation="vertical">
 
                             <TextView
@@ -488,122 +419,425 @@
                                 android:gravity="start"
                                 android:maxLines="2"
                                 android:textColor="?attr/textColor"
-                                android:textSize="20sp"
+                                android:textSize="22sp"
                                 android:textStyle="bold"
                                 tools:text="The Perfect Run The Perfect Run" />
 
-                            <!-- Phase 7: wrap_content + center_horizontal centers the
-                                 provider/type/year meta line under the title
-                                 (FlowLayout itself packs children from the left). -->
-                            <com.lagradost.cloudstream3.widget.FlowLayout
-                                android:layout_width="wrap_content"
+                            <!-- Meta row 1: provider chip, type chip,
+                                 content-rating chip, year. Each view hides
+                                 itself via setText(null) when its data is
+                                 absent, exactly as before. -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_gravity="start"
-                                app:itemSpacing="10dp">
+                                android:layout_marginTop="5dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/result_meta_site"
                                     style="@style/SmallBlackButton"
+                                    android:layout_height="26dp"
                                     android:layout_gravity="center_vertical"
+                                    app:icon="@drawable/ic_sky_plugin_placeholder"
+                                    app:iconPadding="5dp"
+                                    app:iconSize="14dp"
+                                    app:iconTint="@color/white"
                                     tools:text="Gogoanime" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_meta_content_rating"
-                                    style="@style/SmallBlackButton"
-                                    android:layout_gravity="center_vertical"
-                                    tools:text="PG-13" />
 
                                 <TextView
                                     android:id="@+id/result_meta_type"
                                     style="@style/ResultInfoText"
+                                    android:layout_height="26dp"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_result_type_chip"
+                                    android:paddingStart="10dp"
+                                    android:paddingEnd="10dp"
+                                    android:textAllCaps="true"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold"
                                     tools:text="Movie" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/result_meta_content_rating"
+                                    style="@style/SmallBlackButton"
+                                    android:layout_height="26dp"
+                                    android:layout_gravity="center_vertical"
+                                    android:layout_marginStart="8dp"
+                                    tools:text="PG-13" />
 
                                 <TextView
                                     android:id="@+id/result_meta_year"
                                     style="@style/ResultInfoText"
+                                    android:layout_marginStart="10dp"
+                                    android:drawableStart="@drawable/ic_result_calendar"
+                                    android:drawablePadding="5dp"
+                                    android:drawableTint="@color/iconColor"
+                                    android:textSize="13sp"
                                     tools:text="2022" />
+                            </LinearLayout>
 
-                                <TextView
-                                    android:id="@+id/result_meta_rating"
-                                    style="@style/ResultInfoText"
-                                    tools:text="Rated: 8.5/10.0" />
-
-                                <TextView
-                                    android:id="@+id/result_meta_status"
-                                    style="@style/ResultInfoText"
-                                    tools:text="Ongoing" />
+                            <!-- Meta row 2: duration, rating, show status —
+                                 each only when the data exists. -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="9dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
                                 <TextView
                                     android:id="@+id/result_meta_duration"
                                     style="@style/ResultInfoText"
+                                    android:drawableStart="@drawable/ic_baseline_clock_24"
+                                    android:drawablePadding="5dp"
+                                    android:drawableTint="@color/iconColor"
+                                    android:textColor="?attr/grayTextColor"
+                                    android:textSize="13sp"
                                     tools:text="121min" />
-                            </com.lagradost.cloudstream3.widget.FlowLayout>
-
-                            
-
-                            <!--
-                            This has half margin and half padding to make TV focus on description look better.
-                            The focus outline now settles between the poster and text.
-                            Phase 7 (phone layout only): the block is now a rounded
-                            card with internal padding.
-                            -->
-                            <FrameLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:background="@drawable/bg_details_card"
-                                android:padding="16dp">
 
                                 <TextView
-                                    android:id="@+id/result_description"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:ellipsize="end"
-                                    android:foreground="@drawable/outline_drawable"
-                                    android:justificationMode="inter_word"
-                                    android:maxLines="5"
-                                    android:nextFocusUp="@id/result_back"
-                                    android:nextFocusDown="@id/result_bookmark_Button"
-                                    android:paddingTop="5dp"
-                                    android:textColor="?attr/textColor"
-                                    android:textSize="15sp"
-                                    tools:text="Ryan Quicksave Romano is an eccentric adventurer with a strange power: he can create a save-point in time and redo his life whenever he dies. Arriving in New Rome, the glitzy capital of sin of a rebuilding Europe, he finds the city torn between mega-corporations, sponsored heroes, superpowered criminals, and true monsters. It's a time of chaos, where potions can grant the power to rule the world and dangers lurk everywhere. " />
+                                    android:id="@+id/result_meta_rating"
+                                    style="@style/ResultInfoText"
+                                    android:layout_marginStart="14dp"
+                                    android:drawableStart="@drawable/ic_baseline_star_24"
+                                    android:drawablePadding="4dp"
+                                    android:drawableTint="@color/ratingStarGold"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold"
+                                    tools:text="Rated: 8.5" />
 
-                                <ImageView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="30dp"
-                                    android:layout_gravity="bottom"
-                                    android:src="@drawable/background_shadow"
-                                    android:visibility="gone"
-                                    tools:ignore="ContentDescription" />
-                            </FrameLayout>
+                                <TextView
+                                    android:id="@+id/result_meta_status"
+                                    style="@style/ResultInfoText"
+                                    android:layout_marginStart="14dp"
+                                    android:textColor="?attr/grayTextColor"
+                                    android:textSize="13sp"
+                                    tools:text="Ongoing" />
+                            </LinearLayout>
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!--
-                                        <com.google.android.material.button.MaterialButton
-                                                android:id="@+id/result_bookmark_button"
-                                                style="@style/BlackButton"
-                                                android:layout_width="wrap_content"
-                                                android:layout_gravity="center_vertical"
-                                                android:layout_marginStart="0dp"
-                                                android:layout_marginTop="0dp"
+                    <TextView
+                        android:id="@+id/result_vpn"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="?attr/grayTextColor"
+                        android:textSize="15sp"
+                        tools:text="@string/vpn_torrent" />
 
-                                                android:layout_marginBottom="10dp"
-                                                android:backgroundTint="?attr/primaryBlackBackground"
+                    <TextView
+                        android:id="@+id/result_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:textColor="?attr/grayTextColor"
+                        android:textSize="15sp"
+                        tools:text="@string/provider_info_meta" />
 
-                                                android:minWidth="100dp"
-                                                android:nextFocusLeft="@id/result_back"
-                                                android:nextFocusRight="@id/result_search"
-                                                android:nextFocusUp="@id/result_description"
+                    <TextView
+                        android:id="@+id/result_no_episodes"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:textColor="?attr/grayTextColor"
+                        android:textSize="15sp"
+                        tools:text="@string/no_episodes_found" />
 
-                                                android:nextFocusDown="@id/result_cast_items"
-                                                android:paddingTop="0dp"
-                                                app:cornerRadius="4dp"
-                                                app:icon="@drawable/ic_baseline_bookmark_24"
-                                                tools:text="Bookmark"
-                                                tools:visibility="visible" />
-                    -->
+                    <TextView
+                        android:id="@+id/result_coming_soon"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:paddingTop="20dp"
+                        android:paddingBottom="20dp"
+                        android:text="@string/coming_soon"
+                        android:textColor="?attr/textColor"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <!-- Phase 8.86: the play cluster moved up directly
+                         under the header (was inside result_data_holder,
+                         below the cast). ResultFragmentPhone hides this
+                         whole wrapper for coming-soon titles, mirroring
+                         the existing result_data_holder rule. -->
+                    <LinearLayout
+                        android:id="@+id/result_play_area"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
+
+                        <!-- Phase 8.99e: marginBottom gives the pill column a
+                             consistent 10dp separation in every state — with a
+                             resume, this holder sits directly above the
+                             full-width Download pill and they used to touch. -->
+                        <FrameLayout
+                            android:id="@+id/result_resume_progress_holder"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="10dp"
+                            android:visibility="gone"
+                            tools:visibility="visible">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_resume_series_button"
+                                style="@style/WhiteButton"
+                                android:layout_width="match_parent"
+                                android:layout_height="52dp"
+                                android:layout_margin="0dp"
+                                android:textColor="@color/white"
+                                android:visibility="visible"
+                                app:backgroundTint="@color/colorPrimaryRed"
+                                app:cornerRadius="26dp"
+                                app:iconTint="@color/white"
+                                app:strokeColor="@color/transparent" />
+
+                            <LinearLayout
+                                android:id="@+id/progress_group"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:gravity="center"
+                                android:orientation="horizontal">
+
+                                <FrameLayout
+                                    android:id="@+id/watch_progress_container"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="center">
+
+                                    <ImageView
+                                        android:id="@+id/episode_play_icon"
+                                        style="@style/ContinueWatchingPlayUnderlayProgress"
+                                        app:tint="@color/white" />
+
+                                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                                        android:id="@+id/result_resume_series_progress"
+                                        style="@style/ContinueWatchingCircularProgress"
+                                        app:indicatorColor="@color/white"
+                                        app:trackColor="@color/skipOpTransparent"
+                                        tools:progress="50" />
+                                </FrameLayout>
+
+                                <TextView
+                                    android:id="@+id/result_resume_series_title"
+                                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="match_parent"
+                                    android:clickable="false"
+                                    android:ellipsize="end"
+                                    android:focusable="false"
+                                    android:gravity="center_vertical"
+                                    android:maxLines="1"
+                                    android:paddingStart="5dp"
+                                    android:textAllCaps="false"
+                                    android:textColor="@color/white"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold"
+                                    android:visibility="visible"
+                                    tools:ignore="RtlSymmetry"
+                                    tools:text="S1E1 Episode 1"
+                                    tools:visibility="visible" />
+
+                                <TextView
+                                    android:id="@+id/result_resume_series_progress_text"
+                                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="match_parent"
+                                    android:clickable="false"
+                                    android:focusable="false"
+                                    android:gravity="center"
+                                    android:maxLines="1"
+                                    android:paddingStart="5dp"
+                                    android:textAllCaps="false"
+                                    android:textColor="@color/white"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold"
+                                    android:visibility="gone"
+                                    tools:ignore="RtlSymmetry"
+                                    tools:text="69m remaining"
+                                    tools:visibility="visible" />
+                            </LinearLayout>
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:id="@+id/result_resume_parent"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone"
+                            tools:visibility="visible">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_next_series_button"
+                                style="@style/WhiteButton"
+                                android:layout_width="match_parent"
+                                android:layout_height="52dp"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginBottom="10dp"
+                                android:layout_marginStart="0dp"
+                                android:layout_marginEnd="0dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:nextFocusUp="@id/result_bookmark_Button"
+                                android:nextFocusDown="@id/result_download_movie"
+                                android:text="S1E2 Episode 2"
+                                android:textColor="@color/white"
+                                android:visibility="gone"
+                                app:backgroundTint="@color/colorPrimaryRed"
+                                app:cornerRadius="26dp"
+                                app:icon="@drawable/cast_ic_mini_controller_skip_next"
+                                app:iconTint="@color/white"
+                                app:strokeColor="@color/transparent"
+                                tools:visibility="visible" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/result_movie_parent"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            tools:visibility="visible">
+
+                            <LinearLayout
+                                android:id="@+id/result_play_parent"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/result_play_movie"
+                                    style="@style/WhiteButton"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="52dp"
+                                    android:layout_gravity="center_vertical"
+                                    android:layout_marginStart="0dp"
+                                    android:layout_marginEnd="0dp"
+                                    android:nextFocusUp="@id/result_bookmark_Button"
+                                    android:nextFocusDown="@id/result_download_movie"
+                                    android:text="@string/play_movie_button"
+                                    android:textColor="@color/white"
+                                    android:visibility="visible"
+                                    app:backgroundTint="@color/colorPrimaryRed"
+                                    app:cornerRadius="26dp"
+                                    app:icon="@drawable/ic_baseline_play_arrow_24"
+                                    app:iconTint="@color/white"
+                                    app:strokeColor="@color/transparent">
+
+                                    <requestFocus />
+
+                                </com.google.android.material.button.MaterialButton>
+                            </LinearLayout>
+
+                            <com.lagradost.cloudstream3.ui.download.button.DownloadButton
+                                android:id="@+id/download_button"
+                                android:layout_width="0dp"
+                                android:layout_height="52dp"
+                                android:layout_marginStart="10dp"
+                                android:layout_weight="1"
+                                app:download_layout="@layout/download_button_layout" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Phase 8.86: Synopsis block — flat on the page
+                         background (the Phase 7 bg_details_card surface is
+                         gone), clamped to 3 lines with an accent
+                         Read more / Read less toggle. Tapping the text
+                         itself still toggles too. -->
+                    <LinearLayout
+                        android:id="@+id/result_synopsis_block"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/synopsis"
+                            android:textColor="?attr/textColor"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp">
+
+                            <TextView
+                                android:id="@+id/result_description"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:foreground="@drawable/outline_drawable"
+                                android:justificationMode="inter_word"
+                                android:maxLines="3"
+                                android:nextFocusUp="@id/result_back"
+                                android:nextFocusDown="@id/result_bookmark_Button"
+                                android:paddingTop="5dp"
+                                android:textColor="?attr/textColor"
+                                android:textSize="15sp"
+                                tools:text="Ryan Quicksave Romano is an eccentric adventurer with a strange power: he can create a save-point in time and redo his life whenever he dies. Arriving in New Rome, the glitzy capital of sin of a rebuilding Europe, the city is torn between mega-corporations, sponsored heroes, superpowered criminals, and true monsters. It is a time of chaos, where potions can grant the power to rule the world and dangers lurk everywhere. " />
+
+                            <ImageView
+                                android:layout_width="match_parent"
+                                android:layout_height="30dp"
+                                android:layout_gravity="bottom"
+                                android:src="@drawable/background_shadow"
+                                android:visibility="gone"
+                                tools:ignore="ContentDescription" />
+                        </FrameLayout>
+
+                        <TextView
+                            android:id="@+id/result_description_toggle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:paddingTop="8dp"
+                            android:paddingBottom="2dp"
+                            android:text="@string/result_read_more"
+                            android:textColor="@color/colorPrimaryRed"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/result_tag_holder"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="10dp"
+                        android:text="@string/result_tags"
+                        android:textColor="?attr/textColor"
+                        android:textSize="17sp"
+                        android:textStyle="normal"
+                        android:visibility="gone" />
+
+                    <!-- Phase 8.5B: chips directly on the page background;
+                         the per-chip pill restyle happens in
+                         ResultFragmentPhone after populateChips. -->
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/result_tag"
+                        style="@style/ChipParent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp" />
+
+                    <TextView
+                        android:id="@+id/result_cast_header"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="2dp"
+                        android:text="@string/result_cast_header"
+                        android:textColor="?attr/textColor"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
 
                     <!-- Phase 8.10: hidden on phone — the cast is presented
                          by result_cast_items below in every case (photo or
@@ -641,76 +875,6 @@
                         tools:listitem="@layout/cast_item"
                         tools:visibility="visible" />
 
-                    <TextView
-                        android:id="@+id/result_vpn"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textColor="?attr/grayTextColor"
-                        android:textSize="15sp"
-                        tools:text="@string/vpn_torrent" />
-
-                    <TextView
-                        android:id="@+id/result_info"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="5dp"
-                        android:textColor="?attr/grayTextColor"
-                        android:textSize="15sp"
-                        tools:text="@string/provider_info_meta" />
-
-                    <TextView
-                        android:id="@+id/result_no_episodes"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="5dp"
-                        android:textColor="?attr/grayTextColor"
-                        android:textSize="15sp"
-                        tools:text="@string/no_episodes_found" />
-
-                    <TextView
-                        android:id="@+id/result_tag_holder"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:layout_marginBottom="10dp"
-                        android:text="@string/result_tags"
-                        android:textColor="?attr/textColor"
-                        android:textSize="17sp"
-                        android:textStyle="normal"
-                        android:visibility="gone" />
-
-                    <!-- Phase 7: genre/tag chips sat inside a rounded card
-                         (hidden by ResultFragmentPhone when there are no tags).
-                         Phase 8.5B: the card surface is gone at the user's
-                         request — only the rounded chip pills themselves
-                         remain, directly on the page background. The
-                         description block above keeps its own bg_details_card
-                         FrameLayout; it is a separate view and is untouched. -->
-                    <com.google.android.material.chip.ChipGroup
-                        android:id="@+id/result_tag"
-                        style="@style/ChipParent"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp" />
-                    <!--<com.lagradost.cloudstream3.widget.FlowLayout
-                            android:id="@+id/result_tag"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content" />-->
-
-                    <TextView
-                        android:id="@+id/result_coming_soon"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:gravity="center"
-                        android:paddingTop="20dp"
-                        android:paddingBottom="20dp"
-                        android:text="@string/coming_soon"
-                        android:textColor="?attr/textColor"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        android:visibility="gone" />
-
                     <LinearLayout
                         android:id="@+id/result_data_holder"
                         android:layout_width="match_parent"
@@ -729,388 +893,231 @@
                             android:visibility="gone"
                             app:icon="@drawable/ic_baseline_add_24" />
 
-                        <FrameLayout
-                            android:id="@+id/result_resume_progress_holder"
+                        <!-- Phase 8.86: season chips replace the season
+                             dialog button on phone. Chips are built in
+                             ResultFragmentPhone from
+                             viewModel.seasonSelections and call
+                             viewModel.changeSeason — the same selection
+                             logic the dialog used. -->
+                        <HorizontalScrollView
+                            android:id="@+id/result_season_chips_scroll"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:paddingVertical="5dp"
+                            android:layout_marginTop="16dp"
+                            android:scrollbars="none"
                             android:visibility="gone"
                             tools:visibility="visible">
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/result_resume_series_button"
-                                style="@style/WhiteButton"
-                                android:layout_width="match_parent"
-                                android:layout_margin="0dp"
-                                android:visibility="visible" />
-
-                            <LinearLayout
-                                android:id="@+id/progress_group"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:gravity="center"
-                                android:orientation="horizontal">
-
-                                <FrameLayout
-                                    android:id="@+id/watch_progress_container"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="center">
-
-                                    <ImageView
-                                        android:id="@+id/episode_play_icon"
-                                        style="@style/ContinueWatchingPlayUnderlayProgress"
-                                        app:tint="?attr/black" />
-
-                                    <com.google.android.material.progressindicator.CircularProgressIndicator
-                                        android:id="@+id/result_resume_series_progress"
-                                        style="@style/ContinueWatchingCircularProgress"
-                                        app:indicatorColor="?attr/iconGrayBackground"
-                                        app:trackColor="@color/skipOpTransparent"
-                                        tools:progress="50" />
-                                </FrameLayout>
-
-                                <TextView
-                                    android:id="@+id/result_resume_series_title"
-                                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="match_parent"
-                                    android:clickable="false"
-                                    android:ellipsize="end"
-                                    android:focusable="false"
-                                    android:gravity="center_vertical"
-                                    android:maxLines="1"
-                                    android:paddingStart="5dp"
-                                    android:textAllCaps="false"
-                                    android:textColor="?attr/iconGrayBackground"
-                                    android:textSize="15sp"
-                                    android:textStyle="bold"
-                                    android:visibility="visible"
-                                    tools:ignore="RtlSymmetry"
-                                    tools:text="S1E1 Episode 1"
-                                    tools:visibility="visible" />
-
-                                <TextView
-                                    android:id="@+id/result_resume_series_progress_text"
-                                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="match_parent"
-                                    android:clickable="false"
-                                    android:focusable="false"
-                                    android:gravity="center"
-                                    android:maxLines="1"
-                                    android:paddingStart="5dp"
-                                    android:textAllCaps="false"
-                                    android:textColor="?attr/iconGrayBackground"
-                                    android:textSize="15sp"
-                                    android:textStyle="bold"
-                                    android:visibility="gone"
-                                    tools:ignore="RtlSymmetry"
-                                    tools:text="69m remaining"
-                                    tools:visibility="visible" />
-                            </LinearLayout>
-                        </FrameLayout>
-
-                        <LinearLayout
-                            android:id="@+id/result_resume_parent"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:visibility="gone"
-                            tools:visibility="visible">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/result_next_series_button"
-                                style="@style/WhiteButton"
-                                android:layout_width="match_parent"
-                                android:layout_gravity="center_vertical"
-                                android:layout_marginVertical="5dp"
-                                android:layout_marginStart="0dp"
-                                android:layout_marginEnd="0dp"
-                                android:ellipsize="end"
-                                android:maxLines="1"
-                                android:nextFocusUp="@id/result_bookmark_Button"
-                                android:nextFocusDown="@id/result_download_movie"
-                                android:text="S1E2 Episode 2"
-                                android:visibility="gone"
-                                app:icon="@drawable/cast_ic_mini_controller_skip_next"
-                                tools:visibility="visible" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:id="@+id/result_movie_parent"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            tools:visibility="visible">
-
-                            <LinearLayout
-                                android:id="@+id/result_play_parent"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginVertical="5dp">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_play_movie"
-                                    style="@style/WhiteButton"
-                                    android:layout_width="match_parent"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginStart="0dp"
-                                    android:layout_marginEnd="0dp"
-                                    android:nextFocusUp="@id/result_bookmark_Button"
-                                    android:nextFocusDown="@id/result_download_movie"
-                                    android:text="@string/play_movie_button"
-                                    android:textColor="@color/white"
-                                    android:visibility="visible"
-                                    app:backgroundTint="@color/colorPrimaryRed"
-                                    app:icon="@drawable/ic_baseline_play_arrow_24"
-                                    app:iconTint="@color/white"
-                                    app:strokeColor="@color/transparent">
-
-                                    <requestFocus />
-
-                                </com.google.android.material.button.MaterialButton>
-                            </LinearLayout>
-                            <!--<com.google.android.material.button.MaterialButton
-                                    android:nextFocusUp="@id/result_play_movie"
-                                    android:nextFocusDown="@id/result_season_button"
-                                    android:layout_marginBottom="10dp"
-
-                                    android:id="@+id/result_download_movie"
-                                    style="@style/BlackButton"
-                                    android:layout_marginStart="0dp"
-                                    android:layout_marginEnd="0dp"
-                                    android:visibility="visible"
-                                    android:layout_gravity="center_vertical"
-                                    tools:text="Downloading"
-                                    tools:icon="@drawable/netflix_download"
-
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:layout_width="match_parent" />-->
-
-                            <com.lagradost.cloudstream3.ui.download.button.DownloadButton
-                                android:id="@+id/download_button"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="5dp"
-                                app:download_layout="@layout/download_button_layout" />
-
-                            <!--<androidx.core.widget.ContentLoadingProgressBar
-                                    android:layout_width="match_parent"
-                                    android:layout_height="20dp"
-                                    tools:progress="50"
-                                    android:id="@+id/result_movie_progress_downloaded"
-                                    android:indeterminate="false"
-                                    style="?android:attr/progressBarStyleHorizontal"
-                                    android:progressBackgroundTint="?attr/colorPrimary"
-                                    android:max="100"
-                                    android:layout_gravity="end|center_vertical"
-                                    android:progress="0"
-                                    android:visibility="gone"
-                                    tools:visibility="visible" />
-    -->
-                            <!--  <TextView
-                                      android:id="@+id/result_movie_text_progress"
-                                      android:layout_gravity="center_vertical"
-                                      android:gravity="center_vertical"
-                                      tools:text="128MB / 237MB"
-                                      android:textColor="?attr/grayTextColor"
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="match_parent" />-->
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <com.lagradost.cloudstream3.widget.FlowLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="10dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                app:itemSpacing="10dp">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_season_button"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginTop="10dp"
-                                    android:layout_marginBottom="10dp"
-                                    android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
-                                    android:nextFocusLeft="@id/result_episode_select"
-                                    android:nextFocusRight="@id/result_episode_select"
-                                    android:nextFocusUp="@id/result_description"
-                                    android:nextFocusDown="@id/result_episodes"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="5dp"
-                                    android:visibility="gone"
-                                    app:cornerRadius="24dp"
-                                    tools:text="Season 1"
-                                    tools:visibility="visible" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_episode_select"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginTop="10dp"
-                                    android:layout_marginBottom="10dp"
-                                    android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
-                                    android:nextFocusLeft="@id/result_season_button"
-                                    android:nextFocusRight="@id/result_season_button"
-                                    android:nextFocusUp="@id/result_description"
-                                    android:nextFocusDown="@id/result_episodes"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="5dp"
-                                    android:visibility="gone"
-                                    tools:text="50-100"
-                                    tools:visibility="visible" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_dub_select"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginTop="10dp"
-                                    android:layout_marginBottom="10dp"
-                                    android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
-                                    android:nextFocusLeft="@id/result_season_button"
-                                    android:nextFocusRight="@id/result_season_button"
-                                    android:nextFocusUp="@id/result_description"
-                                    android:nextFocusDown="@id/result_episodes"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="5dp"
-                                    android:visibility="gone"
-                                    tools:text="Dubbed1"
-                                    tools:visibility="visible" />
-
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_sort_button"
-                                    style="@style/MultiSelectButton"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginTop="10dp"
-                                    android:layout_marginBottom="10dp"
-                                    android:nextFocusLeft="@id/result_dub_select"
-                                    android:nextFocusUp="@id/result_description"
-                                    android:nextFocusDown="@id/result_episodes"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="5dp"
-                                    android:text="Sort"
-                                    android:visibility="gone"
-                                    tools:visibility="visible" />
-
-                                <ImageView
-                                    android:background="?selectableItemBackgroundBorderless"
-                                    android:id="@+id/result_batch_download_button"
-                                    android:layout_width="36dp"
-                                    android:layout_height="36dp"
-                                    android:layout_margin="2dp"
-                                    android:contentDescription="@string/download_all"
-                                    android:nextFocusLeft="@id/result_dub_select"
-                                    android:nextFocusUp="@id/result_description"
-                                    android:nextFocusDown="@id/result_episodes"
-                                    android:src="@drawable/netflix_download_batch"
-                                    android:visibility="gone"
-                                    tools:visibility="visible">
-
-                                </ImageView>
-                                <TextView
-                                    android:id="@+id/result_episodes_text"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginTop="10dp"
-                                    android:layout_marginBottom="10dp"
-                                    android:paddingTop="10dp"
-                                    android:paddingBottom="10dp"
-                                    android:textColor="?attr/textColor"
-                                    android:textSize="17sp"
-                                    android:textStyle="normal"
-                                    tools:text="8 Episodes" />
-                            </com.lagradost.cloudstream3.widget.FlowLayout>
-
-
-                            <!--TODO add next airing-->
-                            <LinearLayout
-                                android:id="@+id/result_next_airing_holder"
+                            <com.google.android.material.chip.ChipGroup
+                                android:id="@+id/result_season_chips"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_gravity="start"
-                                android:orientation="horizontal">
+                                app:chipSpacingHorizontal="8dp"
+                                app:singleSelection="true" />
+                        </HorizontalScrollView>
 
-                                <TextView
-                                    android:id="@+id/result_next_airing"
+                        <!-- Phase 8.86: Episodes header — title + count on
+                             the left, sort + batch-download on the right.
+                             Shown from the episodes observer. -->
+                        <LinearLayout
+                            android:id="@+id/result_episodes_header"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="18dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone"
+                            tools:visibility="visible">
 
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:gravity="center"
-                                    android:textColor="?attr/grayTextColor"
-                                    android:textSize="17sp"
-                                    android:textStyle="normal"
-                                    tools:text="Episode 1022 will be released in" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/episodes"
+                                android:textColor="?attr/textColor"
+                                android:textSize="18sp"
+                                android:textStyle="bold" />
 
-                                <TextView
-                                    android:id="@+id/result_next_airing_time"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:gravity="center"
-                                    android:paddingStart="5dp"
-                                    android:paddingEnd="5dp"
-                                    android:textColor="?attr/textColor"
-                                    android:textSize="17sp"
-                                    android:textStyle="normal"
-                                    tools:text="5d 3h 30m" />
-                            </LinearLayout>
+                            <TextView
+                                android:id="@+id/result_episodes_text"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:textColor="?attr/grayTextColor"
+                                android:textSize="15sp"
+                                android:textStyle="normal"
+                                tools:text="8 Episodes" />
 
-                            <com.facebook.shimmer.ShimmerFrameLayout
-                                android:id="@+id/result_episode_loading"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:layout_gravity="center"
-                                android:layout_marginTop="15dp"
-                                android:orientation="vertical"
-                                app:shimmer_auto_start="true"
-                                app:shimmer_base_alpha="0.2"
-                                app:shimmer_duration="@integer/loading_time"
-                                app:shimmer_highlight_alpha="0.3"
+                            <View
+                                android:layout_width="0dp"
+                                android:layout_height="0dp"
+                                android:layout_weight="1" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_sort_button"
+                                style="@style/MultiSelectButton"
+                                android:layout_gravity="center_vertical"
+                                android:nextFocusLeft="@id/result_dub_select"
+                                android:nextFocusUp="@id/result_description"
+                                android:nextFocusDown="@id/result_episodes"
+                                android:paddingStart="10dp"
+                                android:paddingEnd="5dp"
+                                android:text="Sort"
+                                android:visibility="gone"
+                                tools:visibility="visible" />
+
+                            <ImageView
+                                android:background="?selectableItemBackgroundBorderless"
+                                android:id="@+id/result_batch_download_button"
+                                android:layout_width="36dp"
+                                android:layout_height="36dp"
+                                android:layout_margin="2dp"
+                                android:contentDescription="@string/download_all"
+                                android:nextFocusLeft="@id/result_dub_select"
+                                android:nextFocusUp="@id/result_description"
+                                android:nextFocusDown="@id/result_episodes"
+                                android:src="@drawable/netflix_download_batch"
+                                android:visibility="gone"
                                 tools:visibility="visible">
 
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="vertical">
+                            </ImageView>
+                        </LinearLayout>
 
-                                    <include layout="@layout/loading_episode" />
+                        <com.lagradost.cloudstream3.widget.FlowLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:layout_marginBottom="10dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            app:itemSpacing="10dp">
 
-                                    <include layout="@layout/loading_episode" />
+                            <!-- Kept for binding parity (text + dialog
+                                 click are still wired in
+                                 ResultFragmentPhone) but force-hidden on
+                                 phone: the season chips above replace it. -->
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_season_button"
+                                style="@style/MultiSelectButton"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginTop="10dp"
+                                android:layout_marginBottom="10dp"
+                                android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
+                                android:nextFocusLeft="@id/result_episode_select"
+                                android:nextFocusRight="@id/result_episode_select"
+                                android:nextFocusUp="@id/result_description"
+                                android:nextFocusDown="@id/result_episodes"
+                                android:paddingStart="10dp"
+                                android:paddingEnd="5dp"
+                                android:visibility="gone"
+                                app:cornerRadius="24dp"
+                                tools:text="Season 1"
+                                tools:visibility="visible" />
 
-                                    <include layout="@layout/loading_episode" />
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_episode_select"
+                                style="@style/MultiSelectButton"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginTop="10dp"
+                                android:layout_marginBottom="10dp"
+                                android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
+                                android:nextFocusLeft="@id/result_season_button"
+                                android:nextFocusRight="@id/result_season_button"
+                                android:nextFocusUp="@id/result_description"
+                                android:nextFocusDown="@id/result_episodes"
+                                android:paddingStart="10dp"
+                                android:paddingEnd="5dp"
+                                android:visibility="gone"
+                                tools:text="50-100"
+                                tools:visibility="visible" />
 
-                                    <include layout="@layout/loading_episode" />
-                                </LinearLayout>
-                            </com.facebook.shimmer.ShimmerFrameLayout>
-                            <!--<androidx.core.widget.ContentLoadingProgressBar
-                                    android:id="@+id/result_episode_loading"
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/result_dub_select"
+                                style="@style/MultiSelectButton"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginTop="10dp"
+                                android:layout_marginBottom="10dp"
+                                android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
+                                android:nextFocusLeft="@id/result_season_button"
+                                android:nextFocusRight="@id/result_season_button"
+                                android:nextFocusUp="@id/result_description"
+                                android:nextFocusDown="@id/result_episodes"
+                                android:paddingStart="10dp"
+                                android:paddingEnd="5dp"
+                                android:visibility="gone"
+                                tools:text="Dubbed1"
+                                tools:visibility="visible" />
+                        </com.lagradost.cloudstream3.widget.FlowLayout>
 
-                                    style="@style/Widget.AppCompat.ProgressBar"
-                                    android:layout_gravity="center"
-                                    android:layout_width="50dp"
-                                    android:layout_height="50dp" />-->
+                        <!--TODO add next airing-->
+                        <LinearLayout
+                            android:id="@+id/result_next_airing_holder"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="start"
+                            android:orientation="horizontal">
 
-                            <androidx.recyclerview.widget.RecyclerView
-                                android:id="@+id/result_episodes"
+                            <TextView
+                                android:id="@+id/result_next_airing"
+
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="0dp"
-                                android:clipToPadding="false"
-                                android:descendantFocusability="afterDescendants"
-                                android:paddingBottom="100dp"
-                                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-                                tools:listitem="@layout/result_episode" />
+                                android:gravity="center"
+                                android:textColor="?attr/grayTextColor"
+                                android:textSize="17sp"
+                                android:textStyle="normal"
+                                tools:text="Episode 1022 will be released in" />
+
+                            <TextView
+                                android:id="@+id/result_next_airing_time"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:paddingStart="5dp"
+                                android:paddingEnd="5dp"
+                                android:textColor="?attr/textColor"
+                                android:textSize="17sp"
+                                android:textStyle="normal"
+                                tools:text="5d 3h 30m" />
                         </LinearLayout>
+
+                        <com.facebook.shimmer.ShimmerFrameLayout
+                            android:id="@+id/result_episode_loading"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_gravity="center"
+                            android:layout_marginTop="15dp"
+                            android:orientation="vertical"
+                            app:shimmer_auto_start="true"
+                            app:shimmer_base_alpha="0.2"
+                            app:shimmer_duration="@integer/loading_time"
+                            app:shimmer_highlight_alpha="0.3"
+                            tools:visibility="visible">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+
+                                <include layout="@layout/loading_episode" />
+
+                                <include layout="@layout/loading_episode" />
+
+                                <include layout="@layout/loading_episode" />
+
+                                <include layout="@layout/loading_episode" />
+                            </LinearLayout>
+                        </com.facebook.shimmer.ShimmerFrameLayout>
+
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/result_episodes"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="0dp"
+                            android:clipToPadding="false"
+                            android:descendantFocusability="afterDescendants"
+                            android:paddingBottom="100dp"
+                            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                            tools:listitem="@layout/result_episode" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -1118,25 +1125,5 @@
         </androidx.core.widget.NestedScrollView>
 
     </LinearLayout>
-
-
-    <!--
-    <androidx.cardview.widget.CardView
-            android:layout_width="100dp"
-            android:layout_height="150dp"
-            app:cardCornerRadius="@dimen/roundedImageRadius"
-            android:elevation="10dp"
-    >
-        <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop"
-                android:id="@+id/result_poster"
-                android:clickable="true"
-                android:focusable="true"
-                tools:src="@drawable/example_poster"
-                android:foreground="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/search_poster_descript"/>
-    </androidx.cardview.widget.CardView>-->
 
 </FrameLayout>

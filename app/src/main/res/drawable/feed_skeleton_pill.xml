@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 8.96: pill-shaped skeleton block (header chips +
+     the category rows' View All placeholder) — same shimmer
+     grey as feed_skeleton_bar, fully rounded ends. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="@color/grayShimmer" />
+</shape>

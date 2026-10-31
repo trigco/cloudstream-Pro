@@ -163,6 +163,11 @@ open class ParentItemAdapter(
                 homeChildMoreInfo.setOnClickListener {
                     moreInfoClickCallback.invoke(item)
                 }
+                // Phase 8.84: the "View All" pill carries the header
+                // arrow's old click — same full-listing popup.
+                homeChildViewAll.setOnClickListener {
+                    moreInfoClickCallback.invoke(item)
+                }
             }
         }
     }
