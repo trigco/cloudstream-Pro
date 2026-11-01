@@ -319,6 +319,19 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent">
 
+                        <!-- Phase 8.102 round 2: blur-fill behind the
+                             sharp backdrop — the same art, blurred and
+                             darkened, cropped to fill the whole header,
+                             so a portrait poster no longer leaves bare
+                             black on either side. The sharp image on top
+                             keeps fitCenter (whole art, uncropped). -->
+                        <ImageView
+                            android:id="@+id/result_poster_background_blur"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="@null"
+                            android:scaleType="centerCrop" />
+
                         <ImageView
                             android:id="@+id/result_poster_background"
                             android:layout_width="match_parent"

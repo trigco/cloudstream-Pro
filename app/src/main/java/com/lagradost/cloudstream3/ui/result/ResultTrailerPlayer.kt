@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.FragmentResultSwipeBinding
@@ -195,6 +196,23 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
         }
         fixPlayerSize()
         uiReset()
+        // Phase 8.102 round 2: resize mode for the trailer surface.
+        // PlayerView.initialize() applied the app-wide resize mode
+        // (Zoom by default since 8.99e) to this host too — inside
+        // the fixed 280dp header that crops the trailer's sides
+        // (a 16:9 frame in a ~1.3:1 box). In header mode the
+        // trailer is therefore pinned to FIT on the view only, so
+        // the whole frame shows, letterboxed on the black page;
+        // the shared preference and PlayerView's own mode are not
+        // touched. Fullscreen restores the user's global mode.
+        // This runs last in the function so it also wins over the
+        // zoom reset inside exitFullscreen().
+        if (isFullScreenPlayer) {
+            playerHostView?.let { host -> host.resize(host.resizeMode, false) }
+        } else {
+            playerHostView?.exoPlayerView?.resizeMode =
+                AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
 
         if (isFullScreenPlayer) {
             activity?.attachBackPressedCallback("ResultTrailerPlayer") { updateFullscreen(false) }

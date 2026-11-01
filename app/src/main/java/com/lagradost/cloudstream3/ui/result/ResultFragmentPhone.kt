@@ -84,6 +84,7 @@ import com.lagradost.cloudstream3.utils.AppContextUtils.updateHasTrailers
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.attachBackPressedCallback
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.detachBackPressedCallback
 import com.lagradost.cloudstream3.utils.BatteryOptimizationChecker.openBatteryOptimizationSettings
+import com.lagradost.cloudstream3.utils.BlurFillTransformation
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -661,6 +662,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         resultBinding?.resultScroll?.setOnScrollChangeListener(
             androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
                 resultBinding?.resultPosterBackground?.translationY = scrollY * 0.35f
+                // Phase 8.102 round 2: the blur-fill drifts with the
+                // sharp backdrop so the two layers never separate.
+                resultBinding?.resultPosterBackgroundBlur?.translationY = scrollY * 0.35f
             }
         )
 
@@ -1219,6 +1223,18 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                                 R.drawable.poster_placeholder
                             )
                         }
+                    }
+                    // Phase 8.102 round 2: the same art as a blurred,
+                    // darkened fill behind the sharp backdrop, so the
+                    // header's sides are never bare black when the art
+                    // is a portrait poster. No error drawable — if the
+                    // art fails, the holder's black simply shows, as
+                    // before this layer existed.
+                    resultPosterBackgroundBlur.loadImage(
+                        d.posterBackgroundImage,
+                        headers = d.posterHeaders
+                    ) {
+                        transformations(BlurFillTransformation())
                     }
 
                     bindLogo(
