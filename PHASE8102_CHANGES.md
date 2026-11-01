@@ -261,3 +261,32 @@ hardware bitmaps cannot exist at all, so behaviour is
 unchanged on every API level, including the user's API 27
 phone. The edited file was re-compiled standalone against
 android.jar + the real androidx.annotation jar: zero errors.
+
+### Repair 2 — lint pass, media3 opt-in (CI #298)
+
+CI #298 (head 273aa707) compiled clean and the NewApi error
+above is gone, but lint FAILED again. First error, from the
+run's Gradle log:
+
+  ui/result/ResultTrailerPlayer.kt:213: Error: This declaration
+  is opt-in and its usage should be marked with
+  @androidx.media3.common.util.UnstableApi or @OptIn(...)
+  [UnsafeOptInUsageError]
+
+Lint counted 3 errors; all three sit in the round-2 resize
+pin inside `updateFullscreen` — the media3 `PlayerView
+.resizeMode` write, the `AspectRatioFrameLayout
+.RESIZE_MODE_FIT` read, and the unstable receiver surface
+around them. The pin is the only media3 surface round 2
+touched (ResultFragmentPhone's hunks are Coil/app calls,
+BlurFillTransformation is Coil + framework bitmap, the layout
+hunk is a plain ImageView — re-audited line by line for
+NewApi and foreign opt-ins; nothing else found). CloudStream's
+own `PlayerView` class carries `@OptIn(UnstableApi::class)`
+at class level for its identical internal resizeMode write;
+the trailer subclass now carries the same annotation at
+function level on `updateFullscreen`, using
+`androidx.annotation.OptIn` — the form this project's lint
+honors (a plain kotlin.OptIn does not satisfy it). No
+behaviour change: the annotation only records the opt-in the
+lint rule requires.

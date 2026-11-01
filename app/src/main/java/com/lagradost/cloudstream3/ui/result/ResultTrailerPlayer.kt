@@ -6,9 +6,11 @@ import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.annotation.OptIn
 import androidx.core.view.ViewCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
@@ -163,6 +165,14 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
         }
     }
 
+    // Phase 8.102 round 2 (lint fix): the trailer resize pin below
+    // writes media3's PlayerView.resizeMode and reads
+    // AspectRatioFrameLayout.RESIZE_MODE_FIT — both are media3
+    // unstable APIs. PlayerView (the host class) carries this same
+    // opt-in at class level for its own internal write; this
+    // function needs it for the external one. androidx.annotation
+    // .OptIn is the form this project's lint honors.
+    @OptIn(UnstableApi::class)
     private fun updateFullscreen(fullscreen: Boolean) {
         isFullScreenPlayer = fullscreen
         lockRotation = fullscreen
