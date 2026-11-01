@@ -1,6 +1,5 @@
 package com.lagradost.cloudstream3.ui.result
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
@@ -10,8 +9,6 @@ import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
-import com.lagradost.cloudstream3.CommonActivity.screenHeight
-import com.lagradost.cloudstream3.CommonActivity.screenWidth
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.databinding.FragmentResultSwipeBinding
@@ -100,20 +97,28 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
         playerWidthHeight?.let { (w, h) ->
             if (w <= 0 || h <= 0) return@let
 
-            val orientation = context?.resources?.configuration?.orientation ?: return
-
-            val sw = if (orientation == Configuration.ORIENTATION_LANDSCAPE) screenWidth else screenHeight
-
             resultBinding?.resultSmallscreenHolder?.isVisible = !isFullScreenPlayer
             binding?.resultFullscreenHolder?.isVisible = isFullScreenPlayer
 
-            val to = sw * h / w
+            // Phase 8.102: in the small (header) mode the trailer
+            // fills the header area exactly — its height is the top
+            // holder's height, never the video-aspect height, and
+            // the top holder itself is never resized. The old aspect
+            // resize (plus the 200ms holder-height animation that
+            // ran with it once the intro was dismissed) is what left
+            // gaps around the video and shoved the content below
+            // around whenever a trailer loaded.
+            val headerHeight = resultBinding?.resultTopHolder?.measuredHeight ?: 0
 
             resultBinding?.fragmentTrailer?.playerBackground?.apply {
                 isVisible = true
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
-                    if (isFullScreenPlayer) FrameLayout.LayoutParams.MATCH_PARENT else to
+                    if (isFullScreenPlayer || headerHeight <= 0) {
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    } else {
+                        headerHeight
+                    }
                 )
             }
 
@@ -122,23 +127,6 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     resultBinding?.resultTopHolder?.measuredHeight ?: FrameLayout.LayoutParams.MATCH_PARENT
                 )
-            }
-
-            if (playerBinding?.playerIntroPlay?.isGone == true) {
-                resultBinding?.resultTopHolder?.apply {
-                    val anim = ValueAnimator.ofInt(
-                        measuredHeight,
-                        if (isFullScreenPlayer) ViewGroup.LayoutParams.MATCH_PARENT else to
-                    )
-                    anim.addUpdateListener { va ->
-                        val v = va.animatedValue as Int
-                        val lp: ViewGroup.LayoutParams = layoutParams
-                        lp.height = v
-                        layoutParams = lp
-                    }
-                    anim.duration = 200
-                    anim.start()
-                }
             }
         }
     }
@@ -243,6 +231,22 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
         playerHostView?.requestUpdateBrightnessOverlayOnNextLayout()
 
         playerBinding?.playerFullscreen?.setOnClickListener { updateFullscreen(!isFullScreenPlayer) }
+
+        // Phase 8.102: the details Trailer button — trailers load
+        // only on tap now (see setTrailers in ResultFragmentPhone).
+        // The tap mirrors the intro-play tap below: load the stored
+        // trailer, dismiss the intro overlay and start playback in
+        // the header area, which keeps its exact poster footprint.
+        resultBinding?.resultTrailerButton?.setOnClickListener {
+            if (currentTrailers.isEmpty()) return@setOnClickListener
+            currentTrailerIndex = 0
+            loadTrailer()
+            playerBinding?.playerIntroPlay?.isGone = true
+            introVisible = false
+            player.handleEvent(CSPlayerEvent.Play, PlayerEventSource.UI)
+            fixPlayerSize()
+            showControls()
+        }
         updateFullscreen(isFullScreenPlayer)
         uiReset()
 

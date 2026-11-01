@@ -350,7 +350,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
     }
 
-    private fun loadTrailer(index: Int? = null) {
+    protected fun loadTrailer(index: Int? = null) {
 
         val isSuccess =
             currentTrailers.getOrNull(index ?: currentTrailerIndex)
@@ -429,9 +429,19 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
     private fun setTrailers(trailers: List<Pair<ExtractorLink, String>>?) {
         context?.updateHasTrailers()
-        if (!LoadResponse.isTrailersEnabled) return
-        currentTrailers = trailers?.sortedBy { -it.first.quality } ?: emptyList()
-        loadTrailer()
+        // Phase 8.102: trailers no longer load on their own. The
+        // automatic loadTrailer() call that used to sit here swapped
+        // the header from the poster to the trailer surface (and
+        // resized it around the video) the moment a page arrived.
+        // Now the list is only stored and the Trailer button in the
+        // play area is shown; ResultTrailerPlayer loads and plays
+        // the trailer when the user taps it.
+        currentTrailers = if (LoadResponse.isTrailersEnabled) {
+            trailers?.sortedBy { -it.first.quality } ?: emptyList()
+        } else {
+            emptyList()
+        }
+        resultBinding?.resultTrailerButton?.isVisible = currentTrailers.isNotEmpty()
     }
 
     override fun onDestroyView() {
@@ -449,6 +459,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         playerHostView?.release()
         playerBinding = null
         resultBinding?.resultScroll?.setOnClickListener(null)
+        resultBinding?.resultScroll?.setOnScrollChangeListener(
+            null as androidx.core.widget.NestedScrollView.OnScrollChangeListener?
+        )
         resultBinding = null
         syncBinding = null
         recommendationBinding = null
@@ -637,6 +650,19 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             TrailerCustomLayoutBinding.bind(it)
         }
         playerHostView?.initialize()
+
+        // Phase 8.102: scroll-linked header animation — as the page
+        // scrolls, the backdrop image drifts at a fraction of the
+        // scroll rate inside its fixed-height holder (the holder
+        // clips it), so the full poster view eases through the
+        // header instead of the header sliding away rigidly. Only
+        // the image translates; the fade and the holder stay put,
+        // so nothing below the header can shift.
+        resultBinding?.resultScroll?.setOnScrollChangeListener(
+            androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+                resultBinding?.resultPosterBackground?.translationY = scrollY * 0.35f
+            }
+        )
 
         // ===== setup =====
         val storedData = getStoredData() ?: return

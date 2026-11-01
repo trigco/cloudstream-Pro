@@ -298,10 +298,15 @@
                     android:background="@color/black"
                     android:clipToOutline="true">
 
+                    <!-- Phase 8.102: the trailer holder now fills the
+                         whole 280dp header area exactly (was
+                         wrap_content), so a trailer playing in it
+                         leaves no gap around it and the content below
+                         never moves. -->
                     <FrameLayout
                         android:id="@+id/result_smallscreen_holder"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
                         android:descendantFocusability="blocksDescendants">
 
                         <include
@@ -318,7 +323,7 @@
                             android:id="@+id/result_poster_background"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
-                            android:scaleType="centerCrop" />
+                            android:scaleType="fitCenter" />
 
                         <!-- Bottom fade into the page background. -->
                         <View
@@ -407,6 +412,7 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
                             android:layout_marginStart="14dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
@@ -422,100 +428,105 @@
                                 android:textSize="22sp"
                                 android:textStyle="bold"
                                 tools:text="The Perfect Run The Perfect Run" />
-
-                            <!-- Meta row 1: provider chip, type chip,
-                                 content-rating chip, year. Each view hides
-                                 itself via setText(null) when its data is
-                                 absent, exactly as before. -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="5dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_meta_site"
-                                    style="@style/SmallBlackButton"
-                                    android:layout_height="26dp"
-                                    android:layout_gravity="center_vertical"
-                                    app:icon="@drawable/ic_sky_plugin_placeholder"
-                                    app:iconPadding="5dp"
-                                    app:iconSize="14dp"
-                                    app:iconTint="@color/white"
-                                    tools:text="Gogoanime" />
-
-                                <TextView
-                                    android:id="@+id/result_meta_type"
-                                    style="@style/ResultInfoText"
-                                    android:layout_height="26dp"
-                                    android:layout_marginStart="8dp"
-                                    android:background="@drawable/bg_result_type_chip"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="10dp"
-                                    android:textAllCaps="true"
-                                    android:textSize="12sp"
-                                    android:textStyle="bold"
-                                    tools:text="Movie" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/result_meta_content_rating"
-                                    style="@style/SmallBlackButton"
-                                    android:layout_height="26dp"
-                                    android:layout_gravity="center_vertical"
-                                    android:layout_marginStart="8dp"
-                                    tools:text="PG-13" />
-
-                                <TextView
-                                    android:id="@+id/result_meta_year"
-                                    style="@style/ResultInfoText"
-                                    android:layout_marginStart="10dp"
-                                    android:drawableStart="@drawable/ic_result_calendar"
-                                    android:drawablePadding="5dp"
-                                    android:drawableTint="@color/iconColor"
-                                    android:textSize="13sp"
-                                    tools:text="2022" />
-                            </LinearLayout>
-
-                            <!-- Meta row 2: duration, rating, show status —
-                                 each only when the data exists. -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="9dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/result_meta_duration"
-                                    style="@style/ResultInfoText"
-                                    android:drawableStart="@drawable/ic_baseline_clock_24"
-                                    android:drawablePadding="5dp"
-                                    android:drawableTint="@color/iconColor"
-                                    android:textColor="?attr/grayTextColor"
-                                    android:textSize="13sp"
-                                    tools:text="121min" />
-
-                                <TextView
-                                    android:id="@+id/result_meta_rating"
-                                    style="@style/ResultInfoText"
-                                    android:layout_marginStart="14dp"
-                                    android:drawableStart="@drawable/ic_baseline_star_24"
-                                    android:drawablePadding="4dp"
-                                    android:drawableTint="@color/ratingStarGold"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold"
-                                    tools:text="Rated: 8.5" />
-
-                                <TextView
-                                    android:id="@+id/result_meta_status"
-                                    style="@style/ResultInfoText"
-                                    android:layout_marginStart="14dp"
-                                    android:textColor="?attr/grayTextColor"
-                                    android:textSize="13sp"
-                                    tools:text="Ongoing" />
-                            </LinearLayout>
                         </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Phase 8.102: the meta rows moved out of the
+                         poster column into full-width rows under the
+                         header row — squeezed beside the poster they
+                         overflowed the right edge and clipped the year
+                         off-screen. Row 1: provider chip, type chip,
+                         content-rating chip. Each view hides itself
+                         via setText(null) when its data is absent,
+                         exactly as before. -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/result_meta_site"
+                            style="@style/SmallBlackButton"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center_vertical"
+                            app:icon="@drawable/ic_sky_plugin_placeholder"
+                            app:iconPadding="5dp"
+                            app:iconSize="14dp"
+                            app:iconTint="@color/white"
+                            tools:text="Gogoanime" />
+
+                        <TextView
+                            android:id="@+id/result_meta_type"
+                            style="@style/ResultInfoText"
+                            android:layout_height="26dp"
+                            android:layout_marginStart="8dp"
+                            android:background="@drawable/bg_result_type_chip"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:textAllCaps="true"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            tools:text="Movie" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/result_meta_content_rating"
+                            style="@style/SmallBlackButton"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="8dp"
+                            tools:text="PG-13" />
+                    </LinearLayout>
+
+                    <!-- Meta row 2: year, duration, rating, show
+                         status — each only when the data
+                         exists. -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="9dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/result_meta_year"
+                            style="@style/ResultInfoText"
+                            android:drawableStart="@drawable/ic_result_calendar"
+                            android:drawablePadding="5dp"
+                            android:drawableTint="@color/iconColor"
+                            android:textSize="13sp"
+                            tools:text="2022" />
+
+                        <TextView
+                            android:id="@+id/result_meta_duration"
+                            android:layout_marginStart="14dp"
+                            style="@style/ResultInfoText"
+                            android:drawableStart="@drawable/ic_baseline_clock_24"
+                            android:drawablePadding="5dp"
+                            android:drawableTint="@color/iconColor"
+                            android:textColor="?attr/grayTextColor"
+                            android:textSize="13sp"
+                            tools:text="121min" />
+
+                        <TextView
+                            android:id="@+id/result_meta_rating"
+                            style="@style/ResultInfoText"
+                            android:layout_marginStart="14dp"
+                            android:drawableStart="@drawable/ic_baseline_star_24"
+                            android:drawablePadding="4dp"
+                            android:drawableTint="@color/ratingStarGold"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            tools:text="Rated: 8.5" />
+
+                        <TextView
+                            android:id="@+id/result_meta_status"
+                            style="@style/ResultInfoText"
+                            android:layout_marginStart="14dp"
+                            android:textColor="?attr/grayTextColor"
+                            android:textSize="13sp"
+                            tools:text="Ongoing" />
                     </LinearLayout>
 
                     <TextView
@@ -740,6 +751,30 @@
                                 android:layout_weight="1"
                                 app:download_layout="@layout/download_button_layout" />
                         </LinearLayout>
+
+                        <!-- Phase 8.102: Trailer button — the trailer
+                             used to load itself the moment a page
+                             arrived (and resize the header around it);
+                             now it loads and plays only when this is
+                             tapped. ResultFragmentPhone shows it when
+                             the page actually ships trailers, and
+                             ResultTrailerPlayer wires the tap. -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/result_trailer_button"
+                            style="@style/WhiteButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/trailer"
+                            android:textColor="@color/white"
+                            android:visibility="gone"
+                            app:backgroundTint="@color/transparent"
+                            app:cornerRadius="26dp"
+                            app:icon="@drawable/ic_baseline_play_arrow_24"
+                            app:iconTint="@color/white"
+                            app:strokeColor="@color/white"
+                            app:strokeWidth="1dp"
+                            tools:visibility="visible" />
                     </LinearLayout>
 
                     <!-- Phase 8.86: Synopsis block — flat on the page
@@ -757,7 +792,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/synopsis"
+                            android:text="@string/description_heading"
                             android:textColor="?attr/textColor"
                             android:textSize="18sp"
                             android:textStyle="bold" />
