@@ -77,6 +77,22 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
     BindingCreator.Inflate(FragmentFeedWatchBinding::inflate)
 ) {
     private var handedOff = false
+
+    /** Phase 8.101: true once THIS fragment instance has seeded
+     *  playback from its arguments. The instance (and its
+     *  arguments) survive on the back stack while the view is
+     *  destroyed — navigating to the main player and back, or to
+     *  the batch page and back, recreates the view and re-runs
+     *  onBindingCreated. The arguments are frozen at the FIRST
+     *  item this screen was opened with, but FeedPlayer's live
+     *  session may have moved on to a different video (Up-next
+     *  taps call FeedPlayer.play directly). A recreated view
+     *  must therefore rebind to the session, never re-seed from
+     *  the stale arguments — doing so replayed the session's
+     *  first video from 0 after a main-player round trip, and
+     *  clobbered currentUrl before onResume's replayCurrent
+     *  could restore the handed-off item at its position. */
+    private var enteredWithArgs = false
     private var seeking = false
     private var tickCount = 0
     private var lastShownUrl: String? = null
@@ -388,8 +404,25 @@ class FeedWatchFragment : BaseFragment<FragmentFeedWatchBinding>(
         val apiName = arguments?.getString("apiName") ?: return
         val name = arguments?.getString("name") ?: url
         val poster = arguments?.getString("posterUrl")
-        refreshUpNext(url)
-        FeedPlayer.play(requireContext(), url, apiName, name, poster)
+        if (enteredWithArgs && FeedPlayer.hasActiveItem) {
+            // Phase 8.101: this view was recreated over a live
+            // FeedPlayer session (back from the main player, the
+            // batch page, …). The session's CURRENT item is what
+            // is playing — not the item in this fragment's frozen
+            // entry arguments — so do NOT seed play() from them:
+            // that reset currentUrl to the session's first video
+            // and cold-loaded it from its own stale position
+            // before onResume's replayCurrent could restore the
+            // handed-off item. The player surface was already
+            // rebound above; after a handoff, onResume replays
+            // the current item at the main player's saved
+            // position, exactly as Phase 8.50 designed.
+            refreshUpNext(FeedPlayer.currentUrl ?: url)
+        } else {
+            enteredWithArgs = true
+            refreshUpNext(url)
+            FeedPlayer.play(requireContext(), url, apiName, name, poster)
+        }
 
         // Phase 8.39: pull-to-refresh on Up next rotates in
         // not-yet-shown suggestions; a floating button appears

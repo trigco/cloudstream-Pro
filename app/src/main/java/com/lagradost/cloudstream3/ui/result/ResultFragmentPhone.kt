@@ -350,7 +350,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
     }
 
-    private fun loadTrailer(index: Int? = null) {
+    protected fun loadTrailer(index: Int? = null) {
 
         val isSuccess =
             currentTrailers.getOrNull(index ?: currentTrailerIndex)
@@ -427,11 +427,46 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         //}
     }
 
+    /**
+     * Phase 8.102 round 3: resize the details top holder so the
+     * header art — seated at the full holder width — keeps its own
+     * aspect ratio: height = width x (imageHeight / imageWidth).
+     * Called from the backdrop load's success listener; the 2:3
+     * default applied in onBindingCreated covers the time before
+     * the art arrives (and stays if the load fails). Invalid or
+     * zero dimensions keep the current height. The trailer surface
+     * binds to this same holder height, so a playing trailer
+     * occupies exactly the poster's footprint — no jump.
+     */
+    private fun applyHeaderAspectRatio(imageWidth: Int, imageHeight: Int) {
+        if (imageWidth <= 0 || imageHeight <= 0) return
+        val holder = resultBinding?.resultTopHolder ?: return
+        val width = holder.measuredWidth.takeIf { it > 0 }
+            ?: resources.displayMetrics.widthPixels
+        if (width <= 0) return
+        val target = (width * imageHeight.toFloat() / imageWidth).roundToInt()
+        if (target <= 0) return
+        val params = holder.layoutParams ?: return
+        if (params.height == target) return
+        params.height = target
+        holder.layoutParams = params
+    }
+
     private fun setTrailers(trailers: List<Pair<ExtractorLink, String>>?) {
         context?.updateHasTrailers()
-        if (!LoadResponse.isTrailersEnabled) return
-        currentTrailers = trailers?.sortedBy { -it.first.quality } ?: emptyList()
-        loadTrailer()
+        // Phase 8.102: trailers no longer load on their own. The
+        // automatic loadTrailer() call that used to sit here swapped
+        // the header from the poster to the trailer surface (and
+        // resized it around the video) the moment a page arrived.
+        // Now the list is only stored and the Trailer button in the
+        // play area is shown; ResultTrailerPlayer loads and plays
+        // the trailer when the user taps it.
+        currentTrailers = if (LoadResponse.isTrailersEnabled) {
+            trailers?.sortedBy { -it.first.quality } ?: emptyList()
+        } else {
+            emptyList()
+        }
+        resultBinding?.resultTrailerButton?.isVisible = currentTrailers.isNotEmpty()
     }
 
     override fun onDestroyView() {
@@ -449,6 +484,9 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         playerHostView?.release()
         playerBinding = null
         resultBinding?.resultScroll?.setOnClickListener(null)
+        resultBinding?.resultScroll?.setOnScrollChangeListener(
+            null as androidx.core.widget.NestedScrollView.OnScrollChangeListener?
+        )
         resultBinding = null
         syncBinding = null
         recommendationBinding = null
@@ -637,6 +675,33 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
             TrailerCustomLayoutBinding.bind(it)
         }
         playerHostView?.initialize()
+
+        // Phase 8.102 round 3: the header IS the poster now — no
+        // blur layer, no fixed 280dp. Until the backdrop load
+        // reports the art's real aspect ratio (see the success
+        // listener on the load in the page observer), seat the top
+        // holder at the standard poster ratio: full screen width,
+        // height = width x 1.5 (2:3). The trailer surface binds to
+        // this same holder height (ResultTrailerPlayer), so the
+        // trailer later fills exactly this footprint.
+        resultBinding?.resultTopHolder?.let { holder ->
+            val params = holder.layoutParams ?: return@let
+            params.height = (resources.displayMetrics.widthPixels * 3) / 2
+            holder.layoutParams = params
+        }
+
+        // Phase 8.102: scroll-linked header animation — as the page
+        // scrolls, the backdrop image drifts at a fraction of the
+        // scroll rate inside its holder (the holder clips it), so
+        // the full poster view eases through the header instead of
+        // the header sliding away rigidly. Only the image
+        // translates; the fade and the holder stay put, so nothing
+        // below the header can shift.
+        resultBinding?.resultScroll?.setOnScrollChangeListener(
+            androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+                resultBinding?.resultPosterBackground?.translationY = scrollY * 0.35f
+            }
+        )
 
         // ===== setup =====
         val storedData = getStoredData() ?: return
@@ -1193,6 +1258,20 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                                 R.drawable.poster_placeholder
                             )
                         }
+                        // Phase 8.102 round 3: when the art lands,
+                        // seat the header to its own aspect ratio —
+                        // the poster fills the whole phone width,
+                        // complete and uncropped, and the header is
+                        // exactly as tall as the art at that width.
+                        // (posterBackgroundImage is the landscape
+                        // backdrop when the page has one, the poster
+                        // otherwise; either way its own ratio rules.)
+                        listener(onSuccess = { _, result ->
+                            applyHeaderAspectRatio(
+                                result.image.width,
+                                result.image.height
+                            )
+                        })
                     }
 
                     bindLogo(
