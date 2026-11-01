@@ -1,3 +1,4 @@
+import com.android.build.api.variant.FilterConfiguration
 import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 import org.jetbrains.dokka.gradle.engine.parameters.KotlinPlatform
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
@@ -79,6 +80,27 @@ android {
                 generateGitHash,
                 GenerateGitHashTask::outputDir
             )
+
+            // ABI splits (8.100): every APK output gets its own
+            // versionCode — the variant's effective base versionCode
+            // (defaultConfig/flavor) * 10 + ABI index: universal = 0,
+            // armeabi-v7a = 1, arm64-v8a = 2. The universal APK keeps
+            // the lowest code so a device can always move from the
+            // universal APK to its native split of the same build.
+            variant.outputs.forEach { output ->
+                val abiIndex = when (
+                    output.filters
+                        .firstOrNull { it.filterType == FilterConfiguration.FilterType.ABI }
+                        ?.identifier
+                ) {
+                    "armeabi-v7a" -> 1
+                    "arm64-v8a" -> 2
+                    else -> 0 // the universal output carries no ABI filter
+                }
+                val baseCode = output.versionCode.orNull
+                    ?: libs.versions.versionCode.get().toInt()
+                output.versionCode.set(baseCode * 10 + abiIndex)
+            }
         }
     }
 
@@ -138,6 +160,21 @@ android {
             "\"" + (System.getenv("ANILIST_KEY") ?: localProperties["anilist.key"]) + "\""
         )
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // ABI splits (8.100): one APK per ABI plus the universal APK, so
+    // every build ships three APKs — arm64-v8a (64-bit phone),
+    // armeabi-v7a (32-bit TV / older phones) and universal (fallback,
+    // runs everywhere). The CI artifact glob
+    // (app/build/outputs/apk/prerelease/debug/*.apk) already picks
+    // up every split output, so no workflow change is needed.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
+        }
     }
 
     buildTypes {
