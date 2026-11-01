@@ -1,4 +1,4 @@
-import com.android.build.api.variant.Filter
+import com.android.build.api.variant.FilterConfiguration
 import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 import org.jetbrains.dokka.gradle.engine.parameters.KotlinPlatform
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
@@ -90,7 +90,7 @@ android {
             variant.outputs.forEach { output ->
                 val abiIndex = when (
                     output.filters
-                        .firstOrNull { it.filterType == Filter.FilterType.ABI }
+                        .firstOrNull { it.filterType == FilterConfiguration.FilterType.ABI }
                         ?.identifier
                 ) {
                     "armeabi-v7a" -> 1
