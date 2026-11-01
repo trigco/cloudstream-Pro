@@ -290,3 +290,87 @@ function level on `updateFullscreen`, using
 honors (a plain kotlin.OptIn does not satisfy it). No
 behaviour change: the annotation only records the opt-in the
 lint rule requires.
+
+## Round 3 (device verdict on round 2, same day)
+
+Verdict on the "The Perfect Lie (2026)" details page — a portrait
+poster in the round-2 header: the blur-fill is REJECTED ("আমি blur
+চাইনা, সম্পূর্ণ মোবাইলে বসানো যাবে?" — no blur; can the poster
+itself be seated across the whole phone?). Meta rows, the title
+block and the Trailer button drew no complaint. Round 3 takes
+the "big poster" direction:
+
+### 8. Full-width poster header, blur removed (fragment_result.xml, ResultFragmentPhone)
+
+- The round-2 blur layer is GONE: `result_poster_background_blur`
+  is deleted from the layout, its load in ResultFragmentPhone is
+  removed (with the now-unused `coil3.request.transformations`
+  and `BlurFillTransformation` imports), and
+  `utils/BlurFillTransformation.kt` itself is deleted — nothing
+  references it any more.
+- The sharp backdrop is the only header layer, and the header is
+  now exactly as tall as the art: `result_top_holder`'s height
+  is set from code — a 2:3 default (full screen width × 1.5)
+  applied in `onBindingCreated`, then the real ratio the moment
+  Coil delivers the image: a success listener on the existing
+  backdrop load calls the new `applyHeaderAspectRatio(w, h)`,
+  which sets height = holderWidth × h/w (guarded against zero /
+  invalid dimensions; the default stays if the load fails).
+  `posterBackgroundImage` is the landscape backdrop when the
+  page has one and the poster otherwise — either way its own
+  ratio rules, so landscape titles get a short wide header and
+  portrait posters the full tall one. fitCenter is unchanged,
+  but with the holder matching the art's ratio at full width,
+  the whole image shows with no crop and no letterbox bars.
+- The 0.35× parallax drift stays, now on the single sharp layer.
+  The bottom fade and the top scrim are untouched, so the back /
+  bookmark / more icons stay readable over bright art; the
+  small poster card, title block, meta rows and Description
+  heading are byte-identical in behaviour to rounds 1–2.
+
+### 9. Trailer keeps the poster's exact footprint (ResultTrailerPlayer)
+
+No mechanism change was needed — round 1/2 already bound the
+trailer surface to `result_top_holder`'s height
+(`fixPlayerSize()` reads `measuredHeight`) and pinned the frame
+to RESIZE_MODE_FIT inside it. With the holder now at the poster
+ratio, a playing trailer therefore occupies exactly the
+poster's area: the header height never changes on play/stop
+(no jump), the poster holder fades out as before, and the 16:9
+frame sits fit-width, vertically centred, letterboxed on the
+black holder. Fullscreen still restores the global resize mode.
+Comments in both files were updated where they still cited the
+old fixed 280dp header; no trailer code changed.
+
+### Local validation (round 3)
+
+- All four pre-existing files were blob-verified identical to
+  branch head a49144bd before editing.
+- fragment_result.xml passes standalone aapt2 compile; no
+  references to the removed blur view remain anywhere.
+- The one new API surface — Coil 3's
+  `ImageRequest.Builder.listener(onSuccess = …)` and
+  `SuccessResult.image.width/height` — was verified against the
+  real coil-core 3.3.0 artifact (javap: `SuccessResult.getImage()`
+  returns `coil3.Image`, which declares `getWidth()/getHeight()`;
+  the builder carries the 4-lambda `listener` overload) and a
+  probe snippet using the exact call shape was compiled with the
+  embeddable kotlinc against that jar.
+- Lint audit of the delta: no new framework calls at all (view
+  layout params + Coil only), no new opt-in surfaces (the media3
+  pin is untouched), `kotlin.math.roundToInt` was already
+  imported; the two removed imports have no remaining uses.
+
+### Verify on device (round 3)
+
+1. Portrait-poster title (e.g. "The Perfect Lie"): the poster
+   itself fills the whole phone width, complete and uncropped,
+   header about 1.5× the width tall — no blur, no black sides.
+2. Landscape-backdrop title: header is short and wide, art
+   complete, no bars.
+3. Scroll: the poster drifts gently (parallax) as before.
+4. Trailer: tap Trailer — the header height does not change;
+   the video plays fit-width, centred on black, inside the
+   poster's area; stopping returns the poster exactly.
+5. Feed return (part A) unchanged: main player → Back resumes
+   the current feed item at its position.

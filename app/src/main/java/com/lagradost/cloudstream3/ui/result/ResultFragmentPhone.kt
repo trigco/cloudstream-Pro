@@ -27,7 +27,6 @@ import androidx.core.widget.NestedScrollView
 import androidx.core.widget.doOnTextChanged
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import coil3.request.transformations
 import com.discord.panels.OverlappingPanelsLayout
 import com.discord.panels.PanelState
 import com.discord.panels.PanelsChildGestureRegionObserver
@@ -85,7 +84,6 @@ import com.lagradost.cloudstream3.utils.AppContextUtils.updateHasTrailers
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.attachBackPressedCallback
 import com.lagradost.cloudstream3.utils.BackPressedCallbackHelper.detachBackPressedCallback
 import com.lagradost.cloudstream3.utils.BatteryOptimizationChecker.openBatteryOptimizationSettings
-import com.lagradost.cloudstream3.utils.BlurFillTransformation
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -429,6 +427,31 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         //}
     }
 
+    /**
+     * Phase 8.102 round 3: resize the details top holder so the
+     * header art — seated at the full holder width — keeps its own
+     * aspect ratio: height = width x (imageHeight / imageWidth).
+     * Called from the backdrop load's success listener; the 2:3
+     * default applied in onBindingCreated covers the time before
+     * the art arrives (and stays if the load fails). Invalid or
+     * zero dimensions keep the current height. The trailer surface
+     * binds to this same holder height, so a playing trailer
+     * occupies exactly the poster's footprint — no jump.
+     */
+    private fun applyHeaderAspectRatio(imageWidth: Int, imageHeight: Int) {
+        if (imageWidth <= 0 || imageHeight <= 0) return
+        val holder = resultBinding?.resultTopHolder ?: return
+        val width = holder.measuredWidth.takeIf { it > 0 }
+            ?: resources.displayMetrics.widthPixels
+        if (width <= 0) return
+        val target = (width * imageHeight.toFloat() / imageWidth).roundToInt()
+        if (target <= 0) return
+        val params = holder.layoutParams ?: return
+        if (params.height == target) return
+        params.height = target
+        holder.layoutParams = params
+    }
+
     private fun setTrailers(trailers: List<Pair<ExtractorLink, String>>?) {
         context?.updateHasTrailers()
         // Phase 8.102: trailers no longer load on their own. The
@@ -653,19 +676,30 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
         }
         playerHostView?.initialize()
 
+        // Phase 8.102 round 3: the header IS the poster now — no
+        // blur layer, no fixed 280dp. Until the backdrop load
+        // reports the art's real aspect ratio (see the success
+        // listener on the load in the page observer), seat the top
+        // holder at the standard poster ratio: full screen width,
+        // height = width x 1.5 (2:3). The trailer surface binds to
+        // this same holder height (ResultTrailerPlayer), so the
+        // trailer later fills exactly this footprint.
+        resultBinding?.resultTopHolder?.let { holder ->
+            val params = holder.layoutParams ?: return@let
+            params.height = (resources.displayMetrics.widthPixels * 3) / 2
+            holder.layoutParams = params
+        }
+
         // Phase 8.102: scroll-linked header animation — as the page
         // scrolls, the backdrop image drifts at a fraction of the
-        // scroll rate inside its fixed-height holder (the holder
-        // clips it), so the full poster view eases through the
-        // header instead of the header sliding away rigidly. Only
-        // the image translates; the fade and the holder stay put,
-        // so nothing below the header can shift.
+        // scroll rate inside its holder (the holder clips it), so
+        // the full poster view eases through the header instead of
+        // the header sliding away rigidly. Only the image
+        // translates; the fade and the holder stay put, so nothing
+        // below the header can shift.
         resultBinding?.resultScroll?.setOnScrollChangeListener(
             androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
                 resultBinding?.resultPosterBackground?.translationY = scrollY * 0.35f
-                // Phase 8.102 round 2: the blur-fill drifts with the
-                // sharp backdrop so the two layers never separate.
-                resultBinding?.resultPosterBackgroundBlur?.translationY = scrollY * 0.35f
             }
         )
 
@@ -1224,18 +1258,20 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                                 R.drawable.poster_placeholder
                             )
                         }
-                    }
-                    // Phase 8.102 round 2: the same art as a blurred,
-                    // darkened fill behind the sharp backdrop, so the
-                    // header's sides are never bare black when the art
-                    // is a portrait poster. No error drawable — if the
-                    // art fails, the holder's black simply shows, as
-                    // before this layer existed.
-                    resultPosterBackgroundBlur.loadImage(
-                        d.posterBackgroundImage,
-                        headers = d.posterHeaders
-                    ) {
-                        transformations(BlurFillTransformation())
+                        // Phase 8.102 round 3: when the art lands,
+                        // seat the header to its own aspect ratio —
+                        // the poster fills the whole phone width,
+                        // complete and uncropped, and the header is
+                        // exactly as tall as the art at that width.
+                        // (posterBackgroundImage is the landscape
+                        // backdrop when the page has one, the poster
+                        // otherwise; either way its own ratio rules.)
+                        listener(onSuccess = { _, result ->
+                            applyHeaderAspectRatio(
+                                result.image.width,
+                                result.image.height
+                            )
+                        })
                     }
 
                     bindLogo(

@@ -111,6 +111,11 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
             // ran with it once the intro was dismissed) is what left
             // gaps around the video and shoved the content below
             // around whenever a trailer loaded.
+            // Round 3: the top holder's height is now the poster
+            // art's aspect height (set by ResultFragmentPhone); this
+            // binding simply follows it, so the trailer keeps the
+            // poster's exact footprint and the 16:9 frame letterboxes
+            // inside it on black via the FIT pin in updateFullscreen.
             val headerHeight = resultBinding?.resultTopHolder?.measuredHeight ?: 0
 
             resultBinding?.fragmentTrailer?.playerBackground?.apply {
@@ -209,8 +214,8 @@ class ResultTrailerPlayer : ResultFragmentPhone() {
         // Phase 8.102 round 2: resize mode for the trailer surface.
         // PlayerView.initialize() applied the app-wide resize mode
         // (Zoom by default since 8.99e) to this host too — inside
-        // the fixed 280dp header that crops the trailer's sides
-        // (a 16:9 frame in a ~1.3:1 box). In header mode the
+        // the fixed header that crops the trailer's sides
+        // (a 16:9 frame in the poster's taller box). In header mode the
         // trailer is therefore pinned to FIT on the view only, so
         // the whole frame shows, letterboxed on the black page;
         // the shared preference and PlayerView's own mode are not

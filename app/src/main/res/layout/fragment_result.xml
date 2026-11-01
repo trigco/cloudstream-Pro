@@ -291,6 +291,12 @@
                      edge via bg_result_fade inside the poster holder. The
                      trailer (result_smallscreen_holder) keeps living in
                      the same holder, above the poster holder. -->
+                <!-- Phase 8.102 round 3: the 280dp below is only the
+                     pre-bind placeholder — ResultFragmentPhone seats
+                     this holder's height from code (2:3 default, then
+                     the loaded art's real aspect ratio), so the poster
+                     itself is the whole header: full phone width,
+                     complete and uncropped, no blur fill. -->
                 <FrameLayout
                     android:id="@+id/result_top_holder"
                     android:layout_width="match_parent"
@@ -299,10 +305,11 @@
                     android:clipToOutline="true">
 
                     <!-- Phase 8.102: the trailer holder now fills the
-                         whole 280dp header area exactly (was
-                         wrap_content), so a trailer playing in it
-                         leaves no gap around it and the content below
-                         never moves. -->
+                         whole header area exactly (was wrap_content;
+                         round 3: the header's height is the poster
+                         art's aspect height, set from code), so a
+                         trailer playing in it leaves no gap around it
+                         and the content below never moves. -->
                     <FrameLayout
                         android:id="@+id/result_smallscreen_holder"
                         android:layout_width="match_parent"
@@ -319,19 +326,13 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent">
 
-                        <!-- Phase 8.102 round 2: blur-fill behind the
-                             sharp backdrop — the same art, blurred and
-                             darkened, cropped to fill the whole header,
-                             so a portrait poster no longer leaves bare
-                             black on either side. The sharp image on top
-                             keeps fitCenter (whole art, uncropped). -->
-                        <ImageView
-                            android:id="@+id/result_poster_background_blur"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:contentDescription="@null"
-                            android:scaleType="centerCrop" />
-
+                        <!-- Phase 8.102 round 3: the sharp backdrop is
+                             the ONLY header layer now (the round-2
+                             blur-fill behind it was device-rejected
+                             and is removed). fitCenter shows the whole
+                             art uncropped; the holder's height follows
+                             the art's aspect ratio from code, so at
+                             full width nothing is letterboxed either. -->
                         <ImageView
                             android:id="@+id/result_poster_background"
                             android:layout_width="match_parent"
