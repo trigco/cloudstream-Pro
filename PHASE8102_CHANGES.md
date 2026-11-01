@@ -210,10 +210,19 @@ watermark at the frame's right edge is cut in half).
 - Differential toy-compile (branch vs edited) for both fragment
   files: no new error kinds beyond explained unresolveds —
   `resultPosterBackgroundBlur` (new binding field, generated at
-  build), `transformations`/`AspectRatioFrameLayout`/`resize`/
-  `resizeMode` (real members of ImageRequest.Builder, media3 and
-  PlayerView respectively; those classpaths are absent from the
-  toy compile). No syntax errors.
+  build) and `AspectRatioFrameLayout`/`resize`/`resizeMode`
+  (real members of media3 and PlayerView respectively; those
+  classpaths are absent from the toy compile). No syntax errors.
+- CI #296 FAILED on the first push of this round — and the toy
+  compile HAD shown the cause: a new unresolved reference
+  `transformations` in ResultFragmentPhone, initially filed as
+  another classpath artifact. It was real: in Coil 3,
+  `transformations()` is an EXTENSION (`coil3.request.
+  transformations`, exactly what PluginAdapter imports), not an
+  ImageRequest.Builder member (verified against the 3.3.0
+  classes with javap). Repair = that one import line, pushed as
+  a follow-up commit on this branch; verdict waits on the next
+  run.
 
 ### Verify on device (round 2)
 
