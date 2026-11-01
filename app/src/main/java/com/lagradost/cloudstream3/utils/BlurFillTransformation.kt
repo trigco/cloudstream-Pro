@@ -2,6 +2,8 @@ package com.lagradost.cloudstream3.utils
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Build
+import androidx.annotation.RequiresApi
 import coil3.size.Size
 import coil3.transform.Transformation
 import kotlin.math.roundToInt
@@ -25,7 +27,11 @@ class BlurFillTransformation : Transformation() {
     override val cacheKey: String = "cs3-blurfill-v1"
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
-        val source = if (input.config == Bitmap.Config.HARDWARE) {
+        // Bitmap.Config.HARDWARE exists only on API 26+; older
+        // APIs have no hardware bitmaps at all, so the copy
+        // branch is unreachable there and the version check
+        // short-circuits before the field is ever touched.
+        val source = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isHardware(input)) {
             input.copy(Bitmap.Config.ARGB_8888, false)
         } else {
             input
@@ -55,6 +61,11 @@ class BlurFillTransformation : Transformation() {
         small.setPixels(pixels, 0, small.width, 0, 0, small.width, small.height)
         return small
     }
+
+    /** API 26+ only — callers must gate on [Build.VERSION_CODES.O]. */
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun isHardware(bitmap: Bitmap): Boolean =
+        bitmap.config == Bitmap.Config.HARDWARE
 
     /** One sliding-window box-blur pass along a single axis. */
     private fun blurAxis(

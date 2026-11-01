@@ -236,3 +236,28 @@ watermark at the frame's right edge is cut in half).
    nothing cut at the sides; thin black bars above/below the
    frame are expected. Fullscreen from the header still uses
    your normal resize mode.
+
+### Repair — lint pass after round 2 (CI #297)
+
+CI #297 (head b0048ff9) compiled and assembled clean — the
+import repair worked — but FAILED at `:app:lintPrereleaseDebug`.
+First error, from the run's Gradle log:
+
+  utils/BlurFillTransformation.kt:28: Error: Field requires API
+  level 26 (current min is 23): android.graphics.Bitmap.Config
+  HARDWARE [NewApi]
+
+Lint is right: `Bitmap.Config.HARDWARE` exists only on API 26+
+and the reference was unguarded. A line-by-line audit of the
+whole round-2 delta found it was the ONLY API-above-23 framework
+reference in the round: ResultFragmentPhone's new hunks use
+compat/library calls only, ResultTrailerPlayer's hunk is a
+media3 library constant, and the layout hunk is a plain
+ImageView (unique id, no `android:tint`). The field read now
+sits inside a `@RequiresApi(O)` helper, called behind
+`Build.VERSION.SDK_INT >= Build.VERSION_CODES.O` in an `&&`
+chain, so the field is never touched below API 26 — where
+hardware bitmaps cannot exist at all, so behaviour is
+unchanged on every API level, including the user's API 27
+phone. The edited file was re-compiled standalone against
+android.jar + the real androidx.annotation jar: zero errors.
